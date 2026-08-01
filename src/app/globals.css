@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@theme {
+  --color-arka: #f1f5f9;
+  --color-kart: #ffffff;
+  --color-cizgi: #e2e8f0;
+  --color-metin: #0f172a;
+  --color-solgun: #64748b;
+  --color-vurgu: #1d4ed8;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-arka);
+  color: var(--color-metin);
+  font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Ortak bileşen sınıfları --------------------------------------------- */
+
+@utility btn-govde {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: --spacing(2);
+  border-radius: var(--radius-md);
+  padding-inline: --spacing(4);
+  padding-block: --spacing(2);
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  font-weight: 500;
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: 150ms;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+@layer components {
+  .kart {
+    @apply rounded-lg border border-cizgi bg-kart shadow-sm;
+  }
+
+  .baslik {
+    @apply text-xl font-semibold text-metin;
+  }
+
+  .etiket {
+    @apply mb-1 block text-sm font-medium text-slate-700;
+  }
+
+  .girdi {
+    @apply w-full rounded-md border border-cizgi bg-white px-3 py-2 text-metin
+           outline-none transition placeholder:text-slate-400
+           focus:border-vurgu focus:ring-2 focus:ring-blue-100
+           disabled:bg-slate-100 disabled:text-slate-500;
+  }
+
+  .hata {
+    @apply mt-1 text-sm text-red-600;
+  }
+
+  /* Tailwind 4'te @apply yalnızca utility sınıflarıyla çalışır; ortak buton
+     gövdesi bu yüzden @utility ile tanımlanıyor. */
+  .btn-birincil {
+    @apply btn-govde bg-vurgu text-white hover:bg-blue-800;
+  }
+
+  .btn-ikincil {
+    @apply btn-govde border border-cizgi bg-white text-metin hover:bg-slate-50;
+  }
+
+  .btn-tehlike {
+    @apply btn-govde border border-red-200 bg-white text-red-700 hover:bg-red-50;
+  }
+
+  .tablo {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .tablo th {
+    @apply border-b border-cizgi bg-slate-50 px-3 py-2 text-left
+           font-semibold whitespace-nowrap text-slate-600;
+  }
+
+  .tablo td {
+    @apply border-b border-cizgi px-3 py-2 align-middle;
+  }
+
+  .tablo tbody tr:hover {
+    @apply bg-slate-50;
+  }
+
+  .rozet {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+}
