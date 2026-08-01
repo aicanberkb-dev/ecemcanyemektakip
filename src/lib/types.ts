@@ -6,8 +6,18 @@ export type IslemTipi = 'tahsilat' | 'harcama'
 export type SerbestOgunTipi = 'ucretli' | 'misafir'
 export type KullaniciRolu = 'admin' | 'personel'
 
+export type Okul = {
+  id: string
+  ad: string
+  sira: number
+  aktif: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type Student = {
   id: string
+  okul_id: string
   ogrenci_no: string
   ad_soyad: string
   sinif: string | null
@@ -25,6 +35,7 @@ export type Student = {
 
 export type StudentBalance = {
   student_id: string
+  okul_id: string
   ogrenci_no: string
   ad_soyad: string
   sinif: string | null

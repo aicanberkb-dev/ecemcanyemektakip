@@ -1,3 +1,4 @@
+import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { GelenGidenSatiri } from '@/lib/types'
 
@@ -27,7 +28,14 @@ export async function GET(request: Request) {
   } = await supabase.auth.getUser()
   if (!user) return new Response('Yetkisiz.', { status: 401 })
 
-  const { data, error } = await supabase.rpc('gelen_giden_raporu', { p_bas: bas, p_bit: bit })
+  const okul = await aktifOkul()
+  if (!okul) return new Response('Okul seçili değil.', { status: 400 })
+
+  const { data, error } = await supabase.rpc('gelen_giden_raporu', {
+    p_okul_id: okul.id,
+    p_bas: bas,
+    p_bit: bit,
+  })
   if (error) return new Response(error.message, { status: 500 })
 
   let satirlar = (data ?? []) as GelenGidenSatiri[]
@@ -88,7 +96,7 @@ export async function GET(request: Request) {
   return new Response(csv, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="gelen-giden-${bas}_${bit}.csv"`,
+      'Content-Disposition': `attachment; filename="gelen-giden-${okul.ad.replace(/[^\p{L}\p{N}]+/gu, '-')}-${bas}_${bit}.csv"`,
     },
   })
 }

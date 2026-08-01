@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { para, tarih as tarihBicim } from '@/lib/format'
+import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { TaksitDurumu, TaksitPlani } from '@/lib/types'
 
@@ -15,9 +16,17 @@ export default async function TaksitPage({
   const yil = Number(yilQ) || new Date().getFullYear()
 
   const supabase = await supabaseServer()
+  const okul = await aktifOkul()
+  if (!okul) return null
+
   const [{ data, error }, { data: planVeri }] = await Promise.all([
-    supabase.rpc('taksit_durumu', { p_yil: yil }),
-    supabase.from('taksit_plani').select('*').eq('yil', yil).order('vade_tarihi'),
+    supabase.rpc('taksit_durumu', { p_okul_id: okul.id, p_yil: yil }),
+    supabase
+      .from('taksit_plani')
+      .select('*')
+      .eq('okul_id', okul.id)
+      .eq('yil', yil)
+      .order('vade_tarihi'),
   ])
 
   const satirlar = (data ?? []) as TaksitDurumu[]
@@ -31,7 +40,10 @@ export default async function TaksitPage({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="baslik">Taksit Takibi — {yil}</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="baslik">Taksit Takibi — {yil}</h1>
+          <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
+        </div>
         <form className="flex items-end gap-2">
           <div>
             <label className="etiket" htmlFor="yil">
@@ -58,7 +70,7 @@ export default async function TaksitPage({
       {plan.length === 0 ? (
         <div className="kart p-6 text-center">
           <p className="text-solgun">
-            {yil} yılı için taksit planı tanımlı değil.
+            {okul.ad} için {yil} yılı taksit planı tanımlı değil.
           </p>
           <Link href="/admin/settings" className="btn-birincil mt-3">
             Taksit planı tanımla

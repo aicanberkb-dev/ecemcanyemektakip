@@ -17,13 +17,14 @@ export type SeciliOgrenci = {
 }
 
 type Props = {
+  okulId: string
   ad?: string
   baslangic?: SeciliOgrenci | null
   onSecim?: (ogrenci: SeciliOgrenci | null) => void
 }
 
-/** Öğrenci no / kimlik / isim ile canlı arayan autocomplete. */
-export function OgrenciSecici({ ad = 'student_id', baslangic, onSecim }: Props) {
+/** Öğrenci no / kimlik / isim ile canlı arayan autocomplete (tek okul içinde). */
+export function OgrenciSecici({ okulId, ad = 'student_id', baslangic, onSecim }: Props) {
   const supabase = useMemo(() => supabaseBrowser(), [])
   const [terim, setTerim] = useState('')
   const [sonuclar, setSonuclar] = useState<PosSonuc[]>([])
@@ -37,7 +38,7 @@ export function OgrenciSecici({ ad = 'student_id', baslangic, onSecim }: Props) 
 
     let iptal = false
     const zamanlayici = setTimeout(async () => {
-      const { data } = await supabase.rpc('pos_ara', { p_terim: t })
+      const { data } = await supabase.rpc('pos_ara', { p_okul_id: okulId, p_terim: t })
       if (!iptal) {
         setSonuclar((data ?? []) as PosSonuc[])
         setVurgulu(0)
@@ -47,7 +48,7 @@ export function OgrenciSecici({ ad = 'student_id', baslangic, onSecim }: Props) 
       iptal = true
       clearTimeout(zamanlayici)
     }
-  }, [terim, secili, supabase])
+  }, [terim, secili, supabase, okulId])
 
   // Kutu boşsa liste kapalı — türetilmiş, effect gerekmez
   const gosterilen = terim.trim() === '' ? [] : sonuclar

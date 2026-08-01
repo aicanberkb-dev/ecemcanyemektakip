@@ -8,7 +8,7 @@ import type { GunSonu, PosSonuc, SerbestOgunTipi } from '@/lib/types'
 
 type Mesaj = { tip: 'ok' | 'hata'; metin: string }
 
-export function PosEkrani() {
+export function PosEkrani({ okulId, okulAdi }: { okulId: string; okulAdi: string }) {
   const supabase = useMemo(() => supabaseBrowser(), [])
   const aramaRef = useRef<HTMLInputElement>(null)
 
@@ -26,21 +26,22 @@ export function PosEkrani() {
   }, [])
 
   const ozetYenile = useCallback(async () => {
-    const { data } = await supabase.rpc('gun_sonu')
+    const { data } = await supabase.rpc('gun_sonu', { p_okul_id: okulId })
     if (data?.[0]) setOzet(data[0] as GunSonu)
-  }, [supabase])
+  }, [supabase, okulId])
 
-  // İlk açılışta bugünün sayacını çek ve odağı arama kutusuna ver
+  // İlk açılışta bugünün sayacını çek ve odağı arama kutusuna ver.
+  // Okul değişince bileşen key ile yeniden kurulur (bkz. pos/page.tsx).
   useEffect(() => {
     let iptal = false
-    supabase.rpc('gun_sonu').then(({ data }) => {
+    supabase.rpc('gun_sonu', { p_okul_id: okulId }).then(({ data }) => {
       if (!iptal && data?.[0]) setOzet(data[0] as GunSonu)
     })
     aramaRef.current?.focus()
     return () => {
       iptal = true
     }
-  }, [supabase])
+  }, [supabase, okulId])
 
   // --- Canlı arama (harfe göre) -------------------------------------------
   useEffect(() => {
@@ -49,7 +50,10 @@ export function PosEkrani() {
 
     let iptal = false
     const zamanlayici = setTimeout(async () => {
-      const { data, error } = await supabase.rpc('pos_ara', { p_terim: t })
+      const { data, error } = await supabase.rpc('pos_ara', {
+        p_okul_id: okulId,
+        p_terim: t,
+      })
       if (iptal) return
       if (error) {
         setMesaj({ tip: 'hata', metin: error.message })
@@ -73,7 +77,7 @@ export function PosEkrani() {
       iptal = true
       clearTimeout(zamanlayici)
     }
-  }, [terim, secili, supabase])
+  }, [terim, secili, supabase, okulId])
 
   // Öğrenci seçiliyse ya da kutu boşsa liste kapalı — türetilmiş, effect gerekmez
   const gosterilen = secili || terim.trim() === '' ? [] : sonuclar
@@ -140,7 +144,10 @@ export function PosEkrani() {
     if (kaydediliyor) return
     setKaydediliyor(true)
 
-    const { data, error } = await supabase.rpc('serbest_ogun_kaydet', { p_tip: tip })
+    const { data, error } = await supabase.rpc('serbest_ogun_kaydet', {
+      p_okul_id: okulId,
+      p_tip: tip,
+    })
 
     setKaydediliyor(false)
     if (error) {
@@ -166,9 +173,12 @@ export function PosEkrani() {
       <div className="space-y-4">
         {/* Arama */}
         <div className="kart relative p-4">
-          <label className="etiket" htmlFor="arama">
-            Öğrenci no, kimlik no veya isim
-          </label>
+          <div className="mb-2 flex items-baseline justify-between gap-3">
+            <label className="etiket !mb-0" htmlFor="arama">
+              Öğrenci no, kimlik no veya isim
+            </label>
+            <span className="rozet bg-blue-100 text-blue-800">{okulAdi}</span>
+          </div>
           <input
             id="arama"
             ref={aramaRef}
@@ -270,7 +280,8 @@ export function PosEkrani() {
             Aylıkçı
           </OgunButonu>
           <OgunButonu
-            renk="bg-emerald-600 hover:bg-emerald-700"
+            renk="bg-yellow-400 hover:bg-yellow-500"
+            metinRengi="text-slate-900"
             etkin={!kaydediliyor}
             onClick={() => serbestKaydet('ucretli')}
           >
@@ -324,12 +335,15 @@ export function PosEkrani() {
 function OgunButonu({
   children,
   renk,
+  metinRengi = 'text-white',
   etkin,
   vurgulu,
   onClick,
 }: {
   children: React.ReactNode
   renk: string
+  /** Açık zeminli butonlarda okunabilirlik için koyu metin verilir. */
+  metinRengi?: string
   etkin: boolean
   vurgulu?: boolean
   onClick: () => void
@@ -339,8 +353,9 @@ function OgunButonu({
       type="button"
       disabled={!etkin}
       onClick={onClick}
-      className={`rounded-lg px-3 py-6 text-base font-semibold text-white transition
-        disabled:cursor-not-allowed disabled:bg-slate-300 ${renk}
+      className={`rounded-lg px-3 py-6 text-base font-semibold transition
+        disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white
+        ${renk} ${etkin ? metinRengi : ''}
         ${vurgulu && etkin ? 'ring-4 ring-offset-2 ring-blue-200' : ''}`}
     >
       {children}

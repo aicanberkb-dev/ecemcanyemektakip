@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import { TarihAraligi } from '@/components/TarihAraligi'
 import { para, tarih as tarihBicim } from '@/lib/format'
+import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { Transaction } from '@/lib/types'
 
@@ -22,9 +23,13 @@ export default async function TahsilatPage({
   const bit = q.bit || `${yil}-12-31`
 
   const supabase = await supabaseServer()
+  const okul = await aktifOkul()
+  if (!okul) return null
+
   const { data, error } = await supabase
     .from('transactions')
-    .select('*, students(ad_soyad, ogrenci_no, sinif)')
+    .select('*, students!inner(ad_soyad, ogrenci_no, sinif, okul_id)')
+    .eq('students.okul_id', okul.id)
     .eq('tip', 'tahsilat')
     .gte('tarih', bas)
     .lte('tarih', bit)
@@ -60,7 +65,10 @@ export default async function TahsilatPage({
 
   return (
     <div className="space-y-4">
-      <h1 className="baslik">Tahsilat Geçmişi</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="baslik">Tahsilat Geçmişi</h1>
+        <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
+      </div>
 
       <TarihAraligi
         bas={bas}

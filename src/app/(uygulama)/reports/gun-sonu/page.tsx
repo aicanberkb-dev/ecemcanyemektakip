@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import { AboneRozeti } from '@/components/Rozetler'
 import { bugunISO, para, tarih as tarihBicim, tarihSaat } from '@/lib/format'
+import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { GunSonu, SerbestOgun, Transaction } from '@/lib/types'
 
@@ -18,15 +19,24 @@ export default async function GunSonuPage({
   const gun = gunQ || bugunISO()
 
   const supabase = await supabaseServer()
+  const okul = await aktifOkul()
+  if (!okul) return null
+
   const [{ data: ozetVeri }, { data: yiyenVeri }, { data: serbestVeri }] = await Promise.all([
-    supabase.rpc('gun_sonu', { p_tarih: gun }),
+    supabase.rpc('gun_sonu', { p_okul_id: okul.id, p_tarih: gun }),
     supabase
       .from('transactions')
-      .select('*, students(ad_soyad, ogrenci_no, sinif)')
+      .select('*, students!inner(ad_soyad, ogrenci_no, sinif, okul_id)')
+      .eq('students.okul_id', okul.id)
       .eq('tarih', gun)
       .not('ogun_abone_tipi', 'is', null)
       .order('created_at'),
-    supabase.from('serbest_ogunler').select('*').eq('tarih', gun).order('created_at'),
+    supabase
+      .from('serbest_ogunler')
+      .select('*')
+      .eq('okul_id', okul.id)
+      .eq('tarih', gun)
+      .order('created_at'),
   ])
 
   const ozet = (ozetVeri?.[0] ?? null) as GunSonu | null
@@ -35,7 +45,10 @@ export default async function GunSonuPage({
 
   return (
     <div className="space-y-4">
-      <h1 className="baslik">Gün Sonu — {tarihBicim(gun)}</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="baslik">Gün Sonu — {tarihBicim(gun)}</h1>
+        <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
+      </div>
 
       <form className="kart flex flex-wrap items-end gap-3 p-4">
         <div>

@@ -7,7 +7,13 @@ import { bugunISO, para } from '@/lib/format'
 
 import { harcamaEkle, tahsilatEkle, type IslemDurumu } from '../../islem-actions'
 
-export function IslemFormu({ baslangic }: { baslangic: SeciliOgrenci | null }) {
+export function IslemFormu({
+  okulId,
+  baslangic,
+}: {
+  okulId: string
+  baslangic: SeciliOgrenci | null
+}) {
   const [tip, setTip] = useState<'tahsilat' | 'harcama'>('tahsilat')
   const [ogrenci, setOgrenci] = useState<SeciliOgrenci | null>(baslangic)
 
@@ -42,7 +48,7 @@ export function IslemFormu({ baslangic }: { baslangic: SeciliOgrenci | null }) {
       >
         <div>
           <label className="etiket">Öğrenci *</label>
-          <OgrenciSecici baslangic={baslangic} onSecim={setOgrenci} />
+          <OgrenciSecici okulId={okulId} baslangic={baslangic} onSecim={setOgrenci} />
           {durum.alanlar?.student_id && <p className="hata">{durum.alanlar.student_id}</p>}
         </div>
 

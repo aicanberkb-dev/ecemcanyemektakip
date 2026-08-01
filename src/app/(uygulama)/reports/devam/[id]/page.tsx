@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 
 import { AboneRozeti } from '@/components/Rozetler'
 import { AY_ADLARI, GUN_KISALTMA } from '@/lib/format'
+import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { StudentBalance } from '@/lib/types'
 
@@ -21,7 +22,12 @@ export default async function DevamOgrenciPage({
 
   const supabase = await supabaseServer()
   const [{ data: ogrenciVeri }, { data: kayitlar }] = await Promise.all([
-    supabase.from('student_balances').select('*').eq('student_id', id).maybeSingle(),
+    supabase
+      .from('student_balances')
+      .select('*')
+      .eq('student_id', id)
+      .eq('okul_id', await aktifOkulId())
+      .maybeSingle(),
     supabase
       .from('transactions')
       .select('tarih')

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { AboneRozeti, Bakiye } from '@/components/Rozetler'
 import { TarihAraligi } from '@/components/TarihAraligi'
 import { ayBasiISO, bugunISO, para } from '@/lib/format'
+import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { GelenGidenSatiri } from '@/lib/types'
 
@@ -18,9 +19,12 @@ export default async function ReportsPage({
   const bit = bitQ || bugunISO()
 
   const supabase = await supabaseServer()
+  const okul = await aktifOkul()
+  if (!okul) return null
+
   const [{ data, error }, { data: sinifSatirlari }] = await Promise.all([
-    supabase.rpc('gelen_giden_raporu', { p_bas: bas, p_bit: bit }),
-    supabase.from('students').select('sinif').not('sinif', 'is', null),
+    supabase.rpc('gelen_giden_raporu', { p_okul_id: okul.id, p_bas: bas, p_bit: bit }),
+    supabase.from('students').select('sinif').eq('okul_id', okul.id).not('sinif', 'is', null),
   ])
 
   let satirlar = (data ?? []) as GelenGidenSatiri[]
@@ -46,7 +50,10 @@ export default async function ReportsPage({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="baslik">Gelen – Giden – Tahsil Edilen</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="baslik">Gelen – Giden – Tahsil Edilen</h1>
+          <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
+        </div>
         <a href={csvYolu} className="btn-ikincil">
           CSV indir
         </a>

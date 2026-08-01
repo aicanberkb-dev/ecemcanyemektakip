@@ -1,4 +1,5 @@
 import type { SeciliOgrenci } from '@/components/OgrenciSecici'
+import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { StudentBalance } from '@/lib/types'
 
@@ -12,6 +13,8 @@ export default async function YeniIslemPage({
   searchParams: Promise<{ student?: string }>
 }) {
   const { student } = await searchParams
+  const okul = await aktifOkul()
+  if (!okul) return null
 
   let baslangic: SeciliOgrenci | null = null
   if (student) {
@@ -20,6 +23,7 @@ export default async function YeniIslemPage({
       .from('student_balances')
       .select('*')
       .eq('student_id', student)
+      .eq('okul_id', okul.id)
       .maybeSingle()
 
     if (data) {
@@ -38,8 +42,12 @@ export default async function YeniIslemPage({
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <h1 className="baslik">İşlem Girişi</h1>
-      <IslemFormu baslangic={baslangic} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="baslik">İşlem Girişi</h1>
+        <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
+      </div>
+      {/* key: okul değişince form ve seçili öğrenci sıfırlanır */}
+      <IslemFormu key={okul.id} okulId={okul.id} baslangic={baslangic} />
     </div>
   )
 }

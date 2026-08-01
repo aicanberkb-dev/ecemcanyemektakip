@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import { AboneRozeti, Bakiye, DurumRozeti } from '@/components/Rozetler'
 import { para } from '@/lib/format'
+import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { StudentBalance } from '@/lib/types'
 
@@ -21,8 +22,13 @@ export default async function StudentsPage({
 }) {
   const filtre = await searchParams
   const supabase = await supabaseServer()
+  const okulId = await aktifOkulId()
 
-  let sorgu = supabase.from('student_balances').select('*').order('ad_soyad')
+  let sorgu = supabase
+    .from('student_balances')
+    .select('*')
+    .eq('okul_id', okulId)
+    .order('ad_soyad')
 
   if (filtre.q?.trim()) {
     const t = filtre.q.trim()
@@ -35,7 +41,7 @@ export default async function StudentsPage({
 
   const [{ data, error }, { data: sinifSatirlari }] = await Promise.all([
     sorgu,
-    supabase.from('students').select('sinif').not('sinif', 'is', null),
+    supabase.from('students').select('sinif').eq('okul_id', okulId).not('sinif', 'is', null),
   ])
 
   const ogrenciler = (data ?? []) as StudentBalance[]

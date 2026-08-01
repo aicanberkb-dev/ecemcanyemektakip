@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
+import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import { bosNull, trSayi } from '@/lib/zod-tr'
 
@@ -22,6 +23,21 @@ function alanHatalari(hata: z.ZodError): Record<string, string> {
 }
 
 /**
+ * Öğrencinin aktif okula ait olduğunu doğrular. İşlem kayıtlarında okul_id
+ * yok — okul öğrenci üzerinden belirlenir, bu yüzden yazma öncesi kontrol şart.
+ */
+async function ogrenciOkuldaMi(studentId: string): Promise<boolean> {
+  const supabase = await supabaseServer()
+  const { data } = await supabase
+    .from('students')
+    .select('id')
+    .eq('id', studentId)
+    .eq('okul_id', await aktifOkulId())
+    .maybeSingle()
+  return !!data
+}
+
+/**
  * Elle tahsilat girişi. Tahsilatın tutarı bir fiyat değil, alınan paradır —
  * bu yüzden elle girilir. islemi_yapan_user_id RLS gereği auth.uid() olmalı.
  */
@@ -38,6 +54,10 @@ export async function tahsilatEkle(
 
   const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  if (!(await ogrenciOkuldaMi(sonuc.data.student_id))) {
+    return { hata: 'Öğrenci seçili okulda bulunamadı.' }
+  }
 
   const supabase = await supabaseServer()
   const {
@@ -75,6 +95,10 @@ export async function harcamaEkle(
   const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
+  if (!(await ogrenciOkuldaMi(sonuc.data.student_id))) {
+    return { hata: 'Öğrenci seçili okulda bulunamadı.' }
+  }
+
   const supabase = await supabaseServer()
   const { error } = await supabase.rpc('yemek_kaydet', {
     p_student_id: sonuc.data.student_id,
@@ -105,6 +129,10 @@ export async function islemGuncelle(
   const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
+  if (!(await ogrenciOkuldaMi(studentId))) {
+    return { hata: 'Bu işlem seçili okula ait değil.' }
+  }
+
   const supabase = await supabaseServer()
   const {
     data: { user },
@@ -116,6 +144,7 @@ export async function islemGuncelle(
     .from('transactions')
     .update({ ...sonuc.data, islemi_yapan_user_id: user.id })
     .eq('id', id)
+    .eq('student_id', studentId)
 
   if (error) return { hata: error.message }
 
@@ -125,8 +154,16 @@ export async function islemGuncelle(
 }
 
 export async function islemSil(id: string, studentId: string) {
+  if (!(await ogrenciOkuldaMi(studentId))) {
+    throw new Error('Bu işlem seçili okula ait değil.')
+  }
+
   const supabase = await supabaseServer()
-  const { error } = await supabase.from('transactions').delete().eq('id', id)
+  const { error } = await supabase
+    .from('transactions')
+    .delete()
+    .eq('id', id)
+    .eq('student_id', studentId)
   if (error) throw new Error(error.message)
 
   revalidatePath(`/students/${studentId}`)

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { tarihSaat } from '@/lib/format'
+import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { AuditLog, Profile } from '@/lib/types'
 
@@ -29,10 +30,14 @@ export default async function AuditLogPage({
   const bas = (sayfa - 1) * SAYFA_BOYUTU
 
   const supabase = await supabaseServer()
+  const okul = await aktifOkul()
+  if (!okul) return null
 
+  // Seçili okulun kayıtları + okula bağlı olmayanlar (kullanıcı yönetimi vb.)
   let sorgu = supabase
     .from('audit_log')
     .select('*', { count: 'exact' })
+    .or(`okul_id.eq.${okul.id},okul_id.is.null`)
     .order('tarih', { ascending: false })
     .range(bas, bas + SAYFA_BOYUTU - 1)
 
@@ -56,7 +61,10 @@ export default async function AuditLogPage({
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="baslik">İşlem Geçmişi</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="baslik">İşlem Geçmişi</h1>
+          <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
+        </div>
         <p className="mt-1 text-sm text-solgun">
           Tüm düzeltme ve silme işlemleri veritabanı trigger&apos;ı tarafından otomatik
           kaydedilir; uygulama üzerinden değiştirilemez.

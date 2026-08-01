@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { AY_ADLARI } from '@/lib/format'
+import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { DevamSatiri } from '@/lib/types'
 
@@ -17,9 +18,12 @@ export default async function DevamPage({
   const ay = Number(q.ay) || simdi.getMonth() + 1
 
   const supabase = await supabaseServer()
+  const okul = await aktifOkul()
+  if (!okul) return null
+
   const [{ data, error }, { data: sinifSatirlari }] = await Promise.all([
-    supabase.rpc('devam_cizelgesi', { p_yil: yil, p_ay: ay }),
-    supabase.from('students').select('sinif').not('sinif', 'is', null),
+    supabase.rpc('devam_cizelgesi', { p_okul_id: okul.id, p_yil: yil, p_ay: ay }),
+    supabase.from('students').select('sinif').eq('okul_id', okul.id).not('sinif', 'is', null),
   ])
 
   let satirlar = (data ?? []) as DevamSatiri[]
@@ -40,9 +44,12 @@ export default async function DevamPage({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="baslik">
-          Devam Çizelgesi — {AY_ADLARI[ay - 1]} {yil}
-        </h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="baslik">
+            Devam Çizelgesi — {AY_ADLARI[ay - 1]} {yil}
+          </h1>
+          <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
+        </div>
         <p className="text-sm text-solgun">
           Ayda {haftaIciSayisi} hafta içi gün · hafta sonları sayıma dahil değil
         </p>

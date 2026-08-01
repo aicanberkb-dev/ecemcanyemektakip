@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { Student } from '@/lib/types'
 
@@ -16,7 +17,12 @@ export default async function OgrenciDuzenlePage({
 }) {
   const { id } = await params
   const supabase = await supabaseServer()
-  const { data } = await supabase.from('students').select('*').eq('id', id).maybeSingle()
+  const { data } = await supabase
+    .from('students')
+    .select('*')
+    .eq('id', id)
+    .eq('okul_id', await aktifOkulId())
+    .maybeSingle()
 
   if (!data) notFound()
   const ogrenci = data as Student

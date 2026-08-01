@@ -1,5 +1,6 @@
 import { TarihAraligi } from '@/components/TarihAraligi'
 import { ayBasiISO, bugunISO, para, tarih as tarihBicim } from '@/lib/format'
+import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { NakitSatiri } from '@/lib/types'
 
@@ -15,7 +16,14 @@ export default async function NakitPage({
   const bit = bitQ || bugunISO()
 
   const supabase = await supabaseServer()
-  const { data, error } = await supabase.rpc('nakit_raporu', { p_bas: bas, p_bit: bit })
+  const okul = await aktifOkul()
+  if (!okul) return null
+
+  const { data, error } = await supabase.rpc('nakit_raporu', {
+    p_okul_id: okul.id,
+    p_bas: bas,
+    p_bit: bit,
+  })
   const satirlar = (data ?? []) as NakitSatiri[]
 
   const toplam = satirlar.reduce(
@@ -31,7 +39,10 @@ export default async function NakitPage({
 
   return (
     <div className="space-y-4">
-      <h1 className="baslik">Kasaya Giren Nakit</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="baslik">Kasaya Giren Nakit</h1>
+        <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
+      </div>
       <TarihAraligi bas={bas} bit={bit} temizleYolu="/reports/nakit" />
 
       {error && (

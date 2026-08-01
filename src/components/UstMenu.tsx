@@ -4,6 +4,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 
+import { OkulSecici } from '@/components/OkulSecici'
+import type { Okul } from '@/lib/types'
+
 const BAGLANTILAR = [
   { yol: '/pos', ad: 'Yemekhane' },
   { yol: '/dashboard', ad: 'Özet' },
@@ -28,7 +31,15 @@ const AYAR_ALT = [
   { yol: '/admin/audit-log', ad: 'İşlem Geçmişi' },
 ]
 
-export function UstMenu({ kullanici }: { kullanici: string }) {
+export function UstMenu({
+  kullanici,
+  okullar,
+  aktifOkulId,
+}: {
+  kullanici: string
+  okullar: Okul[]
+  aktifOkulId: string
+}) {
   const yol = usePathname()
   const [acikMenu, setAcikMenu] = useState(false)
 
@@ -51,6 +62,8 @@ export function UstMenu({ kullanici }: { kullanici: string }) {
         <Link href="/pos" className="text-lg font-bold tracking-tight text-vurgu">
           Yemek Takip
         </Link>
+
+        <OkulSecici okullar={okullar} aktifId={aktifOkulId} />
 
         <nav className="hidden flex-1 items-center gap-1 md:flex">
           {BAGLANTILAR.map((b) => (

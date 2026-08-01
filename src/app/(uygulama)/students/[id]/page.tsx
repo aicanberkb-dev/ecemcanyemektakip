@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 
 import { AboneRozeti, Bakiye, DurumRozeti } from '@/components/Rozetler'
 import { para } from '@/lib/format'
+import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { StudentBalance, Transaction } from '@/lib/types'
 
@@ -17,9 +18,16 @@ export default async function OgrenciDetayPage({
 }) {
   const { id } = await params
   const supabase = await supabaseServer()
+  const okulId = await aktifOkulId()
 
   const [{ data: ozetVeri }, { data: islemVeri }] = await Promise.all([
-    supabase.from('student_balances').select('*').eq('student_id', id).maybeSingle(),
+    // okul_id filtresi: başka okulun öğrencisi URL'den açılamaz
+    supabase
+      .from('student_balances')
+      .select('*')
+      .eq('student_id', id)
+      .eq('okul_id', okulId)
+      .maybeSingle(),
     supabase
       .from('transactions')
       .select('*')

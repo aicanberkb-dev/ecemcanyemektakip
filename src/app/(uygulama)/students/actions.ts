@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 
+import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import { bosNull, trBoolean, trSayi } from '@/lib/zod-tr'
 
@@ -41,8 +42,11 @@ function alanHatalari(hata: z.ZodError): Record<string, string> {
 
 /** Postgres hatasını kullanıcıya gösterilebilir Türkçe mesaja çevirir. */
 function hataMesaji(mesaj: string): string {
-  if (mesaj.includes('students_ogrenci_no_key')) return 'Bu öğrenci numarası zaten kayıtlı.'
-  if (mesaj.includes('students_kimlik_no_uniq')) return 'Bu kimlik numarası zaten kayıtlı.'
+  // Benzersizlik okul bazındadır: aynı numara diğer okulda kullanılabilir.
+  if (mesaj.includes('students_okul_ogrenci_no_uniq'))
+    return 'Bu öğrenci numarası bu okulda zaten kayıtlı.'
+  if (mesaj.includes('students_okul_kimlik_no_uniq'))
+    return 'Bu kimlik numarası bu okulda zaten kayıtlı.'
   return mesaj
 }
 
@@ -54,9 +58,11 @@ export async function ogrenciEkle(
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
   const supabase = await supabaseServer()
+  const okulId = await aktifOkulId()
+
   const { data, error } = await supabase
     .from('students')
-    .insert(sonuc.data)
+    .insert({ ...sonuc.data, okul_id: okulId })
     .select('id')
     .single()
 
@@ -75,7 +81,12 @@ export async function ogrenciGuncelle(
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
   const supabase = await supabaseServer()
-  const { error } = await supabase.from('students').update(sonuc.data).eq('id', id)
+  // okul_id filtresi: başka okulun kaydı elle girilen bir id ile değiştirilemesin
+  const { error } = await supabase
+    .from('students')
+    .update(sonuc.data)
+    .eq('id', id)
+    .eq('okul_id', await aktifOkulId())
 
   if (error) return { hata: hataMesaji(error.message) }
 
@@ -99,7 +110,11 @@ export async function iskontoDevirGuncelle(
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
   const supabase = await supabaseServer()
-  const { error } = await supabase.from('students').update(sonuc.data).eq('id', id)
+  const { error } = await supabase
+    .from('students')
+    .update(sonuc.data)
+    .eq('id', id)
+    .eq('okul_id', await aktifOkulId())
   if (error) return { hata: error.message }
 
   revalidatePath(`/students/${id}`)
@@ -108,7 +123,11 @@ export async function iskontoDevirGuncelle(
 
 export async function ogrenciSil(id: string) {
   const supabase = await supabaseServer()
-  const { error } = await supabase.from('students').delete().eq('id', id)
+  const { error } = await supabase
+    .from('students')
+    .delete()
+    .eq('id', id)
+    .eq('okul_id', await aktifOkulId())
   if (error) throw new Error(error.message)
 
   revalidatePath('/students')

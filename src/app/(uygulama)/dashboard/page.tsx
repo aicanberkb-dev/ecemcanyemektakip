@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import { TarihAraligi } from '@/components/TarihAraligi'
 import { ayBasiISO, bugunISO, para, tarih as tarihBicim } from '@/lib/format'
+import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { SerbestOgun, Transaction } from '@/lib/types'
 
@@ -19,6 +20,8 @@ export default async function DashboardPage({
   const bit = bitQ || bugunISO()
 
   const supabase = await supabaseServer()
+  const okul = await aktifOkul()
+  if (!okul) return null
 
   const [
     { data: islemler },
@@ -26,12 +29,28 @@ export default async function DashboardPage({
     { count: aktifOgrenci },
     { data: sonIslemler },
   ] = await Promise.all([
-    supabase.from('transactions').select('tip, tutar, ogun_abone_tipi').gte('tarih', bas).lte('tarih', bit),
-    supabase.from('serbest_ogunler').select('tip, tutar').gte('tarih', bas).lte('tarih', bit),
-    supabase.from('students').select('id', { count: 'exact', head: true }).eq('aktif', true),
+    // students!inner: yalnızca bu okulun öğrencilerine ait işlemler
     supabase
       .from('transactions')
-      .select('*, students(ad_soyad, ogrenci_no)')
+      .select('tip, tutar, ogun_abone_tipi, students!inner(okul_id)')
+      .eq('students.okul_id', okul.id)
+      .gte('tarih', bas)
+      .lte('tarih', bit),
+    supabase
+      .from('serbest_ogunler')
+      .select('tip, tutar')
+      .eq('okul_id', okul.id)
+      .gte('tarih', bas)
+      .lte('tarih', bit),
+    supabase
+      .from('students')
+      .select('id', { count: 'exact', head: true })
+      .eq('okul_id', okul.id)
+      .eq('aktif', true),
+    supabase
+      .from('transactions')
+      .select('*, students!inner(ad_soyad, ogrenci_no, okul_id)')
+      .eq('students.okul_id', okul.id)
       .order('created_at', { ascending: false })
       .limit(15),
   ])
@@ -54,7 +73,10 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-5">
-      <h1 className="baslik">Özet</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="baslik">Özet</h1>
+        <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
+      </div>
 
       <TarihAraligi bas={bas} bit={bit} temizleYolu="/dashboard" />
 

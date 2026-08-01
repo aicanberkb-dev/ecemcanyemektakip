@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
+import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import { trSayi } from '@/lib/zod-tr'
 
@@ -36,12 +37,42 @@ export async function ucretleriGuncelle(
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
   const supabase = await supabaseServer()
-  const { error } = await supabase.from('app_settings').update(sonuc.data).eq('id', id)
+  // okul_id filtresi: yalnızca seçili okulun ücretleri değişebilir
+  const { error } = await supabase
+    .from('app_settings')
+    .update(sonuc.data)
+    .eq('id', id)
+    .eq('okul_id', await aktifOkulId())
   if (error) return { hata: error.message }
 
   revalidatePath('/admin/settings')
   revalidatePath('/pos')
   return { basari: 'Ücretler güncellendi.' }
+}
+
+/** Okulun görünen adını değiştirir. */
+export async function okulAdiGuncelle(
+  okulId: string,
+  _onceki: AyarDurumu,
+  formData: FormData,
+): Promise<AyarDurumu> {
+  const sema = z.object({ ad: z.string().trim().min(2, 'Okul adı gerekli.') })
+  const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase.from('okullar').update(sonuc.data).eq('id', okulId)
+
+  if (error) {
+    return {
+      hata: error.message.includes('okullar_ad_key')
+        ? 'Bu isimde başka bir okul var.'
+        : error.message,
+    }
+  }
+
+  revalidatePath('/', 'layout')
+  return { basari: 'Okul adı güncellendi.' }
 }
 
 export async function taksitEkle(
@@ -59,12 +90,14 @@ export async function taksitEkle(
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
   const supabase = await supabaseServer()
-  const { error } = await supabase.from('taksit_plani').insert(sonuc.data)
+  const { error } = await supabase
+    .from('taksit_plani')
+    .insert({ ...sonuc.data, okul_id: await aktifOkulId() })
 
   if (error) {
     return {
-      hata: error.message.includes('taksit_plani_yil_ad_key')
-        ? 'Bu yıl için aynı adda bir taksit zaten var.'
+      hata: error.message.includes('taksit_plani_okul_yil_ad_uniq')
+        ? 'Bu okulda o yıl için aynı adda bir taksit zaten var.'
         : error.message,
     }
   }
@@ -89,7 +122,11 @@ export async function taksitGuncelle(
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
   const supabase = await supabaseServer()
-  const { error } = await supabase.from('taksit_plani').update(sonuc.data).eq('id', id)
+  const { error } = await supabase
+    .from('taksit_plani')
+    .update(sonuc.data)
+    .eq('id', id)
+    .eq('okul_id', await aktifOkulId())
   if (error) return { hata: error.message }
 
   revalidatePath('/admin/settings')
@@ -99,7 +136,11 @@ export async function taksitGuncelle(
 
 export async function taksitSil(id: string) {
   const supabase = await supabaseServer()
-  const { error } = await supabase.from('taksit_plani').delete().eq('id', id)
+  const { error } = await supabase
+    .from('taksit_plani')
+    .delete()
+    .eq('id', id)
+    .eq('okul_id', await aktifOkulId())
   if (error) throw new Error(error.message)
 
   revalidatePath('/admin/settings')
