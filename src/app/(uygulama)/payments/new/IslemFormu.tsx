@@ -1,12 +1,19 @@
 'use client'
 
+import Link from 'next/link'
 import { useActionState, useState } from 'react'
 
+import { OdemeYontemiSecici } from '@/components/OdemeYontemiSecici'
 import { OgrenciSecici, type SeciliOgrenci } from '@/components/OgrenciSecici'
 import { bugunISO, para } from '@/lib/format'
+import type { OdemeYontemi } from '@/lib/types'
 
-import { harcamaEkle, tahsilatEkle, type IslemDurumu } from '../../islem-actions'
+import { tahsilatEkle, type IslemDurumu } from '../../islem-actions'
 
+/**
+ * Yalnızca tahsilat (para girişi) alır. Yemek kaydı bu ekranda yapılmaz:
+ * bugünkü öğünler Yemekhane, geçmiş tarihler Toplu Giriş ekranından girilir.
+ */
 export function IslemFormu({
   okulId,
   baslangic,
@@ -14,38 +21,13 @@ export function IslemFormu({
   okulId: string
   baslangic: SeciliOgrenci | null
 }) {
-  const [tip, setTip] = useState<'tahsilat' | 'harcama'>('tahsilat')
   const [ogrenci, setOgrenci] = useState<SeciliOgrenci | null>(baslangic)
-
-  const [tahsilatDurum, tahsilatGonder, tahsilatBekliyor] = useActionState(
-    tahsilatEkle,
-    {} as IslemDurumu,
-  )
-  const [harcamaDurum, harcamaGonder, harcamaBekliyor] = useActionState(
-    harcamaEkle,
-    {} as IslemDurumu,
-  )
-
-  const durum = tip === 'tahsilat' ? tahsilatDurum : harcamaDurum
-  const bekliyor = tip === 'tahsilat' ? tahsilatBekliyor : harcamaBekliyor
+  const [yontem, setYontem] = useState<OdemeYontemi | null>(null)
+  const [durum, gonder, bekliyor] = useActionState(tahsilatEkle, {} as IslemDurumu)
 
   return (
     <div className="kart space-y-5 p-6">
-      {/* Tip seçimi */}
-      <div className="flex gap-2">
-        <TipButonu aktif={tip === 'tahsilat'} onClick={() => setTip('tahsilat')} renk="emerald">
-          Tahsilat (para girişi)
-        </TipButonu>
-        <TipButonu aktif={tip === 'harcama'} onClick={() => setTip('harcama')} renk="slate">
-          Harcama (yemek)
-        </TipButonu>
-      </div>
-
-      <form
-        key={tip}
-        action={tip === 'tahsilat' ? tahsilatGonder : harcamaGonder}
-        className="space-y-4"
-      >
+      <form action={gonder} className="space-y-4">
         <div>
           <label className="etiket">Öğrenci *</label>
           <OgrenciSecici okulId={okulId} baslangic={baslangic} onSecim={setOgrenci} />
@@ -67,50 +49,48 @@ export function IslemFormu({
             {durum.alanlar?.tarih && <p className="hata">{durum.alanlar.tarih}</p>}
           </div>
 
-          {tip === 'tahsilat' ? (
-            <div>
-              <label className="etiket" htmlFor="tutar">
-                Tutar (₺) *
-              </label>
-              <input
-                id="tutar"
-                name="tutar"
-                inputMode="decimal"
-                placeholder="0,00"
-                className="girdi"
-                autoFocus
-              />
-              {durum.alanlar?.tutar && <p className="hata">{durum.alanlar.tutar}</p>}
-            </div>
-          ) : (
-            <div>
-              <label className="etiket">Düşülecek tutar</label>
-              <div className="girdi bg-slate-50 text-slate-600">
-                {!ogrenci
-                  ? 'Öğrenci seçin'
-                  : ogrenci.abone_tipi === 'aylik'
-                    ? '0,00 ₺ — aylıkçı devam kaydı'
-                    : para(ogrenci.gunluk_ucret)}
-              </div>
-              <p className="mt-1 text-xs text-solgun">
-                Tutar öğrencinin iskontosundan ve ayarlardan hesaplanır.
-              </p>
-            </div>
+          <div>
+            <label className="etiket" htmlFor="tutar">
+              Alınan Tutar (₺) *
+            </label>
+            <input
+              id="tutar"
+              name="tutar"
+              inputMode="decimal"
+              placeholder="0,00"
+              className="girdi"
+            />
+            {durum.alanlar?.tutar && <p className="hata">{durum.alanlar.tutar}</p>}
+          </div>
+        </div>
+
+        <div>
+          <label className="etiket">Ödeme Yöntemi *</label>
+          <OdemeYontemiSecici onSecim={setYontem} />
+          {durum.alanlar?.odeme_yontemi && (
+            <p className="hata">{durum.alanlar.odeme_yontemi}</p>
           )}
         </div>
 
-        {tip === 'tahsilat' && (
-          <div>
-            <label className="etiket" htmlFor="aciklama">
-              Açıklama
-            </label>
-            <input
-              id="aciklama"
-              name="aciklama"
-              className="girdi"
-              placeholder="ör. Ekim taksiti, elden"
-            />
-          </div>
+        <div>
+          <label className="etiket" htmlFor="aciklama">
+            Açıklama
+          </label>
+          <input
+            id="aciklama"
+            name="aciklama"
+            className="girdi"
+            placeholder="ör. Ekim taksiti, elden"
+          />
+        </div>
+
+        {ogrenci && (
+          <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-solgun">
+            {ogrenci.ad_soyad} — güncel bakiye{' '}
+            <strong className={ogrenci.kalan < 0 ? 'text-red-600' : 'text-emerald-700'}>
+              {para(ogrenci.kalan)}
+            </strong>
+          </p>
         )}
 
         {durum.hata && (
@@ -122,39 +102,25 @@ export function IslemFormu({
           </p>
         )}
 
-        <button className="btn-birincil" disabled={bekliyor || !ogrenci}>
-          {bekliyor ? 'Kaydediliyor…' : tip === 'tahsilat' ? 'Tahsilatı Kaydet' : 'Yemek Kaydı Ekle'}
+        <button className="btn-birincil" disabled={bekliyor || !ogrenci || !yontem}>
+          {bekliyor ? 'Kaydediliyor…' : 'Tahsilatı Kaydet'}
         </button>
+        {!yontem && ogrenci && (
+          <p className="text-xs text-solgun">Kaydetmek için ödeme yöntemini seçin.</p>
+        )}
       </form>
+
+      <p className="border-t border-cizgi pt-4 text-sm text-solgun">
+        Yemek kaydı bu ekrandan girilmez. Bugünkü öğünler için{' '}
+        <Link href="/pos" className="text-vurgu hover:underline">
+          Yemekhane
+        </Link>
+        , geçmiş bir tarih için{' '}
+        <Link href="/toplu" className="text-vurgu hover:underline">
+          Toplu Giriş
+        </Link>{' '}
+        ekranını kullanın.
+      </p>
     </div>
-  )
-}
-
-function TipButonu({
-  aktif,
-  onClick,
-  renk,
-  children,
-}: {
-  aktif: boolean
-  onClick: () => void
-  renk: 'emerald' | 'slate'
-  children: React.ReactNode
-}) {
-  const aktifSinif =
-    renk === 'emerald'
-      ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-      : 'border-slate-500 bg-slate-100 text-slate-800'
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex-1 rounded-md border px-4 py-2.5 text-sm font-medium transition ${
-        aktif ? aktifSinif : 'border-cizgi bg-white text-slate-600 hover:bg-slate-50'
-      }`}
-    >
-      {children}
-    </button>
   )
 }

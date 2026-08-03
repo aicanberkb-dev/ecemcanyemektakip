@@ -28,13 +28,29 @@ export default async function NakitPage({
 
   const toplam = satirlar.reduce(
     (t, s) => ({
+      nakit: t.nakit + Number(s.nakit_tutar),
+      havale: t.havale + Number(s.havale_tutar),
+      kart: t.kart + Number(s.kart_tutar),
+      belirsiz: t.belirsiz + Number(s.belirsiz_tutar),
       tahsilat: t.tahsilat + Number(s.tahsilat_tutar),
       tahsilatAdet: t.tahsilatAdet + Number(s.tahsilat_adet),
       ucretli: t.ucretli + Number(s.ucretli_tutar),
       ucretliAdet: t.ucretliAdet + Number(s.ucretli_adet),
       genel: t.genel + Number(s.toplam),
+      kasa: t.kasa + Number(s.kasa_nakit),
     }),
-    { tahsilat: 0, tahsilatAdet: 0, ucretli: 0, ucretliAdet: 0, genel: 0 },
+    {
+      nakit: 0,
+      havale: 0,
+      kart: 0,
+      belirsiz: 0,
+      tahsilat: 0,
+      tahsilatAdet: 0,
+      ucretli: 0,
+      ucretliAdet: 0,
+      genel: 0,
+      kasa: 0,
+    },
   )
 
   return (
@@ -49,14 +65,29 @@ export default async function NakitPage({
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error.message}</p>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Ozet baslik="Tahsilatlar" deger={para(toplam.tahsilat)} alt={`${toplam.tahsilatAdet} işlem`} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Ozet baslik="Nakit tahsilat" deger={para(toplam.nakit)} />
+        <Ozet baslik="Havale / EFT" deger={para(toplam.havale)} />
+        <Ozet baslik="Kredi kartı" deger={para(toplam.kart)} />
         <Ozet
           baslik="Ücretli öğünler"
           deger={para(toplam.ucretli)}
-          alt={`${toplam.ucretliAdet} öğün`}
+          alt={`${toplam.ucretliAdet} öğün · kapıda nakit`}
         />
-        <Ozet baslik="Toplam" deger={para(toplam.genel)} renk="text-emerald-700" alt="dönem geneli" />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Ozet
+          baslik="Kasaya giren nakit"
+          deger={para(toplam.kasa)}
+          renk="text-emerald-700"
+          alt="nakit tahsilat + ücretli öğünler"
+        />
+        <Ozet
+          baslik="Dönem geneli (tüm yöntemler)"
+          deger={para(toplam.genel)}
+          alt={`${toplam.tahsilatAdet} tahsilat işlemi dahil`}
+        />
       </div>
 
       <div className="kart overflow-x-auto">
@@ -64,10 +95,11 @@ export default async function NakitPage({
           <thead>
             <tr>
               <th>Tarih</th>
-              <th className="text-right">Tahsilat</th>
-              <th className="text-right">Adet</th>
+              <th className="text-right">Nakit</th>
+              <th className="text-right">Havale</th>
+              <th className="text-right">Kart</th>
               <th className="text-right">Ücretli öğün</th>
-              <th className="text-right">Adet</th>
+              <th className="text-right">Kasaya giren</th>
               <th className="text-right">Günün toplamı</th>
             </tr>
           </thead>
@@ -75,18 +107,19 @@ export default async function NakitPage({
             {satirlar.map((s) => (
               <tr key={s.tarih}>
                 <td className="whitespace-nowrap">{tarihBicim(s.tarih)}</td>
-                <td className="text-right tabular-nums text-emerald-700">
-                  {para(s.tahsilat_tutar)}
-                </td>
-                <td className="text-right tabular-nums text-solgun">{s.tahsilat_adet}</td>
+                <td className="text-right tabular-nums">{para(s.nakit_tutar)}</td>
+                <td className="text-right tabular-nums">{para(s.havale_tutar)}</td>
+                <td className="text-right tabular-nums">{para(s.kart_tutar)}</td>
                 <td className="text-right tabular-nums">{para(s.ucretli_tutar)}</td>
-                <td className="text-right tabular-nums text-solgun">{s.ucretli_adet}</td>
-                <td className="text-right font-semibold tabular-nums">{para(s.toplam)}</td>
+                <td className="text-right font-semibold tabular-nums text-emerald-700">
+                  {para(s.kasa_nakit)}
+                </td>
+                <td className="text-right tabular-nums">{para(s.toplam)}</td>
               </tr>
             ))}
             {satirlar.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-solgun">
+                <td colSpan={7} className="py-8 text-center text-solgun">
                   Bu aralıkta kasaya para girişi yok.
                 </td>
               </tr>
@@ -96,10 +129,13 @@ export default async function NakitPage({
             <tfoot>
               <tr className="bg-slate-50 font-semibold">
                 <td className="px-3 py-2">TOPLAM</td>
-                <td className="px-3 py-2 text-right tabular-nums">{para(toplam.tahsilat)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{toplam.tahsilatAdet}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{para(toplam.nakit)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{para(toplam.havale)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{para(toplam.kart)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{para(toplam.ucretli)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{toplam.ucretliAdet}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
+                  {para(toplam.kasa)}
+                </td>
                 <td className="px-3 py-2 text-right tabular-nums">{para(toplam.genel)}</td>
               </tr>
             </tfoot>

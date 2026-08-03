@@ -50,6 +50,10 @@ export async function tahsilatEkle(
     tarih: z.string().min(1, 'Tarih gerekli.'),
     tutar: trSayi({ min: 0.01 }),
     aciklama: bosNull,
+    // Zorunlu: tahsilatın nasıl alındığı seçilmeden kayıt açılamaz
+    odeme_yontemi: z.enum(['nakit', 'havale', 'kredi_karti'], {
+      error: 'Ödeme yöntemi seçin.',
+    }),
   })
 
   const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
@@ -80,40 +84,9 @@ export async function tahsilatEkle(
 }
 
 /**
- * Elle yemek (harcama) girişi. Tutar istemciden gelmez —
- * yemek_kaydet fonksiyonu öğrencinin iskontosundan ve ayarlardan hesaplar.
+ * Geçmiş işlem düzeltme. Tahsilatlarda ödeme yöntemi de değiştirilebilir.
+ * Yapılan her düzeltme audit_log'a eski/yeni değeriyle yazılır.
  */
-export async function harcamaEkle(
-  _onceki: IslemDurumu,
-  formData: FormData,
-): Promise<IslemDurumu> {
-  const sema = z.object({
-    student_id: z.uuid('Öğrenci seçin.'),
-    tarih: z.string().min(1, 'Tarih gerekli.'),
-  })
-
-  const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
-  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
-
-  if (!(await ogrenciOkuldaMi(sonuc.data.student_id))) {
-    return { hata: 'Öğrenci seçili okulda bulunamadı.' }
-  }
-
-  const supabase = await supabaseServer()
-  const { error } = await supabase.rpc('yemek_kaydet', {
-    p_student_id: sonuc.data.student_id,
-    p_tarih: sonuc.data.tarih,
-  })
-
-  if (error) return { hata: error.message }
-
-  revalidatePath('/students')
-  revalidatePath(`/students/${sonuc.data.student_id}`)
-  revalidatePath('/dashboard')
-  return { basari: 'Yemek kaydı eklendi.' }
-}
-
-/** İşlem düzeltme. Harcama tutarı da düzeltilebilir (yanlış girilmiş kayıt için). */
 export async function islemGuncelle(
   id: string,
   studentId: string,
@@ -124,6 +97,8 @@ export async function islemGuncelle(
     tarih: z.string().min(1, 'Tarih gerekli.'),
     tutar: trSayi({ min: 0 }),
     aciklama: bosNull,
+    // Tahsilatlarda zorunlu, harcamalarda gönderilmez
+    odeme_yontemi: z.enum(['nakit', 'havale', 'kredi_karti']).optional(),
   })
 
   const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
@@ -139,16 +114,38 @@ export async function islemGuncelle(
   } = await supabase.auth.getUser()
   if (!user) return { hata: 'Oturum bulunamadı.' }
 
+  const { odeme_yontemi, ...alanlar } = sonuc.data
+
+  // Kaydın tipi değişmez; ödeme yöntemi yalnızca tahsilatlarda güncellenir
+  const { data: mevcut } = await supabase
+    .from('transactions')
+    .select('tip')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (!mevcut) return { hata: 'İşlem bulunamadı.' }
+
+  const tahsilatMi = mevcut.tip === 'tahsilat'
+  if (tahsilatMi && !odeme_yontemi) {
+    return { alanlar: { odeme_yontemi: 'Ödeme yöntemi seçin.' } }
+  }
+
   // RLS: düzeltmede islemi_yapan_user_id düzelten kişi olur
   const { error } = await supabase
     .from('transactions')
-    .update({ ...sonuc.data, islemi_yapan_user_id: user.id })
+    .update({
+      ...alanlar,
+      ...(tahsilatMi ? { odeme_yontemi } : {}),
+      islemi_yapan_user_id: user.id,
+    })
     .eq('id', id)
     .eq('student_id', studentId)
 
   if (error) return { hata: error.message }
 
   revalidatePath(`/students/${studentId}`)
+  revalidatePath('/reports/tahsilat')
+  revalidatePath('/reports/nakit')
   revalidatePath('/dashboard')
   return { basari: 'İşlem güncellendi.' }
 }

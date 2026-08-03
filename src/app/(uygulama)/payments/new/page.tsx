@@ -5,7 +5,7 @@ import type { StudentBalance } from '@/lib/types'
 
 import { IslemFormu } from './IslemFormu'
 
-export const metadata = { title: 'İşlem Girişi — Yemek Takip' }
+export const metadata = { title: 'Tahsilat Girişi — Yemek Takip' }
 
 export default async function YeniIslemPage({
   searchParams,

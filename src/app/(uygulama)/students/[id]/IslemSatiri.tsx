@@ -2,8 +2,9 @@
 
 import { useActionState, useState } from 'react'
 
+import { OdemeYontemiSecici } from '@/components/OdemeYontemiSecici'
 import { para, tarih as tarihBicim } from '@/lib/format'
-import type { Transaction } from '@/lib/types'
+import { ODEME_YONTEMI_ADLARI, type Transaction } from '@/lib/types'
 
 import { islemGuncelle, islemSil, type IslemDurumu } from '../../islem-actions'
 
@@ -47,6 +48,15 @@ export function IslemSatiri({ islem }: { islem: Transaction }) {
                 className="girdi !py-1.5"
               />
             </div>
+            {islem.tip === 'tahsilat' && (
+              <div>
+                <label className="etiket text-xs">Ödeme Yöntemi</label>
+                <OdemeYontemiSecici baslangic={islem.odeme_yontemi} kucuk />
+                {durum.alanlar?.odeme_yontemi && (
+                  <p className="hata">{durum.alanlar.odeme_yontemi}</p>
+                )}
+              </div>
+            )}
             <button className="btn-birincil !py-1.5" disabled={bekliyor}>
               {bekliyor ? 'Kaydediliyor…' : 'Kaydet'}
             </button>
@@ -76,7 +86,14 @@ export function IslemSatiri({ islem }: { islem: Transaction }) {
           </span>
         )}
       </td>
-      <td className="text-solgun">{islem.aciklama ?? '—'}</td>
+      <td className="text-solgun">
+        {islem.odeme_yontemi && (
+          <span className="rozet mr-2 bg-slate-100 text-slate-700">
+            {ODEME_YONTEMI_ADLARI[islem.odeme_yontemi]}
+          </span>
+        )}
+        {islem.aciklama ?? '—'}
+      </td>
       <td
         className={`text-right font-medium tabular-nums ${
           islem.tip === 'tahsilat' ? 'text-emerald-700' : 'text-slate-700'

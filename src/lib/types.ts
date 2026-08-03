@@ -5,6 +5,13 @@ export type AboneTipi = 'gunluk' | 'aylik'
 export type IslemTipi = 'tahsilat' | 'harcama'
 export type SerbestOgunTipi = 'ucretli' | 'misafir'
 export type KullaniciRolu = 'admin' | 'personel'
+export type OdemeYontemi = 'nakit' | 'havale' | 'kredi_karti'
+
+export const ODEME_YONTEMI_ADLARI: Record<OdemeYontemi, string> = {
+  nakit: 'Nakit',
+  havale: 'Havale / EFT',
+  kredi_karti: 'Kredi Kartı',
+}
 
 export type Okul = {
   id: string
@@ -72,6 +79,8 @@ export type Transaction = {
   aciklama: string | null
   islemi_yapan_user_id: string
   ogun_abone_tipi: AboneTipi | null
+  /** Yalnızca tahsilat kayıtlarında dolu; harcamalarda null */
+  odeme_yontemi: OdemeYontemi | null
   created_at: string
 }
 
@@ -166,11 +175,17 @@ export type GunSonu = {
 
 export type NakitSatiri = {
   tarih: string
+  nakit_tutar: number
+  havale_tutar: number
+  kart_tutar: number
+  belirsiz_tutar: number
   tahsilat_tutar: number
   tahsilat_adet: number
   ucretli_tutar: number
   ucretli_adet: number
   toplam: number
+  /** Kasaya fiilen giren para: nakit tahsilat + ücretli öğünler */
+  kasa_nakit: number
 }
 
 export type GelenGidenSatiri = {

@@ -4,7 +4,7 @@ import { TarihAraligi } from '@/components/TarihAraligi'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
-import type { Transaction } from '@/lib/types'
+import { ODEME_YONTEMI_ADLARI, type OdemeYontemi, type Transaction } from '@/lib/types'
 
 export const metadata = { title: 'Tahsilat Geçmişi — Yemek Takip' }
 
@@ -47,6 +47,19 @@ export default async function TahsilatPage({
   }
 
   const toplam = kayitlar.reduce((t, k) => t + Number(k.tutar), 0)
+
+  // Ödeme yöntemi kırılımı
+  const yonteme = {
+    nakit: { tutar: 0, adet: 0 },
+    havale: { tutar: 0, adet: 0 },
+    kredi_karti: { tutar: 0, adet: 0 },
+    belirtilmemis: { tutar: 0, adet: 0 },
+  }
+  for (const k of kayitlar) {
+    const anahtar = k.odeme_yontemi ?? 'belirtilmemis'
+    yonteme[anahtar].tutar += Number(k.tutar)
+    yonteme[anahtar].adet += 1
+  }
 
   // Öğrenci bazlı kırılım
   const ogrenciBazli = new Map<string, { ad: string; no: string; tutar: number; adet: number }>()
@@ -94,6 +107,25 @@ export default async function TahsilatPage({
         <Ozet baslik="Ödeme yapan öğrenci" deger={String(ogrenciBazli.size)} />
       </div>
 
+      {/* Ödeme yöntemi kırılımı */}
+      <div className="grid gap-4 sm:grid-cols-4">
+        {(['nakit', 'havale', 'kredi_karti'] as OdemeYontemi[]).map((y) => (
+          <Ozet
+            key={y}
+            baslik={ODEME_YONTEMI_ADLARI[y]}
+            deger={para(yonteme[y].tutar)}
+            alt={`${yonteme[y].adet} işlem`}
+          />
+        ))}
+        {yonteme.belirtilmemis.adet > 0 && (
+          <Ozet
+            baslik="Belirtilmemiş"
+            deger={para(yonteme.belirtilmemis.tutar)}
+            alt={`${yonteme.belirtilmemis.adet} eski kayıt`}
+          />
+        )}
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
         <div className="kart overflow-x-auto">
           <h2 className="border-b border-cizgi px-4 py-3 font-semibold">
@@ -105,8 +137,10 @@ export default async function TahsilatPage({
                 <th>Tarih</th>
                 <th>Öğrenci</th>
                 <th>Sınıf</th>
+                <th>Ödeme Yöntemi</th>
                 <th>Açıklama</th>
                 <th className="text-right">Tutar</th>
+                <th className="text-right">Düzelt</th>
               </tr>
             </thead>
             <tbody>
@@ -122,15 +156,32 @@ export default async function TahsilatPage({
                     </Link>
                   </td>
                   <td>{k.students?.sinif ?? '—'}</td>
+                  <td>
+                    {k.odeme_yontemi ? (
+                      <span className="rozet bg-slate-100 text-slate-700">
+                        {ODEME_YONTEMI_ADLARI[k.odeme_yontemi]}
+                      </span>
+                    ) : (
+                      <span className="rozet bg-amber-100 text-amber-800">belirtilmemiş</span>
+                    )}
+                  </td>
                   <td className="text-solgun">{k.aciklama ?? '—'}</td>
                   <td className="text-right font-medium tabular-nums text-emerald-700">
                     {para(k.tutar)}
+                  </td>
+                  <td className="text-right whitespace-nowrap">
+                    <Link
+                      href={`/students/${k.student_id}`}
+                      className="text-xs text-vurgu hover:underline"
+                    >
+                      Düzelt →
+                    </Link>
                   </td>
                 </tr>
               ))}
               {kayitlar.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-solgun">
+                  <td colSpan={7} className="py-8 text-center text-solgun">
                     Bu aralıkta tahsilat yok.
                   </td>
                 </tr>
@@ -176,11 +227,22 @@ export default async function TahsilatPage({
   )
 }
 
-function Ozet({ baslik, deger, renk }: { baslik: string; deger: string; renk?: string }) {
+function Ozet({
+  baslik,
+  deger,
+  alt,
+  renk,
+}: {
+  baslik: string
+  deger: string
+  alt?: string
+  renk?: string
+}) {
   return (
     <div className="kart p-4">
       <p className="text-xs font-medium tracking-wide text-solgun uppercase">{baslik}</p>
       <p className={`mt-1 text-2xl font-bold tabular-nums ${renk ?? ''}`}>{deger}</p>
+      {alt && <p className="mt-1 text-xs text-solgun">{alt}</p>}
     </div>
   )
 }
