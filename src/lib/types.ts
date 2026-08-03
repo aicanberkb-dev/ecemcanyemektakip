@@ -140,14 +140,18 @@ export type PosSonuc = {
 
 /** Bir öğrencinin etkin taksit satırı: okul planı + varsa kişisel istisna */
 export type OgrenciTaksitSatiri = {
-  taksit_plani_id: string
+  istisna_id: string | null
+  /** null ise satır okul planında yok, yalnızca bu öğrenciye ait */
+  taksit_plani_id: string | null
   ad: string
-  okul_tutar: number
-  okul_vade: string
+  okul_tutar: number | null
+  okul_vade: string | null
   tutar: number
   vade_tarihi: string
   ozel_tutar: boolean
   ozel_vade: boolean
+  /** Öğrenciye özel ek taksit (okul planında karşılığı yok) */
+  ekstra: boolean
   aciklama: string | null
 }
 

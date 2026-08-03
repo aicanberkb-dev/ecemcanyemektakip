@@ -43,14 +43,7 @@ export async function ogrenciTaksitGuncelle(
   })
 
   const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
-  if (!sonuc.success) {
-    const alanlar: Record<string, string> = {}
-    for (const s of sonuc.error.issues) {
-      const alan = String(s.path[0] ?? '')
-      if (alan && !alanlar[alan]) alanlar[alan] = s.message
-    }
-    return { alanlar }
-  }
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
   if (!(await ogrenciOkuldaMi(studentId))) {
     return { hata: 'Öğrenci seçili okulda bulunamadı.' }
@@ -112,6 +105,99 @@ export async function ogrenciTaksitVarsayilana(studentId: string, taksitPlaniId:
     .delete()
     .eq('student_id', studentId)
     .eq('taksit_plani_id', taksitPlaniId)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/students/${studentId}`)
+  revalidatePath('/reports/taksit')
+}
+
+const ekstraSemasi = z.object({
+  ad: z.string().trim().min(1, 'Taksit adı gerekli.'),
+  tutar: trSayi({ min: 0 }),
+  vade_tarihi: z.string().min(1, 'Vade tarihi gerekli.'),
+  aciklama: bosNull,
+})
+
+function alanHatalari(hata: z.ZodError): Record<string, string> {
+  const sonuc: Record<string, string> = {}
+  for (const s of hata.issues) {
+    const alan = String(s.path[0] ?? '')
+    if (alan && !sonuc[alan]) sonuc[alan] = s.message
+  }
+  return sonuc
+}
+
+/**
+ * Okul planında karşılığı olmayan, yalnızca bu öğrenciye ait taksit ekler.
+ * Okul 3 taksitse veliyle 6 taksitte anlaşılmış olabilir.
+ */
+export async function ogrenciTaksitEkstraEkle(
+  studentId: string,
+  yil: number,
+  _onceki: TaksitIstisnaDurumu,
+  formData: FormData,
+): Promise<TaksitIstisnaDurumu> {
+  const sonuc = ekstraSemasi.safeParse(Object.fromEntries(formData.entries()))
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  if (!(await ogrenciOkuldaMi(studentId))) {
+    return { hata: 'Öğrenci seçili okulda bulunamadı.' }
+  }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase.from('ogrenci_taksit').insert({
+    student_id: studentId,
+    taksit_plani_id: null,
+    yil,
+    ...sonuc.data,
+  })
+
+  if (error) return { hata: error.message }
+
+  revalidatePath(`/students/${studentId}`)
+  revalidatePath('/reports/taksit')
+  return { basari: 'Taksit eklendi.' }
+}
+
+export async function ogrenciTaksitEkstraGuncelle(
+  studentId: string,
+  istisnaId: string,
+  _onceki: TaksitIstisnaDurumu,
+  formData: FormData,
+): Promise<TaksitIstisnaDurumu> {
+  const sonuc = ekstraSemasi.safeParse(Object.fromEntries(formData.entries()))
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  if (!(await ogrenciOkuldaMi(studentId))) {
+    return { hata: 'Öğrenci seçili okulda bulunamadı.' }
+  }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase
+    .from('ogrenci_taksit')
+    .update(sonuc.data)
+    .eq('id', istisnaId)
+    .eq('student_id', studentId)
+
+  if (error) return { hata: error.message }
+
+  revalidatePath(`/students/${studentId}`)
+  revalidatePath('/reports/taksit')
+  return { basari: 'Taksit güncellendi.' }
+}
+
+export async function ogrenciTaksitEkstraSil(studentId: string, istisnaId: string) {
+  if (!(await ogrenciOkuldaMi(studentId))) {
+    throw new Error('Öğrenci seçili okulda bulunamadı.')
+  }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase
+    .from('ogrenci_taksit')
+    .delete()
+    .eq('id', istisnaId)
+    .eq('student_id', studentId)
 
   if (error) throw new Error(error.message)
 
