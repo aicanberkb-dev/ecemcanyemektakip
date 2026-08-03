@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { CiktiBasligi } from '@/components/CiktiBasligi'
+import { SezonUyarisi } from '@/components/SezonUyarisi'
 import { YazdirButonu } from '@/components/Yazdir'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
@@ -101,6 +102,8 @@ export default async function TaksitPage({
         aralıkta yapılan tüm tahsilat sezona sayılır; yaz aylarındaki geç ödemeler de
         dahildir.
       </p>
+
+      <SezonUyarisi sezon={sezon} plan={plan} />
 
       {error && (
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error.message}</p>

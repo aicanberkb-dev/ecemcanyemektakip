@@ -11,6 +11,8 @@ export type IslemDurumu = {
   hata?: string
   basari?: string
   alanlar?: Record<string, string>
+  /** Her başarılı kayıtta değişir; geçmiş listesinin tazelenmesini tetikler */
+  zaman?: number
 }
 
 function alanHatalari(hata: z.ZodError): Record<string, string> {
@@ -79,8 +81,9 @@ export async function tahsilatEkle(
 
   revalidatePath('/students')
   revalidatePath(`/students/${sonuc.data.student_id}`)
+  revalidatePath('/reports/tahsilat')
   revalidatePath('/dashboard')
-  return { basari: 'Tahsilat kaydedildi.' }
+  return { basari: 'Tahsilat kaydedildi.', zaman: Date.now() }
 }
 
 /**

@@ -1,3 +1,4 @@
+import { SezonUyarisi } from '@/components/SezonUyarisi'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
 import { sezonSec } from '@/lib/sezon'
@@ -118,7 +119,17 @@ export default async function SettingsPage({
         </div>
 
         {sezon ? (
-          <TaksitPlaniBolumu key={sezon.id} sezonId={sezon.id} sezonAdi={sezon.ad} plan={plan} />
+          <>
+            <div className="mb-4">
+              <SezonUyarisi sezon={sezon} plan={plan} />
+            </div>
+            <TaksitPlaniBolumu
+              key={sezon.id}
+              sezonId={sezon.id}
+              sezonAdi={sezon.ad}
+              plan={plan}
+            />
+          </>
         ) : (
           <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
             Taksit planı girebilmek için önce yukarıdan bir sezon ekleyin.

@@ -15,16 +15,17 @@ export function SezonBolumu({ sezonlar }: { sezonlar: Sezon[] }) {
   if (durum.basari && acik) setAcik(false)
 
   const bugun = new Date().toISOString().slice(0, 10)
-  const oneri = onerilenSezon(new Date().getMonth() + 1 >= 9
-    ? new Date().getFullYear()
-    : new Date().getFullYear() - 1)
+  const oneri = onerilenSezon(
+    new Date().getMonth() + 1 >= 9 ? new Date().getFullYear() : new Date().getFullYear() - 1,
+  )
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-solgun">
-        Okul yılı takvim yılıyla örtüşmez. Taksitler yıla değil sezona bağlanır;
-        tahsilat da sezonun tarih aralığında sayılır. Böylece Ocak&apos;ta yapılan ödeme
-        Eylül&apos;de başlayan sezona doğru işlenir.
+        Taksitler yıla değil sezona bağlanır. <strong>Tarihler isteğe bağlıdır</strong> —
+        boş bırakırsanız hiçbir tarih filtresi uygulanmaz ve öğrencinin tüm tahsilatı
+        sezona sayılır. Sezon başında veri sıfırlanarak yeniden başlandığı için önerilen
+        kullanım budur.
       </p>
 
       <div className="overflow-x-auto">
@@ -33,8 +34,8 @@ export function SezonBolumu({ sezonlar }: { sezonlar: Sezon[] }) {
             <tr>
               <th>Sezon</th>
               <th>Başlangıç</th>
-              <th>Bitiş (tahsilat penceresi)</th>
-              <th>Durum</th>
+              <th>Bitiş</th>
+              <th>Tahsilat filtresi</th>
               <th className="text-right">İşlem</th>
             </tr>
           </thead>
@@ -61,25 +62,13 @@ export function SezonBolumu({ sezonlar }: { sezonlar: Sezon[] }) {
             {durum.alanlar?.ad && <p className="hata">{durum.alanlar.ad}</p>}
           </div>
           <div>
-            <label className="etiket text-xs">Başlangıç</label>
-            <input
-              type="date"
-              name="baslangic"
-              defaultValue={oneri.baslangic}
-              className="girdi !py-1.5"
-              required
-            />
+            <label className="etiket text-xs">Başlangıç (isteğe bağlı)</label>
+            <input type="date" name="baslangic" className="girdi !py-1.5" />
             {durum.alanlar?.baslangic && <p className="hata">{durum.alanlar.baslangic}</p>}
           </div>
           <div>
-            <label className="etiket text-xs">Bitiş</label>
-            <input
-              type="date"
-              name="bitis"
-              defaultValue={oneri.bitis}
-              className="girdi !py-1.5"
-              required
-            />
+            <label className="etiket text-xs">Bitiş (isteğe bağlı)</label>
+            <input type="date" name="bitis" className="girdi !py-1.5" />
             {durum.alanlar?.bitis && <p className="hata">{durum.alanlar.bitis}</p>}
           </div>
           <button className="btn-birincil !py-1.5" disabled={bekliyor}>
@@ -90,8 +79,9 @@ export function SezonBolumu({ sezonlar }: { sezonlar: Sezon[] }) {
           </button>
           {durum.hata && <p className="hata w-full">{durum.hata}</p>}
           <p className="w-full text-xs text-solgun">
-            Bitiş tarihini dersler bittikten sonrasına almak, yaz aylarında yapılan geç
-            ödemelerin doğru sezona sayılmasını sağlar.
+            Tarihleri boş bırakırsanız tahsilata filtre uygulanmaz — önerilen budur.
+            Yalnızca aynı anda birden fazla sezonun verisini bir arada tutuyorsanız
+            tarih girin. Öneri: {oneri.ad}
           </p>
         </form>
       ) : (
@@ -111,7 +101,8 @@ function SezonSatiri({ sezon, bugun }: { sezon: Sezon; bugun: string }) {
 
   if (durum.basari && duzenle) setDuzenle(false)
 
-  const guncelMi = sezon.baslangic <= bugun && bugun <= sezon.bitis
+  const guncelMi =
+    (!sezon.baslangic || sezon.baslangic <= bugun) && (!sezon.bitis || bugun <= sezon.bitis)
 
   if (duzenle) {
     return (
@@ -123,20 +114,20 @@ function SezonSatiri({ sezon, bugun }: { sezon: Sezon; bugun: string }) {
               <input name="ad" defaultValue={sezon.ad} className="girdi !py-1.5 w-36" />
             </div>
             <div>
-              <label className="etiket text-xs">Başlangıç</label>
+              <label className="etiket text-xs">Başlangıç (isteğe bağlı)</label>
               <input
                 type="date"
                 name="baslangic"
-                defaultValue={sezon.baslangic}
+                defaultValue={sezon.baslangic ?? ''}
                 className="girdi !py-1.5"
               />
             </div>
             <div>
-              <label className="etiket text-xs">Bitiş</label>
+              <label className="etiket text-xs">Bitiş (isteğe bağlı)</label>
               <input
                 type="date"
                 name="bitis"
-                defaultValue={sezon.bitis}
+                defaultValue={sezon.bitis ?? ''}
                 className="girdi !py-1.5"
               />
               {durum.alanlar?.bitis && <p className="hata">{durum.alanlar.bitis}</p>}
@@ -157,15 +148,21 @@ function SezonSatiri({ sezon, bugun }: { sezon: Sezon; bugun: string }) {
   return (
     <tr>
       <td className="font-medium">{sezon.ad}</td>
-      <td>{tarihBicim(sezon.baslangic)}</td>
-      <td>{tarihBicim(sezon.bitis)}</td>
+      <td className="text-solgun">
+        {sezon.baslangic ? tarihBicim(sezon.baslangic) : '—'}
+      </td>
+      <td className="text-solgun">{sezon.bitis ? tarihBicim(sezon.bitis) : '—'}</td>
       <td>
-        {guncelMi ? (
-          <span className="rozet bg-emerald-100 text-emerald-800">güncel sezon</span>
-        ) : sezon.bitis < bugun ? (
-          <span className="rozet bg-slate-100 text-slate-600">geçmiş</span>
+        {!sezon.baslangic && !sezon.bitis ? (
+          <span className="rozet bg-emerald-100 text-emerald-800">
+            yok — tüm tahsilat sayılır
+          </span>
+        ) : guncelMi ? (
+          <span className="rozet bg-blue-100 text-blue-800">aralık içinde</span>
         ) : (
-          <span className="rozet bg-blue-100 text-blue-800">gelecek</span>
+          <span className="rozet bg-amber-100 text-amber-800">
+            bugün aralık dışında
+          </span>
         )}
       </td>
       <td className="text-right whitespace-nowrap">

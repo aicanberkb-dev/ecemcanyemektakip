@@ -5,7 +5,7 @@ import { z } from 'zod'
 
 import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
-import { trSayi } from '@/lib/zod-tr'
+import { bosNull, trSayi } from '@/lib/zod-tr'
 
 export type AyarDurumu = {
   hata?: string
@@ -148,31 +148,34 @@ export async function taksitSil(id: string) {
 }
 
 /**
- * Sezon ekler. Okul yılı takvim yılıyla örtüşmediği için taksitler yıla değil
- * sezona bağlanır; tahsilat da sezonun tarih aralığında sayılır.
+ * Sezon tarihleri isteğe bağlıdır. Boş bırakılırsa tahsilata hiçbir tarih
+ * filtresi uygulanmaz — sezon başında veri sıfırlanarak yeniden başlandığı
+ * için varsayılan kullanım budur.
  */
+const sezonSemasi = z
+  .object({
+    ad: z.string().trim().min(1, 'Sezon adı gerekli.'),
+    baslangic: bosNull,
+    bitis: bosNull,
+  })
+  .refine((d) => !d.baslangic || !d.bitis || d.bitis > d.baslangic, {
+    message: 'Bitiş, başlangıçtan sonra olmalı.',
+    path: ['bitis'],
+  })
+
 export async function sezonEkle(
   _onceki: AyarDurumu,
   formData: FormData,
 ): Promise<AyarDurumu> {
-  const sema = z
-    .object({
-      ad: z.string().trim().min(1, 'Sezon adı gerekli.'),
-      baslangic: z.string().min(1, 'Başlangıç tarihi gerekli.'),
-      bitis: z.string().min(1, 'Bitiş tarihi gerekli.'),
-    })
-    .refine((d) => d.bitis > d.baslangic, {
-      message: 'Bitiş, başlangıçtan sonra olmalı.',
-      path: ['bitis'],
-    })
-
-  const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
+  const sonuc = sezonSemasi.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const { ad, baslangic, bitis } = sonuc.data
 
   const supabase = await supabaseServer()
   const { error } = await supabase
     .from('sezonlar')
-    .insert({ ...sonuc.data, okul_id: await aktifOkulId() })
+    .insert({ ad, baslangic, bitis, okul_id: await aktifOkulId() })
 
   if (error) {
     return {
@@ -192,24 +195,15 @@ export async function sezonGuncelle(
   _onceki: AyarDurumu,
   formData: FormData,
 ): Promise<AyarDurumu> {
-  const sema = z
-    .object({
-      ad: z.string().trim().min(1, 'Sezon adı gerekli.'),
-      baslangic: z.string().min(1, 'Başlangıç tarihi gerekli.'),
-      bitis: z.string().min(1, 'Bitiş tarihi gerekli.'),
-    })
-    .refine((d) => d.bitis > d.baslangic, {
-      message: 'Bitiş, başlangıçtan sonra olmalı.',
-      path: ['bitis'],
-    })
-
-  const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
+  const sonuc = sezonSemasi.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const { ad, baslangic, bitis } = sonuc.data
 
   const supabase = await supabaseServer()
   const { error } = await supabase
     .from('sezonlar')
-    .update(sonuc.data)
+    .update({ ad, baslangic, bitis })
     .eq('id', id)
     .eq('okul_id', await aktifOkulId())
 

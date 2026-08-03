@@ -9,6 +9,7 @@ import { bugunISO, para } from '@/lib/format'
 import type { OdemeYontemi } from '@/lib/types'
 
 import { tahsilatEkle, type IslemDurumu } from '../../islem-actions'
+import { SonTahsilatlar } from './SonTahsilatlar'
 
 /**
  * Yalnızca tahsilat (para girişi) alır. Yemek kaydı bu ekranda yapılmaz:
@@ -23,6 +24,9 @@ export function IslemFormu({
 }) {
   const [ogrenci, setOgrenci] = useState<SeciliOgrenci | null>(baslangic)
   const [yontem, setYontem] = useState<OdemeYontemi | null>(null)
+  // Mükerrer kontrolü için tarih ve tutar kontrollü tutulur
+  const [tarih, setTarih] = useState(bugunISO())
+  const [tutar, setTutar] = useState('')
   const [durum, gonder, bekliyor] = useActionState(tahsilatEkle, {} as IslemDurumu)
 
   return (
@@ -43,7 +47,8 @@ export function IslemFormu({
               id="tarih"
               type="date"
               name="tarih"
-              defaultValue={bugunISO()}
+              value={tarih}
+              onChange={(e) => setTarih(e.target.value)}
               className="girdi"
             />
             {durum.alanlar?.tarih && <p className="hata">{durum.alanlar.tarih}</p>}
@@ -58,6 +63,8 @@ export function IslemFormu({
               name="tutar"
               inputMode="decimal"
               placeholder="0,00"
+              value={tutar}
+              onChange={(e) => setTutar(e.target.value)}
               className="girdi"
             />
             {durum.alanlar?.tutar && <p className="hata">{durum.alanlar.tutar}</p>}
@@ -109,6 +116,13 @@ export function IslemFormu({
           <p className="text-xs text-solgun">Kaydetmek için ödeme yöntemini seçin.</p>
         )}
       </form>
+
+      <SonTahsilatlar
+        studentId={ogrenci?.student_id ?? null}
+        tarih={tarih}
+        tutar={tutar}
+        yenile={durum.zaman}
+      />
 
       <p className="border-t border-cizgi pt-4 text-sm text-solgun">
         Yemek kaydı bu ekrandan girilmez. Bugünkü öğünler için{' '}

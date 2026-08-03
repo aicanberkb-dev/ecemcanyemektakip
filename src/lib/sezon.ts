@@ -14,8 +14,14 @@ export function sezonSec(liste: Sezon[], istenenId?: string): Sezon | null {
     const bulunan = liste.find((s) => s.id === istenenId)
     if (bulunan) return bulunan
   }
+  // Tarihsiz sezon her zaman geçerlidir; tarihliyse bugünü kapsayanı seç
   const bugun = new Date().toISOString().slice(0, 10)
-  return liste.find((s) => s.baslangic <= bugun && bugun <= s.bitis) ?? liste[0]
+  return (
+    liste.find(
+      (s) =>
+        (!s.baslangic || s.baslangic <= bugun) && (!s.bitis || bugun <= s.bitis),
+    ) ?? liste[0]
+  )
 }
 
 /** Bir yıl için önerilen sezon: 01.09.yyyy – 31.08.(yyyy+1) */
