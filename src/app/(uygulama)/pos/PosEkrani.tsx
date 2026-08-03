@@ -140,13 +140,33 @@ export function PosEkrani({ okulId, okulAdi }: { okulId: string; okulAdi: string
     ozetYenile()
   }
 
-  async function serbestKaydet(tip: SerbestOgunTipi) {
+  /** Öğrencinin bugünkü yemek kaydını siler — o gün gelmemiş sayılır. */
+  async function yemekGeriAl() {
+    if (!secili || kaydediliyor) return
+    if (!confirm(`${secili.ad_soyad} bugün yemek yememiş olarak işaretlensin mi?`)) return
+
+    setKaydediliyor(true)
+    const ad = secili.ad_soyad
+    const { error } = await supabase.rpc('yemek_geri_al', { p_student_id: secili.student_id })
+
+    setKaydediliyor(false)
+    if (error) {
+      setMesaj({ tip: 'hata', metin: error.message })
+      return
+    }
+    setMesaj({ tip: 'ok', metin: `${ad} — yemek kaydı geri alındı.` })
+    vazgec()
+    ozetYenile()
+  }
+
+  async function serbestKaydet(tip: SerbestOgunTipi, adet: number) {
     if (kaydediliyor) return
     setKaydediliyor(true)
 
     const { data, error } = await supabase.rpc('serbest_ogun_kaydet', {
       p_okul_id: okulId,
       p_tip: tip,
+      p_adet: adet,
     })
 
     setKaydediliyor(false)
@@ -154,13 +174,40 @@ export function PosEkrani({ okulId, okulAdi }: { okulId: string; okulAdi: string
       setMesaj({ tip: 'hata', metin: error.message })
       return
     }
-    const tutar = Number((data as { tutar?: number } | null)?.tutar ?? 0)
+    const sonuc = (data as { eklenen: number; gun_toplami: number; birim_tutar: number }[] | null)?.[0]
+    const ad = tip === 'ucretli' ? 'Ücretli' : 'Misafir'
     setMesaj({
       tip: 'ok',
       metin:
-        tip === 'ucretli'
-          ? `Ücretli öğün kaydedildi — ${para(tutar)}`
-          : `Misafir öğün kaydedildi${tutar > 0 ? ` — ${para(tutar)}` : ''}.`,
+        `${ad}: ${sonuc?.eklenen ?? adet} kayıt eklendi` +
+        `${Number(sonuc?.birim_tutar ?? 0) > 0 ? ` (birim ${para(sonuc!.birim_tutar)})` : ''}` +
+        ` — bugün toplam ${sonuc?.gun_toplami ?? '?'}.`,
+    })
+    vazgec()
+    ozetYenile()
+  }
+
+  async function serbestGeriAl(tip: SerbestOgunTipi, adet: number) {
+    if (kaydediliyor) return
+    const ad = tip === 'ucretli' ? 'ücretli' : 'misafir'
+    if (!confirm(`${adet} adet ${ad} öğün kaydı silinsin mi?`)) return
+
+    setKaydediliyor(true)
+    const { data, error } = await supabase.rpc('serbest_ogun_geri_al', {
+      p_okul_id: okulId,
+      p_tip: tip,
+      p_adet: adet,
+    })
+
+    setKaydediliyor(false)
+    if (error) {
+      setMesaj({ tip: 'hata', metin: error.message })
+      return
+    }
+    const sonuc = (data as { silinen: number; gun_toplami: number }[] | null)?.[0]
+    setMesaj({
+      tip: 'ok',
+      metin: `${tip === 'ucretli' ? 'Ücretli' : 'Misafir'}: ${sonuc?.silinen ?? adet} kayıt geri alındı — bugün toplam ${sonuc?.gun_toplami ?? '?'}.`,
     })
     vazgec()
     ozetYenile()
@@ -261,42 +308,81 @@ export function PosEkrani({ okulId, okulAdi }: { okulId: string; okulAdi: string
           )}
         </div>
 
-        {/* Butonlar */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {/* Kayıt butonları — abone tipini öğrencinin verisinden biliyoruz,
+            kullanıcıya seçtirmiyoruz */}
+        <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_auto]">
           <OgunButonu
             renk="bg-blue-600 hover:bg-blue-700"
             etkin={!yemekKilitli}
-            vurgulu={secili?.abone_tipi === 'gunluk'}
+            vurgulu={!!secili && !secili.bugun_yedi}
             onClick={yemekKaydet}
           >
-            Günlükçü
+            Öğrenci Yemek Yedir
           </OgunButonu>
-          <OgunButonu
-            renk="bg-amber-500 hover:bg-amber-600"
-            etkin={!yemekKilitli}
-            vurgulu={secili?.abone_tipi === 'aylik'}
-            onClick={yemekKaydet}
-          >
-            Aylıkçı
-          </OgunButonu>
-          <OgunButonu
+
+          <AdetliButon
             renk="bg-yellow-400 hover:bg-yellow-500"
             metinRengi="text-slate-900"
             etkin={!kaydediliyor}
-            onClick={() => serbestKaydet('ucretli')}
+            onGonder={(adet) => serbestKaydet('ucretli', adet)}
           >
             Ücretli
-          </OgunButonu>
-          <OgunButonu
+          </AdetliButon>
+
+          <AdetliButon
             renk="bg-purple-600 hover:bg-purple-700"
             etkin={!kaydediliyor}
-            onClick={() => serbestKaydet('misafir')}
+            onGonder={(adet) => serbestKaydet('misafir', adet)}
           >
             Misafir
-          </OgunButonu>
+          </AdetliButon>
+
           <OgunButonu renk="bg-slate-500 hover:bg-slate-600" etkin onClick={vazgec}>
             Vazgeç
           </OgunButonu>
+        </div>
+
+        {/* Geri alma barı — yanlışlıkla basılmasın diye ayrı ve uzakta */}
+        <div className="mt-8 rounded-lg border border-red-200 bg-red-50/50 p-4">
+          <h3 className="mb-3 text-xs font-semibold tracking-wide text-red-800 uppercase">
+            Geri alma — yanlış girilen kayıtları siler
+          </h3>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <button
+              type="button"
+              disabled={!secili || kaydediliyor}
+              onClick={yemekGeriAl}
+              className="rounded-md border border-red-300 bg-white px-3 py-3 text-sm font-medium
+                         text-red-700 transition hover:bg-red-100
+                         disabled:cursor-not-allowed disabled:border-cizgi
+                         disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              Öğrenci Yemek Geri Al
+              {!secili && <span className="mt-0.5 block text-xs">önce öğrenci seçin</span>}
+            </button>
+
+            <AdetliButon
+              renk="bg-white hover:bg-red-100"
+              metinRengi="text-red-700"
+              kenarlik="border border-red-300"
+              etkin={!kaydediliyor}
+              kucuk
+              onGonder={(adet) => serbestGeriAl('ucretli', adet)}
+            >
+              Ücretli Geri Al
+            </AdetliButon>
+
+            <AdetliButon
+              renk="bg-white hover:bg-red-100"
+              metinRengi="text-red-700"
+              kenarlik="border border-red-300"
+              etkin={!kaydediliyor}
+              kucuk
+              onGonder={(adet) => serbestGeriAl('misafir', adet)}
+            >
+              Misafir Geri Al
+            </AdetliButon>
+          </div>
         </div>
 
         {mesaj && (
@@ -328,6 +414,61 @@ export function PosEkrani({ okulId, okulAdi }: { okulId: string; okulAdi: string
           </div>
         </dl>
       </aside>
+    </div>
+  )
+}
+
+/**
+ * Adet kutulu buton: varsayılan 1, elle değiştirilebilir.
+ * "Yemekten sonra 3 kişi ücretli yedi" gibi toplu girişler için.
+ */
+function AdetliButon({
+  children,
+  renk,
+  metinRengi = 'text-white',
+  kenarlik = '',
+  etkin,
+  kucuk,
+  onGonder,
+}: {
+  children: React.ReactNode
+  renk: string
+  metinRengi?: string
+  kenarlik?: string
+  etkin: boolean
+  kucuk?: boolean
+  onGonder: (adet: number) => void
+}) {
+  const [adet, setAdet] = useState('1')
+  const sayi = Math.min(500, Math.max(1, Number(adet) || 1))
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        disabled={!etkin}
+        onClick={() => onGonder(sayi)}
+        className={`rounded-lg px-3 font-semibold transition
+          ${kucuk ? 'py-3 text-sm' : 'py-6 text-base'}
+          disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white
+          ${renk} ${kenarlik} ${etkin ? metinRengi : ''}`}
+      >
+        {children}
+      </button>
+      <label className="flex items-center gap-1.5 text-xs text-solgun">
+        <span>Adet</span>
+        <input
+          type="number"
+          min={1}
+          max={500}
+          value={adet}
+          onChange={(e) => setAdet(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          className="w-16 rounded border border-cizgi bg-white px-2 py-1 text-center
+                     text-sm font-medium text-metin tabular-nums outline-none
+                     focus:border-vurgu focus:ring-2 focus:ring-blue-100"
+        />
+      </label>
     </div>
   )
 }

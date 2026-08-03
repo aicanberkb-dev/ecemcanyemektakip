@@ -13,8 +13,8 @@ export type FormDurumu = {
   alanlar?: Record<string, string>
 }
 
+// ogrenci_no burada yok: numarayı sunucu atar (bkz. sonraki_ogrenci_no).
 const ogrenciSemasi = z.object({
-  ogrenci_no: z.string().trim().min(1, 'Öğrenci no gerekli.'),
   ad_soyad: z.string().trim().min(2, 'Ad soyad gerekli.'),
   sinif: bosNull,
   kimlik_no: bosNull,
@@ -59,17 +59,28 @@ export async function ogrenciEkle(
 
   const supabase = await supabaseServer()
   const okulId = await aktifOkulId()
+  const g = sonuc.data
 
-  const { data, error } = await supabase
-    .from('students')
-    .insert({ ...sonuc.data, okul_id: okulId })
-    .select('id')
-    .single()
+  // Numarayı ogrenci_ekle atar: boşluk varsa doldurur, aynı anda iki kayıt
+  // açılırsa çakışmayı kendi içinde çözer.
+  const { data, error } = await supabase.rpc('ogrenci_ekle', {
+    p_okul_id: okulId,
+    p_ad_soyad: g.ad_soyad,
+    p_sinif: g.sinif,
+    p_kimlik_no: g.kimlik_no,
+    p_veli_adi: g.veli_adi,
+    p_veli_telefon: g.veli_telefon,
+    p_iskonto_orani: g.iskonto_orani,
+    p_iskonto_tutar: g.iskonto_tutar,
+    p_devir: g.devir,
+    p_abone_tipi: g.abone_tipi,
+    p_aktif: g.aktif,
+  })
 
   if (error) return { hata: hataMesaji(error.message) }
 
   revalidatePath('/students')
-  redirect(`/students/${data.id}`)
+  redirect(`/students/${(data as { id: string }).id}`)
 }
 
 export async function ogrenciGuncelle(

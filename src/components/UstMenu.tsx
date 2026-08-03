@@ -9,6 +9,7 @@ import type { Okul } from '@/lib/types'
 
 const BAGLANTILAR = [
   { yol: '/pos', ad: 'Yemekhane' },
+  { yol: '/toplu', ad: 'Toplu Giriş' },
   { yol: '/dashboard', ad: 'Özet' },
   { yol: '/students', ad: 'Öğrenciler' },
   { yol: '/payments/new', ad: 'Tahsilat' },

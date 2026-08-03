@@ -11,9 +11,11 @@ type Props = {
   eylem: (durum: FormDurumu, formData: FormData) => Promise<FormDurumu>
   ogrenci?: Student
   iptalYolu: string
+  /** Yeni kayıtta atanacak numara (önizleme) */
+  sonrakiNo?: string
 }
 
-export function OgrenciFormu({ eylem, ogrenci, iptalYolu }: Props) {
+export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
   const [durum, gonder, bekliyor] = useActionState(eylem, {} as FormDurumu)
   const h = durum.alanlar ?? {}
 
@@ -23,18 +25,24 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu }: Props) {
   return (
     <form action={gonder} className="kart space-y-5 p-6">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Alan ad="ogrenci_no" etiket="Öğrenci No *" hata={h.ogrenci_no}>
+        {/* Numarayı sistem verir; elle değiştirilemez ki numara düzeni bozulmasın */}
+        <Alan ad="ogrenci_no_gosterim" etiket="Öğrenci No">
+          <div className="girdi flex items-center justify-between bg-slate-100 text-slate-600">
+            <span className="font-medium tabular-nums">
+              {ogrenci?.ogrenci_no ?? sonrakiNo ?? '—'}
+            </span>
+            <span className="text-xs">otomatik</span>
+          </div>
+        </Alan>
+
+        <Alan ad="ad_soyad" etiket="Ad Soyad *" hata={h.ad_soyad}>
           <input
-            name="ogrenci_no"
-            defaultValue={ogrenci?.ogrenci_no}
+            name="ad_soyad"
+            defaultValue={ogrenci?.ad_soyad}
             className="girdi"
             required
             autoFocus
           />
-        </Alan>
-
-        <Alan ad="ad_soyad" etiket="Ad Soyad *" hata={h.ad_soyad}>
-          <input name="ad_soyad" defaultValue={ogrenci?.ad_soyad} className="girdi" required />
         </Alan>
 
         <Alan ad="sinif" etiket="Sınıf" hata={h.sinif}>
