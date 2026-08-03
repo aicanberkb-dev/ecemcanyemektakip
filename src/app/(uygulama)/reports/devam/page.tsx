@@ -10,7 +10,7 @@ export const metadata = { title: 'Devam Çizelgesi — Yemek Takip' }
 export default async function DevamPage({
   searchParams,
 }: {
-  searchParams: Promise<{ yil?: string; ay?: string; sinif?: string }>
+  searchParams: Promise<{ yil?: string; ay?: string; sinif?: string; q?: string }>
 }) {
   const q = await searchParams
   const simdi = new Date()
@@ -28,6 +28,12 @@ export default async function DevamPage({
 
   let satirlar = (data ?? []) as DevamSatiri[]
   if (q.sinif) satirlar = satirlar.filter((s) => s.sinif === q.sinif)
+  if (q.q?.trim()) {
+    const t = q.q.trim().toLocaleLowerCase('tr')
+    satirlar = satirlar.filter(
+      (s) => s.ad_soyad.toLocaleLowerCase('tr').includes(t) || s.ogrenci_no.includes(t),
+    )
+  }
 
   const siniflar = [
     ...new Set((sinifSatirlari ?? []).map((s) => s.sinif as string).filter(Boolean)),
@@ -94,6 +100,12 @@ export default async function DevamPage({
               </option>
             ))}
           </select>
+        </div>
+        <div className="min-w-48 flex-1">
+          <label className="etiket" htmlFor="q">
+            Öğrenci ara (ad veya no)
+          </label>
+          <input id="q" name="q" defaultValue={q.q ?? ''} className="girdi" />
         </div>
         <button className="btn-birincil">Göster</button>
         <Link href="/reports/devam" className="btn-ikincil">

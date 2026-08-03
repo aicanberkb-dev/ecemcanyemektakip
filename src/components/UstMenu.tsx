@@ -19,6 +19,7 @@ const BAGLANTILAR = [
 
 const RAPOR_ALT = [
   { yol: '/reports', ad: 'Gelen–Giden–Tahsil' },
+  { yol: '/reports/borclu', ad: 'Borçlu Öğrenciler' },
   { yol: '/reports/gun-sonu', ad: 'Gün Sonu' },
   { yol: '/reports/nakit', ad: 'Nakit' },
   { yol: '/reports/devam', ad: 'Devam Çizelgesi' },
