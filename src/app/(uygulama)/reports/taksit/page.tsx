@@ -1,5 +1,7 @@
 import Link from 'next/link'
 
+import { CiktiBasligi } from '@/components/CiktiBasligi'
+import { YazdirButonu } from '@/components/Yazdir'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
@@ -39,28 +41,36 @@ export default async function TaksitPage({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <CiktiBasligi baslik="Taksit Takibi" okul={okul.ad} donem={`${yil} yılı`} />
+
+      <div className="yazdirma-gizle flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="baslik">Taksit Takibi — {yil}</h1>
           <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
         </div>
-        <form className="flex items-end gap-2">
-          <div>
-            <label className="etiket" htmlFor="yil">
-              Yıl
-            </label>
-            <input
-              id="yil"
-              type="number"
-              name="yil"
-              defaultValue={yil}
-              min={2000}
-              max={2100}
-              className="girdi w-28"
-            />
-          </div>
-          <button className="btn-birincil">Göster</button>
-        </form>
+        <div className="flex flex-wrap items-end gap-2">
+          <form className="flex items-end gap-2">
+            <div>
+              <label className="etiket" htmlFor="yil">
+                Yıl
+              </label>
+              <input
+                id="yil"
+                type="number"
+                name="yil"
+                defaultValue={yil}
+                min={2000}
+                max={2100}
+                className="girdi w-28"
+              />
+            </div>
+            <button className="btn-birincil">Göster</button>
+          </form>
+          <YazdirButonu />
+          <a href={`/reports/taksit/csv?yil=${yil}`} className="btn-ikincil">
+            CSV indir
+          </a>
+        </div>
       </div>
 
       {error && (
@@ -192,7 +202,7 @@ export default async function TaksitPage({
             </table>
           </div>
 
-          <p className="text-xs text-solgun">
+          <p className="yazdirma-gizle text-xs text-solgun">
             Kümülatif hesap: vadesi gelen taksitlerin toplamı, yıl içinde yapılan tüm
             tahsilatla karşılaştırılır. Geç yapılan kısmi ödeme borcu azaltır ama
             tamamlamıyorsa öğrenci borçlu görünmeye devam eder.

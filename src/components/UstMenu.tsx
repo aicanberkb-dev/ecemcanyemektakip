@@ -59,7 +59,7 @@ export function UstMenu({
       : null
 
   return (
-    <header className="border-b border-cizgi bg-white">
+    <header className="yazdirma-gizle border-b border-cizgi bg-white">
       <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-3">
         <Link href="/pos" className="text-lg font-bold tracking-tight text-vurgu">
           Yemek Takip

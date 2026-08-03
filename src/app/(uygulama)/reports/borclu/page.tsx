@@ -1,5 +1,7 @@
 import Link from 'next/link'
 
+import { CiktiBasligi } from '@/components/CiktiBasligi'
+import { YazdirButonu } from '@/components/Yazdir'
 import { para } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
@@ -57,13 +59,30 @@ export default async function BorcluPage({
   const toplamBorc = borclular.reduce((t, o) => t + Math.abs(Number(o.kalan)), 0)
   const telefonsuz = borclular.filter((o) => !o.veli_telefon).length
 
+  const csvYolu =
+    `/reports/borclu/csv?` +
+    new URLSearchParams({
+      ...(filtre.q ? { q: filtre.q } : {}),
+      ...(filtre.sinif ? { sinif: filtre.sinif } : {}),
+    }).toString()
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="baslik">Borçlu Öğrenciler</h1>
-        <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
+      <CiktiBasligi baslik="Borçlu Öğrenciler" okul={okul.ad} />
+
+      <div className="yazdirma-gizle flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="baslik">Borçlu Öğrenciler</h1>
+          <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
+        </div>
+        <div className="flex gap-2">
+          <YazdirButonu />
+          <a href={csvYolu} className="btn-ikincil">
+            CSV indir
+          </a>
+        </div>
       </div>
-      <p className="text-sm text-solgun">
+      <p className="yazdirma-gizle text-sm text-solgun">
         Bakiyesi eksiye düşmüş <strong>günlükçü</strong> öğrenciler. Bakiyesi sıfır veya
         artıda olanlar listede görünmez. Aylıkçılar bu raporda yer almaz — onların takibi{' '}
         <Link href="/reports/taksit" className="text-vurgu hover:underline">
@@ -72,7 +91,7 @@ export default async function BorcluPage({
         sayfasındadır.
       </p>
 
-      <form className="kart flex flex-wrap items-end gap-3 p-4">
+      <form className="kart yazdirma-gizle flex flex-wrap items-end gap-3 p-4">
         <div className="min-w-56 flex-1">
           <label className="etiket" htmlFor="q">
             Öğrenci veya veli ara

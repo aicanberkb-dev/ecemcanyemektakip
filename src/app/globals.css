@@ -102,3 +102,73 @@ body {
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
   }
 }
+
+/* --- Yazdırma ------------------------------------------------------------
+   Ekranda gereken menü, filtre ve butonlar kâğıda basılmaz; çıktı başlığı
+   ise yalnızca kâğıtta görünür. */
+
+.yazdirma-basligi {
+  display: none;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
+@media print {
+  .yazdirma-gizle {
+    display: none !important;
+  }
+
+  .yazdirma-basligi {
+    display: block;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .kart {
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .tablo {
+    font-size: 10px;
+  }
+
+  .tablo th,
+  .tablo td {
+    padding: 4px 6px;
+  }
+
+  /* Arka plan renkleri varsayılan olarak basılmaz; başlık ve vurgular
+     kâğıtta da okunabilsin diye açıkça isteniyor. */
+  .tablo th,
+  .tablo tfoot tr,
+  .rozet {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Tablo başlığı her sayfanın üstünde tekrarlansın */
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
