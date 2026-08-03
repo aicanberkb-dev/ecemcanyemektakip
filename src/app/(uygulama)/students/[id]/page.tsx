@@ -5,18 +5,23 @@ import { AboneRozeti, Bakiye, DurumRozeti } from '@/components/Rozetler'
 import { para } from '@/lib/format'
 import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
-import type { StudentBalance, Transaction } from '@/lib/types'
+import type { OgrenciTaksitSatiri, StudentBalance, Transaction } from '@/lib/types'
 
 import { ogrenciSil } from '../actions'
 import { IskontoFormu } from './IskontoFormu'
 import { IslemSatiri } from './IslemSatiri'
+import { TaksitBolumu } from './TaksitBolumu'
 
 export default async function OgrenciDetayPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ yil?: string }>
 }) {
   const { id } = await params
+  const { yil: yilQ } = await searchParams
+  const yil = Number(yilQ) || new Date().getFullYear()
   const supabase = await supabaseServer()
   const okulId = await aktifOkulId()
 
@@ -39,6 +44,13 @@ export default async function OgrenciDetayPage({
   if (!ozetVeri) notFound()
   const ozet = ozetVeri as StudentBalance
   const islemler = (islemVeri ?? []) as Transaction[]
+
+  // Taksit planı yalnızca aylıkçılar için anlamlı
+  const { data: taksitVeri } =
+    ozet.abone_tipi === 'aylik'
+      ? await supabase.rpc('ogrenci_taksit_plani', { p_student_id: id, p_yil: yil })
+      : { data: null }
+  const taksitSatirlari = (taksitVeri ?? []) as OgrenciTaksitSatiri[]
 
   const sil = ogrenciSil.bind(null, id)
 
@@ -80,6 +92,33 @@ export default async function OgrenciDetayPage({
           </p>
         </div>
       </div>
+
+      {/* Taksit planı — yalnızca aylıkçılarda */}
+      {ozet.abone_tipi === 'aylik' && (
+        <div className="kart p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-semibold">Taksit Planı — {yil}</h2>
+            <form className="flex items-end gap-2">
+              <div>
+                <label className="etiket text-xs" htmlFor="yil">
+                  Yıl
+                </label>
+                <input
+                  id="yil"
+                  type="number"
+                  name="yil"
+                  defaultValue={yil}
+                  min={2000}
+                  max={2100}
+                  className="girdi !py-1.5 w-24"
+                />
+              </div>
+              <button className="btn-ikincil !py-1.5">Göster</button>
+            </form>
+          </div>
+          <TaksitBolumu studentId={id} yil={yil} satirlar={taksitSatirlari} />
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
         {/* İşlem geçmişi */}

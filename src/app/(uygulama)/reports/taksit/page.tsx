@@ -130,6 +130,11 @@ export default async function TaksitPage({
                 </tr>
               </tfoot>
             </table>
+            <p className="yazdirma-gizle border-t border-cizgi px-4 py-2 text-xs text-solgun">
+              Bu, okulun varsayılan planıdır. Öğrenciye özel tutar veya tarih
+              tanımlanmışsa aşağıdaki tabloda &quot;özel plan&quot; etiketiyle görünür ve
+              hesaplama o öğrencinin kendi planı üzerinden yapılır.
+            </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
@@ -168,6 +173,14 @@ export default async function TaksitPage({
                       >
                         {s.ad_soyad}
                       </Link>
+                      {s.ozel_plan && (
+                        <span
+                          className="rozet ml-2 bg-amber-100 text-amber-800"
+                          title="Bu öğrencinin taksit planı okul planından farklı"
+                        >
+                          özel plan
+                        </span>
+                      )}
                     </td>
                     <td>{s.sinif ?? '—'}</td>
                     <td className="text-right tabular-nums">{para(s.yillik_toplam)}</td>

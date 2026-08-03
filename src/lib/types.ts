@@ -138,6 +138,19 @@ export type PosSonuc = {
   tam_eslesme: boolean
 }
 
+/** Bir öğrencinin etkin taksit satırı: okul planı + varsa kişisel istisna */
+export type OgrenciTaksitSatiri = {
+  taksit_plani_id: string
+  ad: string
+  okul_tutar: number
+  okul_vade: string
+  tutar: number
+  vade_tarihi: string
+  ozel_tutar: boolean
+  ozel_vade: boolean
+  aciklama: string | null
+}
+
 export type TaksitDurumu = {
   student_id: string
   ogrenci_no: string
@@ -149,6 +162,8 @@ export type TaksitDurumu = {
   eksik: number
   odeme_alinmali: boolean
   son_vade: string | null
+  /** Öğrencinin okul planından sapan en az bir taksiti var */
+  ozel_plan: boolean
 }
 
 export type DevamSatiri = {
