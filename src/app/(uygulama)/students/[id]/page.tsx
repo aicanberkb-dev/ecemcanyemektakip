@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation'
 import { AboneRozeti, Bakiye, DurumRozeti } from '@/components/Rozetler'
 import { para } from '@/lib/format'
 import { aktifOkulId } from '@/lib/okul'
+import { sezonSec } from '@/lib/sezon'
+import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { OgrenciTaksitSatiri, StudentBalance, Transaction } from '@/lib/types'
 
@@ -17,11 +19,10 @@ export default async function OgrenciDetayPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ yil?: string }>
+  searchParams: Promise<{ sezon?: string }>
 }) {
   const { id } = await params
-  const { yil: yilQ } = await searchParams
-  const yil = Number(yilQ) || new Date().getFullYear()
+  const { sezon: sezonQ } = await searchParams
   const supabase = await supabaseServer()
   const okulId = await aktifOkulId()
 
@@ -46,9 +47,15 @@ export default async function OgrenciDetayPage({
   const islemler = (islemVeri ?? []) as Transaction[]
 
   // Taksit planı yalnızca aylıkçılar için anlamlı
+  const sezonListesi = ozet.abone_tipi === 'aylik' ? await sezonlariGetir(okulId) : []
+  const sezon = sezonSec(sezonListesi, sezonQ)
+
   const { data: taksitVeri } =
-    ozet.abone_tipi === 'aylik'
-      ? await supabase.rpc('ogrenci_taksit_plani', { p_student_id: id, p_yil: yil })
+    ozet.abone_tipi === 'aylik' && sezon
+      ? await supabase.rpc('ogrenci_taksit_plani', {
+          p_student_id: id,
+          p_sezon_id: sezon.id,
+        })
       : { data: null }
   const taksitSatirlari = (taksitVeri ?? []) as OgrenciTaksitSatiri[]
 
@@ -97,26 +104,46 @@ export default async function OgrenciDetayPage({
       {ozet.abone_tipi === 'aylik' && (
         <div className="kart p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-semibold">Taksit Planı — {yil}</h2>
-            <form className="flex items-end gap-2">
-              <div>
-                <label className="etiket text-xs" htmlFor="yil">
-                  Yıl
-                </label>
-                <input
-                  id="yil"
-                  type="number"
-                  name="yil"
-                  defaultValue={yil}
-                  min={2000}
-                  max={2100}
-                  className="girdi !py-1.5 w-24"
-                />
-              </div>
-              <button className="btn-ikincil !py-1.5">Göster</button>
-            </form>
+            <h2 className="font-semibold">
+              Taksit Planı{sezon ? ` — ${sezon.ad}` : ''}
+            </h2>
+            {sezonListesi.length > 1 && sezon && (
+              <form className="flex items-end gap-2">
+                <div>
+                  <label className="etiket text-xs" htmlFor="sezon">
+                    Sezon
+                  </label>
+                  <select
+                    id="sezon"
+                    name="sezon"
+                    defaultValue={sezon.id}
+                    className="girdi !py-1.5"
+                  >
+                    {sezonListesi.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.ad}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button className="btn-ikincil !py-1.5">Göster</button>
+              </form>
+            )}
           </div>
-          <TaksitBolumu studentId={id} yil={yil} satirlar={taksitSatirlari} />
+          {sezon ? (
+            <TaksitBolumu
+              key={sezon.id}
+              studentId={id}
+              sezonId={sezon.id}
+              sezonAdi={sezon.ad}
+              satirlar={taksitSatirlari}
+            />
+          ) : (
+            <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Sezon tanımlı değil. Ayarlar sayfasından sezon eklemeden taksit planı
+              görüntülenemez.
+            </p>
+          )}
         </div>
       )}
 

@@ -7,7 +7,15 @@ import type { TaksitPlani } from '@/lib/types'
 
 import { taksitEkle, taksitGuncelle, taksitSil, type AyarDurumu } from './actions'
 
-export function TaksitPlaniBolumu({ yil, plan }: { yil: number; plan: TaksitPlani[] }) {
+export function TaksitPlaniBolumu({
+  sezonId,
+  sezonAdi,
+  plan,
+}: {
+  sezonId: string
+  sezonAdi: string
+  plan: TaksitPlani[]
+}) {
   const [durum, gonder, bekliyor] = useActionState(taksitEkle, {} as AyarDurumu)
   const toplam = plan.reduce((t, p) => t + Number(p.tutar), 0)
 
@@ -30,7 +38,7 @@ export function TaksitPlaniBolumu({ yil, plan }: { yil: number; plan: TaksitPlan
             {plan.length === 0 && (
               <tr>
                 <td colSpan={4} className="py-6 text-center text-solgun">
-                  {yil} için taksit tanımlı değil.
+                  {sezonAdi} sezonu için taksit tanımlı değil.
                 </td>
               </tr>
             )}
@@ -51,21 +59,15 @@ export function TaksitPlaniBolumu({ yil, plan }: { yil: number; plan: TaksitPlan
 
       {/* Yeni taksit */}
       <form action={gonder} className="flex flex-wrap items-end gap-3 border-t border-cizgi pt-4">
-        <input type="hidden" name="yil" value={yil} />
+        <input type="hidden" name="sezon_id" value={sezonId} />
         <div className="min-w-40 flex-1">
           <label className="etiket text-xs">Taksit adı</label>
-          <input name="ad" placeholder="ör. Şubat" className="girdi !py-1.5" required />
+          <input name="ad" placeholder="ör. 1. Taksit" className="girdi !py-1.5" required />
           {durum.alanlar?.ad && <p className="hata">{durum.alanlar.ad}</p>}
         </div>
         <div>
           <label className="etiket text-xs">Vade tarihi</label>
-          <input
-            type="date"
-            name="vade_tarihi"
-            defaultValue={`${yil}-01-01`}
-            className="girdi !py-1.5"
-            required
-          />
+          <input type="date" name="vade_tarihi" className="girdi !py-1.5" required />
           {durum.alanlar?.vade_tarihi && <p className="hata">{durum.alanlar.vade_tarihi}</p>}
         </div>
         <div>

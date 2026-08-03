@@ -16,15 +16,17 @@ import {
 
 export function TaksitBolumu({
   studentId,
-  yil,
+  sezonId,
+  sezonAdi,
   satirlar,
 }: {
   studentId: string
-  yil: number
+  sezonId: string
+  sezonAdi: string
   satirlar: OgrenciTaksitSatiri[]
 }) {
   const [ekleAcik, setEkleAcik] = useState(false)
-  const ekleEylem = ogrenciTaksitEkstraEkle.bind(null, studentId, yil)
+  const ekleEylem = ogrenciTaksitEkstraEkle.bind(null, studentId, sezonId)
   const [ekleDurum, ekleGonder, ekleBekliyor] = useActionState(
     ekleEylem,
     {} as TaksitIstisnaDurumu,
@@ -47,7 +49,7 @@ export function TaksitBolumu({
 
       {satirlar.length === 0 ? (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          {yil} yılı için okul taksit planı tanımlı değil. Ayarlar sayfasından
+          {sezonAdi} sezonu için okul taksit planı tanımlı değil. Ayarlar sayfasından
           tanımlayabilir ya da aşağıdan bu öğrenciye özel taksit ekleyebilirsin.
         </p>
       ) : (
@@ -74,7 +76,7 @@ export function TaksitBolumu({
             <tfoot>
               <tr className="bg-slate-50 font-semibold">
                 <td className="px-3 py-2" colSpan={2}>
-                  {yil} yıllık toplam · {satirlar.length} taksit
+                  {sezonAdi} sezon toplamı · {satirlar.length} taksit
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {para(toplam)}
@@ -100,13 +102,7 @@ export function TaksitBolumu({
           </div>
           <div>
             <label className="etiket text-xs">Vade</label>
-            <input
-              type="date"
-              name="vade_tarihi"
-              defaultValue={`${yil}-01-01`}
-              className="girdi !py-1.5"
-              required
-            />
+            <input type="date" name="vade_tarihi" className="girdi !py-1.5" required />
             {ekleDurum.alanlar?.vade_tarihi && (
               <p className="hata">{ekleDurum.alanlar.vade_tarihi}</p>
             )}

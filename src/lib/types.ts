@@ -94,9 +94,22 @@ export type SerbestOgun = {
   created_at: string
 }
 
+/** Okul yılı takvim yılıyla örtüşmez: Eylül'de başlar, ertesi yaz biter. */
+export type Sezon = {
+  id: string
+  okul_id: string
+  ad: string
+  baslangic: string
+  /** Tahsilat penceresinin sonu — geç ödemeler bu tarihe kadar sezona sayılır */
+  bitis: string
+  aktif: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type TaksitPlani = {
   id: string
-  yil: number
+  sezon_id: string
   ad: string
   vade_tarihi: string
   tutar: number

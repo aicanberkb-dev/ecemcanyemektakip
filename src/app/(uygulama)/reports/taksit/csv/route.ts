@@ -1,11 +1,13 @@
 import { csvMetni, csvSayi, dosyaAdi, hucre } from '@/lib/csv'
 import { aktifOkul } from '@/lib/okul'
+import { sezonSec } from '@/lib/sezon'
+import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { TaksitDurumu } from '@/lib/types'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const yil = Number(url.searchParams.get('yil')) || new Date().getFullYear()
+  const sezonQ = url.searchParams.get('sezon') ?? undefined
 
   const supabase = await supabaseServer()
   const {
@@ -16,10 +18,10 @@ export async function GET(request: Request) {
   const okul = await aktifOkul()
   if (!okul) return new Response('Okul seçili değil.', { status: 400 })
 
-  const { data, error } = await supabase.rpc('taksit_durumu', {
-    p_okul_id: okul.id,
-    p_yil: yil,
-  })
+  const sezon = sezonSec(await sezonlariGetir(okul.id), sezonQ)
+  if (!sezon) return new Response('Sezon tanımlı değil.', { status: 400 })
+
+  const { data, error } = await supabase.rpc('taksit_durumu', { p_sezon_id: sezon.id })
   if (error) return new Response(error.message, { status: 500 })
 
   const satirlar = ((data ?? []) as TaksitDurumu[]).map((s) => [
@@ -65,7 +67,7 @@ export async function GET(request: Request) {
   return new Response(csv, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${dosyaAdi('taksit-takibi', okul.ad, String(yil))}.csv"`,
+      'Content-Disposition': `attachment; filename="${dosyaAdi('taksit-takibi', okul.ad, sezon.ad)}.csv"`,
     },
   })
 }

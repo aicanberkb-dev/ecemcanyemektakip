@@ -80,7 +80,7 @@ export async function taksitEkle(
   formData: FormData,
 ): Promise<AyarDurumu> {
   const sema = z.object({
-    yil: trSayi({ min: 2000, max: 2100 }),
+    sezon_id: z.uuid('Sezon seçin.'),
     ad: z.string().trim().min(1, 'Taksit adı gerekli.'),
     vade_tarihi: z.string().min(1, 'Vade tarihi gerekli.'),
     tutar: trSayi({ min: 0 }),
@@ -96,8 +96,8 @@ export async function taksitEkle(
 
   if (error) {
     return {
-      hata: error.message.includes('taksit_plani_okul_yil_ad_uniq')
-        ? 'Bu okulda o yıl için aynı adda bir taksit zaten var.'
+      hata: error.message.includes('taksit_plani_sezon_ad_uniq')
+        ? 'Bu sezonda aynı adda bir taksit zaten var.'
         : error.message,
     }
   }
@@ -138,6 +138,93 @@ export async function taksitSil(id: string) {
   const supabase = await supabaseServer()
   const { error } = await supabase
     .from('taksit_plani')
+    .delete()
+    .eq('id', id)
+    .eq('okul_id', await aktifOkulId())
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin/settings')
+  revalidatePath('/reports/taksit')
+}
+
+/**
+ * Sezon ekler. Okul yılı takvim yılıyla örtüşmediği için taksitler yıla değil
+ * sezona bağlanır; tahsilat da sezonun tarih aralığında sayılır.
+ */
+export async function sezonEkle(
+  _onceki: AyarDurumu,
+  formData: FormData,
+): Promise<AyarDurumu> {
+  const sema = z
+    .object({
+      ad: z.string().trim().min(1, 'Sezon adı gerekli.'),
+      baslangic: z.string().min(1, 'Başlangıç tarihi gerekli.'),
+      bitis: z.string().min(1, 'Bitiş tarihi gerekli.'),
+    })
+    .refine((d) => d.bitis > d.baslangic, {
+      message: 'Bitiş, başlangıçtan sonra olmalı.',
+      path: ['bitis'],
+    })
+
+  const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase
+    .from('sezonlar')
+    .insert({ ...sonuc.data, okul_id: await aktifOkulId() })
+
+  if (error) {
+    return {
+      hata: error.message.includes('sezonlar_okul_ad_key')
+        ? 'Bu okulda aynı adda bir sezon zaten var.'
+        : error.message,
+    }
+  }
+
+  revalidatePath('/admin/settings')
+  revalidatePath('/reports/taksit')
+  return { basari: 'Sezon eklendi.' }
+}
+
+export async function sezonGuncelle(
+  id: string,
+  _onceki: AyarDurumu,
+  formData: FormData,
+): Promise<AyarDurumu> {
+  const sema = z
+    .object({
+      ad: z.string().trim().min(1, 'Sezon adı gerekli.'),
+      baslangic: z.string().min(1, 'Başlangıç tarihi gerekli.'),
+      bitis: z.string().min(1, 'Bitiş tarihi gerekli.'),
+    })
+    .refine((d) => d.bitis > d.baslangic, {
+      message: 'Bitiş, başlangıçtan sonra olmalı.',
+      path: ['bitis'],
+    })
+
+  const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase
+    .from('sezonlar')
+    .update(sonuc.data)
+    .eq('id', id)
+    .eq('okul_id', await aktifOkulId())
+
+  if (error) return { hata: error.message }
+
+  revalidatePath('/admin/settings')
+  revalidatePath('/reports/taksit')
+  return { basari: 'Sezon güncellendi.' }
+}
+
+/** Sezonu siler; bağlı taksitler de silinir (cascade). */
+export async function sezonSil(id: string) {
+  const supabase = await supabaseServer()
+  const { error } = await supabase
+    .from('sezonlar')
     .delete()
     .eq('id', id)
     .eq('okul_id', await aktifOkulId())

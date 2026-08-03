@@ -4,6 +4,8 @@ import { CiktiBasligi } from '@/components/CiktiBasligi'
 import { YazdirButonu } from '@/components/Yazdir'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
+import { sezonSec } from '@/lib/sezon'
+import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { TaksitDurumu, TaksitPlani } from '@/lib/types'
 
@@ -12,22 +14,39 @@ export const metadata = { title: 'Taksit Takibi — Yemek Takip' }
 export default async function TaksitPage({
   searchParams,
 }: {
-  searchParams: Promise<{ yil?: string }>
+  searchParams: Promise<{ sezon?: string }>
 }) {
-  const { yil: yilQ } = await searchParams
-  const yil = Number(yilQ) || new Date().getFullYear()
+  const { sezon: sezonQ } = await searchParams
 
   const supabase = await supabaseServer()
   const okul = await aktifOkul()
   if (!okul) return null
 
+  const liste = await sezonlariGetir(okul.id)
+  const sezon = sezonSec(liste, sezonQ)
+
+  if (!sezon) {
+    return (
+      <div className="space-y-4">
+        <h1 className="baslik">Taksit Takibi</h1>
+        <div className="kart p-6 text-center">
+          <p className="text-solgun">
+            {okul.ad} için sezon tanımlı değil. Taksit takibi sezon üzerinden çalışır.
+          </p>
+          <Link href="/admin/settings" className="btn-birincil mt-3">
+            Sezon tanımla
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   const [{ data, error }, { data: planVeri }] = await Promise.all([
-    supabase.rpc('taksit_durumu', { p_okul_id: okul.id, p_yil: yil }),
+    supabase.rpc('taksit_durumu', { p_sezon_id: sezon.id }),
     supabase
       .from('taksit_plani')
       .select('*')
-      .eq('okul_id', okul.id)
-      .eq('yil', yil)
+      .eq('sezon_id', sezon.id)
       .order('vade_tarihi'),
   ])
 
@@ -41,37 +60,47 @@ export default async function TaksitPage({
 
   return (
     <div className="space-y-4">
-      <CiktiBasligi baslik="Taksit Takibi" okul={okul.ad} donem={`${yil} yılı`} />
+      <CiktiBasligi
+        baslik="Taksit Takibi"
+        okul={okul.ad}
+        donem={`${sezon.ad} sezonu (${tarihBicim(sezon.baslangic)} – ${tarihBicim(sezon.bitis)})`}
+      />
 
       <div className="yazdirma-gizle flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="baslik">Taksit Takibi — {yil}</h1>
+          <h1 className="baslik">Taksit Takibi — {sezon.ad}</h1>
           <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          <form className="flex items-end gap-2">
-            <div>
-              <label className="etiket" htmlFor="yil">
-                Yıl
-              </label>
-              <input
-                id="yil"
-                type="number"
-                name="yil"
-                defaultValue={yil}
-                min={2000}
-                max={2100}
-                className="girdi w-28"
-              />
-            </div>
-            <button className="btn-birincil">Göster</button>
-          </form>
+          {liste.length > 1 && (
+            <form className="flex items-end gap-2">
+              <div>
+                <label className="etiket" htmlFor="sezon">
+                  Sezon
+                </label>
+                <select id="sezon" name="sezon" defaultValue={sezon.id} className="girdi">
+                  {liste.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.ad}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button className="btn-birincil">Göster</button>
+            </form>
+          )}
           <YazdirButonu />
-          <a href={`/reports/taksit/csv?yil=${yil}`} className="btn-ikincil">
+          <a href={`/reports/taksit/csv?sezon=${sezon.id}`} className="btn-ikincil">
             CSV indir
           </a>
         </div>
       </div>
+
+      <p className="yazdirma-gizle text-sm text-solgun">
+        Sezon aralığı: {tarihBicim(sezon.baslangic)} – {tarihBicim(sezon.bitis)}. Bu
+        aralıkta yapılan tüm tahsilat sezona sayılır; yaz aylarındaki geç ödemeler de
+        dahildir.
+      </p>
 
       {error && (
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error.message}</p>
@@ -80,7 +109,7 @@ export default async function TaksitPage({
       {plan.length === 0 ? (
         <div className="kart p-6 text-center">
           <p className="text-solgun">
-            {okul.ad} için {yil} yılı taksit planı tanımlı değil.
+            {okul.ad} için {sezon.ad} sezonu taksit planı tanımlı değil.
           </p>
           <Link href="/admin/settings" className="btn-birincil mt-3">
             Taksit planı tanımla
@@ -91,7 +120,7 @@ export default async function TaksitPage({
           {/* Plan özeti */}
           <div className="kart overflow-x-auto">
             <h2 className="border-b border-cizgi px-4 py-3 font-semibold">
-              {yil} Taksit Planı
+              {sezon.ad} Taksit Planı
             </h2>
             <table className="tablo">
               <thead>

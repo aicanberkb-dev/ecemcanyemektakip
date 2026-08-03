@@ -1,9 +1,12 @@
-import { para } from '@/lib/format'
+import { para, tarih as tarihBicim } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
+import { sezonSec } from '@/lib/sezon'
+import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { AppSettings, TaksitPlani } from '@/lib/types'
 
 import { OkulAdiFormu } from './OkulAdiFormu'
+import { SezonBolumu } from './SezonBolumu'
 import { TaksitPlaniBolumu } from './TaksitPlaniBolumu'
 import { UcretFormu } from './UcretFormu'
 
@@ -12,23 +15,26 @@ export const metadata = { title: 'Ayarlar — Yemek Takip' }
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ yil?: string }>
+  searchParams: Promise<{ sezon?: string }>
 }) {
-  const { yil: yilQ } = await searchParams
-  const yil = Number(yilQ) || new Date().getFullYear()
+  const { sezon: sezonQ } = await searchParams
 
   const okul = await aktifOkul()
   if (!okul) return null
 
   const supabase = await supabaseServer()
+  const liste = await sezonlariGetir(okul.id)
+  const sezon = sezonSec(liste, sezonQ)
+
   const [{ data: ayarVeri }, { data: planVeri }] = await Promise.all([
     supabase.from('app_settings').select('*').eq('okul_id', okul.id).maybeSingle(),
-    supabase
-      .from('taksit_plani')
-      .select('*')
-      .eq('okul_id', okul.id)
-      .eq('yil', yil)
-      .order('vade_tarihi'),
+    sezon
+      ? supabase
+          .from('taksit_plani')
+          .select('*')
+          .eq('sezon_id', sezon.id)
+          .order('vade_tarihi')
+      : Promise.resolve({ data: null }),
   ])
 
   const ayar = ayarVeri as AppSettings | null
@@ -42,8 +48,9 @@ export default async function SettingsPage({
       </div>
 
       <p className="rounded-md bg-blue-50 px-4 py-3 text-sm text-blue-900">
-        Bu sayfadaki ücretler ve taksit planı yalnızca <strong>{okul.ad}</strong> için
-        geçerlidir. Diğer okulun ayarları için üst bardan okulu değiştirin.
+        Bu sayfadaki ücretler, sezonlar ve taksit planı yalnızca{' '}
+        <strong>{okul.ad}</strong> için geçerlidir. Diğer okulun ayarları için üst bardan
+        okulu değiştirin.
       </p>
 
       <section className="kart p-6">
@@ -70,33 +77,53 @@ export default async function SettingsPage({
       </section>
 
       <section className="kart p-6">
+        <h2 className="mb-1 font-semibold">Sezonlar</h2>
+        <SezonBolumu sezonlar={liste} />
+      </section>
+
+      <section className="kart p-6">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="font-semibold">Aylıkçı Taksit Planı — {yil}</h2>
-            <p className="text-sm text-solgun">
-              {okul.ad} aylıkçı öğrencilerinin yıllık ücreti bu vadelere göre takip edilir.
-            </p>
+            <h2 className="font-semibold">
+              Aylıkçı Taksit Planı{sezon ? ` — ${sezon.ad}` : ''}
+            </h2>
+            {sezon && (
+              <p className="text-sm text-solgun">
+                {tarihBicim(sezon.baslangic)} – {tarihBicim(sezon.bitis)} arası
+              </p>
+            )}
           </div>
-          <form className="flex items-end gap-2">
-            <div>
-              <label className="etiket text-xs" htmlFor="yil">
-                Yıl
-              </label>
-              <input
-                id="yil"
-                type="number"
-                name="yil"
-                defaultValue={yil}
-                min={2000}
-                max={2100}
-                className="girdi !py-1.5 w-28"
-              />
-            </div>
-            <button className="btn-ikincil !py-1.5">Göster</button>
-          </form>
+          {liste.length > 1 && (
+            <form className="flex items-end gap-2">
+              <div>
+                <label className="etiket text-xs" htmlFor="sezon">
+                  Sezon
+                </label>
+                <select
+                  id="sezon"
+                  name="sezon"
+                  defaultValue={sezon?.id ?? ''}
+                  className="girdi !py-1.5"
+                >
+                  {liste.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.ad}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button className="btn-ikincil !py-1.5">Göster</button>
+            </form>
+          )}
         </div>
 
-        <TaksitPlaniBolumu key={okul.id} yil={yil} plan={plan} />
+        {sezon ? (
+          <TaksitPlaniBolumu key={sezon.id} sezonId={sezon.id} sezonAdi={sezon.ad} plan={plan} />
+        ) : (
+          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Taksit planı girebilmek için önce yukarıdan bir sezon ekleyin.
+          </p>
+        )}
       </section>
 
       {ayar && Number(ayar.taban_gunluk_ucret) > 0 && (

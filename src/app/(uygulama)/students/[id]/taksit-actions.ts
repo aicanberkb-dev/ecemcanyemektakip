@@ -53,7 +53,7 @@ export async function ogrenciTaksitGuncelle(
 
   const { data: plan } = await supabase
     .from('taksit_plani')
-    .select('tutar, vade_tarihi')
+    .select('tutar, vade_tarihi, sezon_id')
     .eq('id', taksitPlaniId)
     .maybeSingle()
 
@@ -79,6 +79,7 @@ export async function ogrenciTaksitGuncelle(
     {
       student_id: studentId,
       taksit_plani_id: taksitPlaniId,
+      sezon_id: plan.sezon_id,
       tutar: tutarFarkli ? sonuc.data.tutar : null,
       vade_tarihi: vadeFarkli ? sonuc.data.vade_tarihi : null,
       aciklama: sonuc.data.aciklama,
@@ -134,7 +135,7 @@ function alanHatalari(hata: z.ZodError): Record<string, string> {
  */
 export async function ogrenciTaksitEkstraEkle(
   studentId: string,
-  yil: number,
+  sezonId: string,
   _onceki: TaksitIstisnaDurumu,
   formData: FormData,
 ): Promise<TaksitIstisnaDurumu> {
@@ -149,7 +150,7 @@ export async function ogrenciTaksitEkstraEkle(
   const { error } = await supabase.from('ogrenci_taksit').insert({
     student_id: studentId,
     taksit_plani_id: null,
-    yil,
+    sezon_id: sezonId,
     ...sonuc.data,
   })
 
