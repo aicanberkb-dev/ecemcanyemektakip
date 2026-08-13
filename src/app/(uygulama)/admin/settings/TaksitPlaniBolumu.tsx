@@ -3,10 +3,20 @@
 import { useActionState, useState } from 'react'
 
 import { para, tarih as tarihBicim } from '@/lib/format'
-import type { TaksitPlani } from '@/lib/types'
+import {
+  OGRENCI_TIPI_ADLARI,
+  PLANLI_OGRENCI_TIPLERI,
+  type OgrenciTipi,
+  type TaksitPlani,
+} from '@/lib/types'
 
 import { taksitEkle, taksitGuncelle, taksitSil, type AyarDurumu } from './actions'
 
+/**
+ * Taksit planı öğrenci tipi kırılımında tutulur: standart, anasınıfı ve
+ * anasınıfı+etüt öğrencilerinin ücretleri farklı. Öğrenci kendi tipinin
+ * planına göre değerlendirilir; öğrenci bazlı istisna bunun üstüne biner.
+ */
 export function TaksitPlaniBolumu({
   sezonId,
   sezonAdi,
@@ -16,11 +26,40 @@ export function TaksitPlaniBolumu({
   sezonAdi: string
   plan: TaksitPlani[]
 }) {
+  const [tip, setTip] = useState<OgrenciTipi>('standart')
   const [durum, gonder, bekliyor] = useActionState(taksitEkle, {} as AyarDurumu)
-  const toplam = plan.reduce((t, p) => t + Number(p.tutar), 0)
+
+  const tipinPlani = plan.filter((p) => p.ogrenci_tipi === tip)
+  const toplam = tipinPlani.reduce((t, p) => t + Number(p.tutar), 0)
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {PLANLI_OGRENCI_TIPLERI.map((t) => {
+          const adet = plan.filter((p) => p.ogrenci_tipi === t).length
+          const tutar = plan
+            .filter((p) => p.ogrenci_tipi === t)
+            .reduce((x, p) => x + Number(p.tutar), 0)
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTip(t)}
+              className={`rounded-md border px-3 py-2 text-sm ${
+                t === tip
+                  ? 'border-vurgu bg-blue-50 font-semibold text-vurgu'
+                  : 'border-cizgi hover:bg-gray-50'
+              }`}
+            >
+              {OGRENCI_TIPI_ADLARI[t]}
+              <span className="ml-2 text-xs text-solgun">
+                {adet === 0 ? 'plan yok' : `${adet} taksit · ${para(tutar)}`}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
       <div className="overflow-x-auto">
         <table className="tablo">
           <thead>
@@ -32,22 +71,23 @@ export function TaksitPlaniBolumu({
             </tr>
           </thead>
           <tbody>
-            {plan.map((t) => (
+            {tipinPlani.map((t) => (
               <TaksitSatiri key={t.id} taksit={t} />
             ))}
-            {plan.length === 0 && (
+            {tipinPlani.length === 0 && (
               <tr>
                 <td colSpan={4} className="py-6 text-center text-solgun">
-                  {sezonAdi} sezonu için taksit tanımlı değil.
+                  {sezonAdi} sezonunda <strong>{OGRENCI_TIPI_ADLARI[tip]}</strong> için taksit
+                  tanımlı değil.
                 </td>
               </tr>
             )}
           </tbody>
-          {plan.length > 0 && (
+          {tipinPlani.length > 0 && (
             <tfoot>
               <tr className="bg-slate-50 font-semibold">
                 <td className="px-3 py-2" colSpan={2}>
-                  Yıllık toplam ({plan.length} taksit)
+                  {OGRENCI_TIPI_ADLARI[tip]} yıllık toplam ({tipinPlani.length} taksit)
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">{para(toplam)}</td>
                 <td />
@@ -57,9 +97,10 @@ export function TaksitPlaniBolumu({
         </table>
       </div>
 
-      {/* Yeni taksit */}
+      {/* Yeni taksit — seçili tipe eklenir */}
       <form action={gonder} className="flex flex-wrap items-end gap-3 border-t border-cizgi pt-4">
         <input type="hidden" name="sezon_id" value={sezonId} />
+        <input type="hidden" name="ogrenci_tipi" value={tip} />
         <div className="min-w-40 flex-1">
           <label className="etiket text-xs">Taksit adı</label>
           <input name="ad" placeholder="ör. 1. Taksit" className="girdi !py-1.5" required />
@@ -82,10 +123,18 @@ export function TaksitPlaniBolumu({
           {durum.alanlar?.tutar && <p className="hata">{durum.alanlar.tutar}</p>}
         </div>
         <button className="btn-birincil !py-1.5" disabled={bekliyor}>
-          {bekliyor ? 'Ekleniyor…' : '+ Taksit Ekle'}
+          {bekliyor ? 'Ekleniyor…' : `+ ${OGRENCI_TIPI_ADLARI[tip]} taksiti ekle`}
         </button>
         {durum.hata && <p className="hata w-full">{durum.hata}</p>}
       </form>
+
+      <p className="text-xs text-solgun">
+        Öğrenci, ana verisinde seçili tipin planına göre değerlendirilir.{' '}
+        <strong>1. sınıf öğrencileri standart planı kullanır</strong>, ayrı plan
+        girilmesine gerek yoktur. Tek bir öğrenciye farklı tutar ya da vade gerekiyorsa
+        öğrenci sayfasındaki taksit bölümünden istisna tanımlayın — istisna tipin
+        planını ezer.
+      </p>
     </div>
   )
 }
@@ -127,11 +176,7 @@ function TaksitSatiri({ taksit }: { taksit: TaksitPlani }) {
             <button className="btn-birincil !py-1.5" disabled={bekliyor}>
               Kaydet
             </button>
-            <button
-              type="button"
-              onClick={() => setDuzenle(false)}
-              className="btn-ikincil !py-1.5"
-            >
+            <button type="button" onClick={() => setDuzenle(false)} className="btn-ikincil !py-1.5">
               Vazgeç
             </button>
             {durum.hata && <p className="hata w-full">{durum.hata}</p>}

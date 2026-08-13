@@ -81,6 +81,7 @@ export async function taksitEkle(
 ): Promise<AyarDurumu> {
   const sema = z.object({
     sezon_id: z.uuid('Sezon seçin.'),
+    ogrenci_tipi: z.enum(['standart', 'anasinifi', 'anasinifi_etut']),
     ad: z.string().trim().min(1, 'Taksit adı gerekli.'),
     vade_tarihi: z.string().min(1, 'Vade tarihi gerekli.'),
     tutar: trSayi({ min: 0 }),
@@ -96,8 +97,8 @@ export async function taksitEkle(
 
   if (error) {
     return {
-      hata: error.message.includes('taksit_plani_sezon_ad_uniq')
-        ? 'Bu sezonda aynı adda bir taksit zaten var.'
+      hata: error.message.includes('taksit_plani_sezon_tip_ad_uniq')
+        ? 'Bu sezonda ve bu öğrenci tipinde aynı adda bir taksit zaten var.'
         : error.message,
     }
   }

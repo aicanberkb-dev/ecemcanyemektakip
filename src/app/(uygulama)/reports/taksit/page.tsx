@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { CiktiBasligi } from '@/components/CiktiBasligi'
+import { OgrenciTipiRozeti } from '@/components/Rozetler'
 import { SezonUyarisi } from '@/components/SezonUyarisi'
 import { YazdirButonu } from '@/components/Yazdir'
 import { para, tarih as tarihBicim } from '@/lib/format'
@@ -187,6 +188,7 @@ export default async function TaksitPage({
                   <th>No</th>
                   <th>Ad Soyad</th>
                   <th>Sınıf</th>
+                  <th>Tip</th>
                   <th className="text-right">Yıllık</th>
                   <th className="text-right">Vadesi Gelen</th>
                   <th className="text-right">Ödenen</th>
@@ -215,6 +217,13 @@ export default async function TaksitPage({
                       )}
                     </td>
                     <td>{s.sinif ?? '—'}</td>
+                    <td className="whitespace-nowrap">
+                      {s.ogrenci_tipi === 'standart' ? (
+                        <span className="text-solgun">Standart</span>
+                      ) : (
+                        <OgrenciTipiRozeti tip={s.ogrenci_tipi} />
+                      )}
+                    </td>
                     <td className="text-right tabular-nums">{para(s.yillik_toplam)}</td>
                     <td className="text-right tabular-nums">{para(s.vadesi_gelen)}</td>
                     <td className="text-right tabular-nums text-emerald-700">
@@ -238,7 +247,7 @@ export default async function TaksitPage({
                 ))}
                 {satirlar.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-solgun">
+                    <td colSpan={9} className="py-8 text-center text-solgun">
                       Aylıkçı öğrenci yok.
                     </td>
                   </tr>

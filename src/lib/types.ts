@@ -2,6 +2,37 @@
 // supabase/migrations altındaki şema değişince burası da güncellenmeli.
 
 export type AboneTipi = 'gunluk' | 'aylik'
+
+/**
+ * Öğrenci tipi.
+ *
+ * Tiplerin çoğu kendi taksit planına tabidir; **1. sınıf** istisnadır — ücreti
+ * standartla aynıdır, ayrı bir plana ihtiyacı yoktur. Tip yine de gerekli:
+ * 1. sınıflar sınıflarından toplu alınıp yoklamaları kâğıtta tutulduğu için
+ * ekranlarda ayırt edilmeleri gerekiyor.
+ */
+export type OgrenciTipi = 'standart' | 'birinci_sinif' | 'anasinifi' | 'anasinifi_etut'
+
+export const OGRENCI_TIPI_ADLARI: Record<OgrenciTipi, string> = {
+  standart: 'Standart',
+  birinci_sinif: '1. Sınıf',
+  anasinifi: 'Anasınıfı',
+  anasinifi_etut: 'Anasınıfı + Etüt',
+}
+
+export const OGRENCI_TIPLERI: OgrenciTipi[] = [
+  'standart',
+  'birinci_sinif',
+  'anasinifi',
+  'anasinifi_etut',
+]
+
+/** Taksit planı tanımlanan tipler — 1. sınıf standart planı kullanır. */
+export const PLANLI_OGRENCI_TIPLERI: OgrenciTipi[] = [
+  'standart',
+  'anasinifi',
+  'anasinifi_etut',
+]
 export type IslemTipi = 'tahsilat' | 'harcama'
 export type SerbestOgunTipi = 'ucretli' | 'misafir'
 export type KullaniciRolu = 'admin' | 'personel'
@@ -31,10 +62,16 @@ export type Student = {
   kimlik_no: string | null
   veli_adi: string | null
   veli_telefon: string | null
+  // Ödemeyi anne de baba da yapabiliyor; ekstre eşleştirmesi iki ada da bakar.
+  veli2_adi: string | null
+  veli2_telefon: string | null
+  /** Aynı gruptaki öğrenciler kardeştir; null ise kardeşi tanımlı değil. */
+  kardes_grup_id: string | null
   iskonto_orani: number
   iskonto_tutar: number
   devir: number
   abone_tipi: AboneTipi
+  ogrenci_tipi: OgrenciTipi
   aktif: boolean
   created_at: string
   updated_at: string
@@ -49,7 +86,12 @@ export type StudentBalance = {
   kimlik_no: string | null
   veli_adi: string | null
   veli_telefon: string | null
+  veli2_adi: string | null
+  veli2_telefon: string | null
+  /** Aynı gruptaki öğrenciler kardeştir; null ise kardeşi tanımlı değil. */
+  kardes_grup_id: string | null
   abone_tipi: AboneTipi
+  ogrenci_tipi: OgrenciTipi
   aktif: boolean
   iskonto_orani: number
   iskonto_tutar: number
@@ -113,6 +155,8 @@ export type Sezon = {
 export type TaksitPlani = {
   id: string
   sezon_id: string
+  /** Bu taksit satırı hangi öğrenci tipine ait */
+  ogrenci_tipi: OgrenciTipi
   ad: string
   vade_tarihi: string
   tutar: number
@@ -176,6 +220,7 @@ export type TaksitDurumu = {
   ogrenci_no: string
   ad_soyad: string
   sinif: string | null
+  ogrenci_tipi: OgrenciTipi
   yillik_toplam: number
   vadesi_gelen: number
   odenen: number
@@ -192,7 +237,10 @@ export type DevamSatiri = {
   ad_soyad: string
   sinif: string | null
   abone_tipi: AboneTipi
+  ogrenci_tipi: OgrenciTipi
   geldigi_gunler: number[]
+  /** O ay tahsilat alınan günler — çizelgede işaretlenir */
+  odeme_gunleri: number[]
   geldi_sayisi: number
   gelmedi_sayisi: number
 }
@@ -229,6 +277,7 @@ export type GelenGidenSatiri = {
   ad_soyad: string
   sinif: string | null
   abone_tipi: AboneTipi
+  ogrenci_tipi: OgrenciTipi
   devir: number
   donem_tahsilat: number
   donem_harcama: number

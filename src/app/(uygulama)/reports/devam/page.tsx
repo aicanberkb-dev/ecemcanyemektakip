@@ -5,12 +5,14 @@ import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { DevamSatiri } from '@/lib/types'
 
+import { DevamTablosu } from './DevamTablosu'
+
 export const metadata = { title: 'Devam Çizelgesi — Yemek Takip' }
 
 export default async function DevamPage({
   searchParams,
 }: {
-  searchParams: Promise<{ yil?: string; ay?: string; sinif?: string; q?: string }>
+  searchParams: Promise<{ yil?: string; ay?: string }>
 }) {
   const q = await searchParams
   const simdi = new Date()
@@ -26,14 +28,9 @@ export default async function DevamPage({
     supabase.from('students').select('sinif').eq('okul_id', okul.id).not('sinif', 'is', null),
   ])
 
-  let satirlar = (data ?? []) as DevamSatiri[]
-  if (q.sinif) satirlar = satirlar.filter((s) => s.sinif === q.sinif)
-  if (q.q?.trim()) {
-    const t = q.q.trim().toLocaleLowerCase('tr')
-    satirlar = satirlar.filter(
-      (s) => s.ad_soyad.toLocaleLowerCase('tr').includes(t) || s.ogrenci_no.includes(t),
-    )
-  }
+  // Ay ve yıl sunucudan gelir (veriyi onlar belirler); sınıf ve arama
+  // tablonun içinde, yazdıkça süzülecek şekilde çalışır.
+  const satirlar = (data ?? []) as DevamSatiri[]
 
   const siniflar = [
     ...new Set((sinifSatirlari ?? []).map((s) => s.sinif as string).filter(Boolean)),
@@ -41,11 +38,11 @@ export default async function DevamPage({
 
   const gunSayisi = new Date(yil, ay, 0).getDate()
   const gunler = Array.from({ length: gunSayisi }, (_, i) => i + 1)
-  const haftaSonu = (gun: number) => {
+  const haftaSonuGunler = gunler.filter((gun) => {
     const g = new Date(yil, ay - 1, gun).getDay()
     return g === 0 || g === 6
-  }
-  const haftaIciSayisi = gunler.filter((g) => !haftaSonu(g)).length
+  })
+  const haftaIciSayisi = gunSayisi - haftaSonuGunler.length
 
   return (
     <div className="space-y-4">
@@ -88,25 +85,6 @@ export default async function DevamPage({
             className="girdi w-28"
           />
         </div>
-        <div>
-          <label className="etiket" htmlFor="sinif">
-            Sınıf
-          </label>
-          <select id="sinif" name="sinif" defaultValue={q.sinif ?? ''} className="girdi">
-            <option value="">Hepsi</option>
-            {siniflar.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="min-w-48 flex-1">
-          <label className="etiket" htmlFor="q">
-            Öğrenci ara (ad veya no)
-          </label>
-          <input id="q" name="q" defaultValue={q.q ?? ''} className="girdi" />
-        </div>
         <button className="btn-birincil">Göster</button>
         <Link href="/reports/devam" className="btn-ikincil">
           Bu ay
@@ -117,70 +95,13 @@ export default async function DevamPage({
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error.message}</p>
       )}
 
-      <div className="kart overflow-x-auto">
-        <table className="tablo">
-          <thead>
-            <tr>
-              <th className="sticky left-0 z-10 bg-slate-50">Öğrenci</th>
-              {gunler.map((g) => (
-                <th
-                  key={g}
-                  className={`!px-1 text-center tabular-nums ${
-                    haftaSonu(g) ? 'bg-slate-200 text-slate-400' : ''
-                  }`}
-                >
-                  {g}
-                </th>
-              ))}
-              <th className="text-right">Geldi</th>
-              <th className="text-right">Gelmedi</th>
-            </tr>
-          </thead>
-          <tbody>
-            {satirlar.map((s) => {
-              const geldigi = new Set(s.geldigi_gunler)
-              return (
-                <tr key={s.student_id}>
-                  <td className="sticky left-0 z-10 bg-white whitespace-nowrap">
-                    <Link
-                      href={`/reports/devam/${s.student_id}?yil=${yil}`}
-                      className="font-medium text-vurgu hover:underline"
-                    >
-                      {s.ad_soyad}
-                    </Link>
-                    <span className="ml-2 text-xs text-solgun">{s.sinif ?? ''}</span>
-                  </td>
-                  {gunler.map((g) => (
-                    <td
-                      key={g}
-                      className={`!px-1 text-center ${
-                        haftaSonu(g)
-                          ? 'bg-slate-100'
-                          : geldigi.has(g)
-                            ? 'bg-emerald-50 font-semibold text-emerald-700'
-                            : ''
-                      }`}
-                    >
-                      {geldigi.has(g) ? '✓' : ''}
-                    </td>
-                  ))}
-                  <td className="text-right font-semibold tabular-nums text-emerald-700">
-                    {s.geldi_sayisi}
-                  </td>
-                  <td className="text-right tabular-nums text-slate-500">{s.gelmedi_sayisi}</td>
-                </tr>
-              )
-            })}
-            {satirlar.length === 0 && (
-              <tr>
-                <td colSpan={gunSayisi + 3} className="py-8 text-center text-solgun">
-                  Kayıt bulunamadı.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DevamTablosu
+        satirlar={satirlar}
+        siniflar={siniflar}
+        yil={yil}
+        gunler={gunler}
+        haftaSonuGunler={haftaSonuGunler}
+      />
     </div>
   )
 }

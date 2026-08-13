@@ -1,21 +1,26 @@
-import Link from 'next/link'
-
 import { TarihAraligi } from '@/components/TarihAraligi'
-import { para, tarih as tarihBicim } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
-import { ODEME_YONTEMI_ADLARI, type OdemeYontemi, type Transaction } from '@/lib/types'
+import type { OdemeYontemi } from '@/lib/types'
+
+import { TahsilatListesi, type TahsilatSatiri } from './TahsilatListesi'
 
 export const metadata = { title: 'Tahsilat Geçmişi — Yemek Takip' }
 
-type Kayit = Transaction & {
+type Ham = {
+  id: string
+  student_id: string
+  tarih: string
+  tutar: number | string
+  aciklama: string | null
+  odeme_yontemi: OdemeYontemi | null
   students: { ad_soyad: string; ogrenci_no: string; sinif: string | null } | null
 }
 
 export default async function TahsilatPage({
   searchParams,
 }: {
-  searchParams: Promise<{ bas?: string; bit?: string; q?: string }>
+  searchParams: Promise<{ bas?: string; bit?: string }>
 }) {
   const q = await searchParams
   const yil = new Date().getFullYear()
@@ -28,7 +33,7 @@ export default async function TahsilatPage({
 
   const { data, error } = await supabase
     .from('transactions')
-    .select('*, students!inner(ad_soyad, ogrenci_no, sinif, okul_id)')
+    .select('id, student_id, tarih, tutar, aciklama, odeme_yontemi, students!inner(ad_soyad, ogrenci_no, sinif, okul_id)')
     .eq('students.okul_id', okul.id)
     .eq('tip', 'tahsilat')
     .gte('tarih', bas)
@@ -36,45 +41,19 @@ export default async function TahsilatPage({
     .order('tarih', { ascending: false })
     .order('created_at', { ascending: false })
 
-  let kayitlar = (data ?? []) as Kayit[]
-  if (q.q?.trim()) {
-    const t = q.q.trim().toLocaleLowerCase('tr')
-    kayitlar = kayitlar.filter(
-      (k) =>
-        k.students?.ad_soyad.toLocaleLowerCase('tr').includes(t) ||
-        k.students?.ogrenci_no.includes(t),
-    )
-  }
-
-  const toplam = kayitlar.reduce((t, k) => t + Number(k.tutar), 0)
-
-  // Ödeme yöntemi kırılımı
-  const yonteme = {
-    nakit: { tutar: 0, adet: 0 },
-    havale: { tutar: 0, adet: 0 },
-    kredi_karti: { tutar: 0, adet: 0 },
-    belirtilmemis: { tutar: 0, adet: 0 },
-  }
-  for (const k of kayitlar) {
-    const anahtar = k.odeme_yontemi ?? 'belirtilmemis'
-    yonteme[anahtar].tutar += Number(k.tutar)
-    yonteme[anahtar].adet += 1
-  }
-
-  // Öğrenci bazlı kırılım
-  const ogrenciBazli = new Map<string, { ad: string; no: string; tutar: number; adet: number }>()
-  for (const k of kayitlar) {
-    const mevcut = ogrenciBazli.get(k.student_id) ?? {
-      ad: k.students?.ad_soyad ?? '—',
-      no: k.students?.ogrenci_no ?? '',
-      tutar: 0,
-      adet: 0,
-    }
-    mevcut.tutar += Number(k.tutar)
-    mevcut.adet += 1
-    ogrenciBazli.set(k.student_id, mevcut)
-  }
-  const ozetSatirlari = [...ogrenciBazli.entries()].sort((a, b) => b[1].tutar - a[1].tutar)
+  // Arama sunucuda değil listede yapılır: kullanıcı yazdıkça süzülsün ve
+  // özet kartları da anında güncellensin.
+  const kayitlar: TahsilatSatiri[] = ((data ?? []) as unknown as Ham[]).map((k) => ({
+    id: k.id,
+    student_id: k.student_id,
+    tarih: k.tarih,
+    tutar: Number(k.tutar),
+    aciklama: k.aciklama,
+    odeme_yontemi: k.odeme_yontemi,
+    ad_soyad: k.students?.ad_soyad ?? '—',
+    ogrenci_no: k.students?.ogrenci_no ?? '',
+    sinif: k.students?.sinif ?? null,
+  }))
 
   return (
     <div className="space-y-4">
@@ -83,166 +62,13 @@ export default async function TahsilatPage({
         <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
       </div>
 
-      <TarihAraligi
-        bas={bas}
-        bit={bit}
-        temizleYolu="/reports/tahsilat"
-        cocuklar={
-          <div className="min-w-48 flex-1">
-            <label className="etiket" htmlFor="q">
-              Öğrenci ara
-            </label>
-            <input id="q" name="q" defaultValue={q.q ?? ''} className="girdi" />
-          </div>
-        }
-      />
+      <TarihAraligi bas={bas} bit={bit} temizleYolu="/reports/tahsilat" />
 
       {error && (
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error.message}</p>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Ozet baslik="Toplam tahsilat" deger={para(toplam)} renk="text-emerald-700" />
-        <Ozet baslik="İşlem sayısı" deger={String(kayitlar.length)} />
-        <Ozet baslik="Ödeme yapan öğrenci" deger={String(ogrenciBazli.size)} />
-      </div>
-
-      {/* Ödeme yöntemi kırılımı */}
-      <div className="grid gap-4 sm:grid-cols-4">
-        {(['nakit', 'havale', 'kredi_karti'] as OdemeYontemi[]).map((y) => (
-          <Ozet
-            key={y}
-            baslik={ODEME_YONTEMI_ADLARI[y]}
-            deger={para(yonteme[y].tutar)}
-            alt={`${yonteme[y].adet} işlem`}
-          />
-        ))}
-        {yonteme.belirtilmemis.adet > 0 && (
-          <Ozet
-            baslik="Belirtilmemiş"
-            deger={para(yonteme.belirtilmemis.tutar)}
-            alt={`${yonteme.belirtilmemis.adet} eski kayıt`}
-          />
-        )}
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
-        <div className="kart overflow-x-auto">
-          <h2 className="border-b border-cizgi px-4 py-3 font-semibold">
-            İşlemler ({kayitlar.length})
-          </h2>
-          <table className="tablo">
-            <thead>
-              <tr>
-                <th>Tarih</th>
-                <th>Öğrenci</th>
-                <th>Sınıf</th>
-                <th>Ödeme Yöntemi</th>
-                <th>Açıklama</th>
-                <th className="text-right">Tutar</th>
-                <th className="text-right">Düzelt</th>
-              </tr>
-            </thead>
-            <tbody>
-              {kayitlar.map((k) => (
-                <tr key={k.id}>
-                  <td className="whitespace-nowrap">{tarihBicim(k.tarih)}</td>
-                  <td>
-                    <Link
-                      href={`/students/${k.student_id}`}
-                      className="font-medium text-vurgu hover:underline"
-                    >
-                      {k.students?.ad_soyad ?? '—'}
-                    </Link>
-                  </td>
-                  <td>{k.students?.sinif ?? '—'}</td>
-                  <td>
-                    {k.odeme_yontemi ? (
-                      <span className="rozet bg-slate-100 text-slate-700">
-                        {ODEME_YONTEMI_ADLARI[k.odeme_yontemi]}
-                      </span>
-                    ) : (
-                      <span className="rozet bg-amber-100 text-amber-800">belirtilmemiş</span>
-                    )}
-                  </td>
-                  <td className="text-solgun">{k.aciklama ?? '—'}</td>
-                  <td className="text-right font-medium tabular-nums text-emerald-700">
-                    {para(k.tutar)}
-                  </td>
-                  <td className="text-right whitespace-nowrap">
-                    <Link
-                      href={`/students/${k.student_id}`}
-                      className="text-xs text-vurgu hover:underline"
-                    >
-                      Düzelt →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-              {kayitlar.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-solgun">
-                    Bu aralıkta tahsilat yok.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="kart h-fit overflow-x-auto">
-          <h2 className="border-b border-cizgi px-4 py-3 font-semibold">Öğrenci Bazlı</h2>
-          <table className="tablo">
-            <thead>
-              <tr>
-                <th>Öğrenci</th>
-                <th className="text-right">Adet</th>
-                <th className="text-right">Toplam</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ozetSatirlari.map(([id, o]) => (
-                <tr key={id}>
-                  <td>
-                    <Link href={`/students/${id}`} className="text-vurgu hover:underline">
-                      {o.ad}
-                    </Link>
-                  </td>
-                  <td className="text-right tabular-nums text-solgun">{o.adet}</td>
-                  <td className="text-right font-medium tabular-nums">{para(o.tutar)}</td>
-                </tr>
-              ))}
-              {ozetSatirlari.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="py-6 text-center text-solgun">
-                    —
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function Ozet({
-  baslik,
-  deger,
-  alt,
-  renk,
-}: {
-  baslik: string
-  deger: string
-  alt?: string
-  renk?: string
-}) {
-  return (
-    <div className="kart p-4">
-      <p className="text-xs font-medium tracking-wide text-solgun uppercase">{baslik}</p>
-      <p className={`mt-1 text-2xl font-bold tabular-nums ${renk ?? ''}`}>{deger}</p>
-      {alt && <p className="mt-1 text-xs text-solgun">{alt}</p>}
+      <TahsilatListesi kayitlar={kayitlar} />
     </div>
   )
 }

@@ -13,6 +13,7 @@ const BAGLANTILAR = [
   { yol: '/dashboard', ad: 'Özet' },
   { yol: '/students', ad: 'Öğrenciler' },
   { yol: '/payments/new', ad: 'Tahsilat' },
+  { yol: '/payments/ekstre', ad: 'Ekstre Aktar' },
   { yol: '/reports', ad: 'Raporlar' },
   { yol: '/admin/settings', ad: 'Ayarlar' },
 ]
@@ -23,6 +24,7 @@ const RAPOR_ALT = [
   { yol: '/reports/gun-sonu', ad: 'Gün Sonu' },
   { yol: '/reports/nakit', ad: 'Nakit' },
   { yol: '/reports/devam', ad: 'Devam Çizelgesi' },
+  { yol: '/reports/yoklama', ad: '1. Sınıf Yoklama' },
   { yol: '/reports/tahsilat', ad: 'Tahsilat Geçmişi' },
   { yol: '/reports/taksit', ad: 'Taksit Takibi' },
 ]

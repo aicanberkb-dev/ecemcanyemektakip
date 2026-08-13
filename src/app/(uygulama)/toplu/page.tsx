@@ -46,6 +46,7 @@ export default async function TopluPage({
     ad_soyad: o.ad_soyad,
     sinif: o.sinif,
     abone_tipi: o.abone_tipi,
+    ogrenci_tipi: o.ogrenci_tipi,
     kalan: Number(o.kalan),
     gunluk_ucret: Number(o.gunluk_ucret),
     zaten_kayitli: kayitli.has(o.student_id),

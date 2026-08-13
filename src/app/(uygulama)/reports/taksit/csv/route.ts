@@ -3,7 +3,7 @@ import { aktifOkul } from '@/lib/okul'
 import { sezonSec } from '@/lib/sezon'
 import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
-import type { TaksitDurumu } from '@/lib/types'
+import { OGRENCI_TIPI_ADLARI, type TaksitDurumu } from '@/lib/types'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -28,6 +28,7 @@ export async function GET(request: Request) {
     hucre(s.ogrenci_no),
     hucre(s.ad_soyad),
     hucre(s.sinif),
+    hucre(OGRENCI_TIPI_ADLARI[s.ogrenci_tipi]),
     csvSayi(s.yillik_toplam),
     csvSayi(s.vadesi_gelen),
     csvSayi(s.odenen),
@@ -46,6 +47,7 @@ export async function GET(request: Request) {
     hucre(''),
     hucre(''),
     hucre(''),
+    hucre(''),
     csvSayi(toplamEksik),
     hucre(''),
   ])
@@ -55,6 +57,7 @@ export async function GET(request: Request) {
       'Öğrenci No',
       'Ad Soyad',
       'Sınıf',
+      'Öğrenci Tipi',
       'Yıllık Toplam',
       'Vadesi Gelen',
       'Ödenen',

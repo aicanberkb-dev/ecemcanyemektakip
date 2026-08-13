@@ -1,17 +1,23 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-import { AboneRozeti, Bakiye, DurumRozeti } from '@/components/Rozetler'
+import { AboneRozeti, Bakiye, DurumRozeti, OgrenciTipiRozeti } from '@/components/Rozetler'
 import { para } from '@/lib/format'
 import { aktifOkulId } from '@/lib/okul'
 import { sezonSec } from '@/lib/sezon'
 import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
-import type { OgrenciTaksitSatiri, StudentBalance, Transaction } from '@/lib/types'
+import {
+  OGRENCI_TIPI_ADLARI,
+  type OgrenciTaksitSatiri,
+  type StudentBalance,
+  type Transaction,
+} from '@/lib/types'
 
 import { ogrenciSil } from '../actions'
 import { IskontoFormu } from './IskontoFormu'
 import { IslemSatiri } from './IslemSatiri'
+import { KardesBolumu } from './KardesBolumu'
 import { TaksitBolumu } from './TaksitBolumu'
 
 export default async function OgrenciDetayPage({
@@ -59,6 +65,32 @@ export default async function OgrenciDetayPage({
       : { data: null }
   const taksitSatirlari = (taksitVeri ?? []) as OgrenciTaksitSatiri[]
 
+  // Kardeşler ve bağlanabilecek adaylar: ikisi de aynı okuldan
+  const { data: okulOgrencileri } = await supabase
+    .from('student_balances')
+    .select('student_id, ogrenci_no, ad_soyad, sinif, kalan, kardes_grup_id')
+    .eq('okul_id', okulId)
+    .eq('aktif', true)
+    .order('ogrenci_no')
+
+  const tumOgrenciler = ((okulOgrencileri ?? []) as StudentBalance[]).map((o) => ({
+    student_id: o.student_id,
+    ogrenci_no: o.ogrenci_no,
+    ad_soyad: o.ad_soyad,
+    sinif: o.sinif,
+    kalan: Number(o.kalan),
+    kardes_grup_id: o.kardes_grup_id,
+  }))
+
+  const kardesler = ozet.kardes_grup_id
+    ? tumOgrenciler.filter(
+        (o) => o.kardes_grup_id === ozet.kardes_grup_id && o.student_id !== id,
+      )
+    : []
+  const kardesAdaylari = tumOgrenciler.filter(
+    (o) => o.student_id !== id && !kardesler.some((k) => k.student_id === o.student_id),
+  )
+
   const sil = ogrenciSil.bind(null, id)
 
   return (
@@ -74,6 +106,7 @@ export default async function OgrenciDetayPage({
             <span className="tabular-nums">{ozet.ogrenci_no}</span>
             {ozet.sinif && <span>· {ozet.sinif}</span>}
             <AboneRozeti tip={ozet.abone_tipi} />
+            <OgrenciTipiRozeti tip={ozet.ogrenci_tipi} />
             <DurumRozeti aktif={ozet.aktif} />
           </p>
         </div>
@@ -205,6 +238,8 @@ export default async function OgrenciDetayPage({
             />
           </div>
 
+          <KardesBolumu studentId={id} kardesler={kardesler} adaylar={kardesAdaylari} />
+
           {/* Veli bilgisi */}
           <div className="kart p-4">
             <h2 className="mb-3 font-semibold">Veli Bilgisi</h2>
@@ -222,6 +257,40 @@ export default async function OgrenciDetayPage({
                     </a>
                   ) : (
                     '—'
+                  )}
+                </dd>
+              </div>
+              {ozet.veli2_adi && (
+                <>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-solgun">2. Veli</dt>
+                    <dd className="text-right">{ozet.veli2_adi}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-solgun">2. Veli Telefon</dt>
+                    <dd className="text-right">
+                      {ozet.veli2_telefon ? (
+                        <a
+                          href={`tel:${ozet.veli2_telefon}`}
+                          className="text-vurgu hover:underline"
+                        >
+                          {ozet.veli2_telefon}
+                        </a>
+                      ) : (
+                        '—'
+                      )}
+                    </dd>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between gap-3">
+                <dt className="text-solgun">Öğrenci tipi</dt>
+                <dd className="text-right">
+                  {OGRENCI_TIPI_ADLARI[ozet.ogrenci_tipi]}
+                  {ozet.abone_tipi === 'aylik' && (
+                    <span className="block text-xs text-solgun">
+                      bu tipin taksit planına tabi
+                    </span>
                   )}
                 </dd>
               </div>

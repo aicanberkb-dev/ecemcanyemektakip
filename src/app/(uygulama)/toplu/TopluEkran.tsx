@@ -3,10 +3,11 @@
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 
-import { AboneRozeti, Bakiye } from '@/components/Rozetler'
+import { AboneRozeti, Bakiye, OgrenciTipiRozeti } from '@/components/Rozetler'
+import { aramaEslesir } from '@/lib/arama'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import { supabaseBrowser } from '@/lib/supabase/client'
-import type { AboneTipi } from '@/lib/types'
+import type { AboneTipi, OgrenciTipi } from '@/lib/types'
 
 export type TopluOgrenci = {
   student_id: string
@@ -14,6 +15,7 @@ export type TopluOgrenci = {
   ad_soyad: string
   sinif: string | null
   abone_tipi: AboneTipi
+  ogrenci_tipi: OgrenciTipi
   kalan: number
   gunluk_ucret: number
   zaten_kayitli: boolean
@@ -37,24 +39,25 @@ export function TopluEkran({
   const [arama, setArama] = useState('')
   const [sinif, setSinif] = useState('')
   const [kaydediliyor, setKaydediliyor] = useState(false)
+  // Toplu girişte hata yapılabiliyor; aynı ekrandan geri alınabilmeli.
+  const [mod, setMod] = useState<'ekle' | 'geri'>('ekle')
   const [mesaj, setMesaj] = useState<Mesaj | null>(null)
 
   // Zaten kaydı olanlar seçilemez
   const secilebilir = ogrenciler.filter((o) => !o.zaten_kayitli)
 
   const gosterilen = useMemo(() => {
-    const t = arama.trim().toLocaleLowerCase('tr')
+    const t = arama.trim()
     return ogrenciler.filter((o) => {
       if (sinif && o.sinif !== sinif) return false
       if (!t) return true
-      return (
-        o.ad_soyad.toLocaleLowerCase('tr').includes(t) ||
-        o.ogrenci_no.includes(t)
-      )
+      return aramaEslesir(`${o.ad_soyad} ${o.ogrenci_no}`, t)
     })
   }, [ogrenciler, arama, sinif])
 
-  const gosterilenSecilebilir = gosterilen.filter((o) => !o.zaten_kayitli)
+  // Ekleme modunda kaydı olmayanlar, geri alma modunda kaydı olanlar seçilebilir.
+  const secilebilirMi = (o: TopluOgrenci) => (mod === 'ekle' ? !o.zaten_kayitli : o.zaten_kayitli)
+  const gosterilenSecilebilir = gosterilen.filter(secilebilirMi)
   const hepsiSecili =
     gosterilenSecilebilir.length > 0 &&
     gosterilenSecilebilir.every((o) => secili.has(o.student_id))
@@ -78,6 +81,8 @@ export function TopluEkran({
     })
   }
 
+  // Aylıkçının öğünü 0 ₺ olduğu için tutar yalnızca günlükçülerden oluşur;
+  // geri almada da aynı tutar iade edilir.
   const toplamTutar = ogrenciler
     .filter((o) => secili.has(o.student_id))
     .reduce((t, o) => t + (o.abone_tipi === 'aylik' ? 0 : o.gunluk_ucret), 0)
@@ -110,6 +115,39 @@ export function TopluEkran({
       metin:
         `${sonuc?.eklenen ?? 0} öğrenciye yemek kaydı girildi` +
         (sonuc?.atlanan ? ` — ${sonuc.atlanan} öğrenci zaten kayıtlıydı, atlandı.` : '.'),
+    })
+    setSecili(new Set())
+    router.refresh()
+  }
+
+  async function geriAl() {
+    if (secili.size === 0 || kaydediliyor) return
+    if (
+      !confirm(
+        `${secili.size} öğrencinin ${tarihBicim(gun)} tarihli yemek kaydı SİLİNECEK.\n` +
+          `Günlükçülere toplam ${para(toplamTutar)} iade edilecek. Onaylıyor musunuz?`,
+      )
+    )
+      return
+
+    setKaydediliyor(true)
+    const { data, error } = await supabase.rpc('toplu_yemek_geri_al', {
+      p_ogrenciler: [...secili],
+      p_tarih: gun,
+    })
+
+    setKaydediliyor(false)
+    if (error) {
+      setMesaj({ tip: 'hata', metin: error.message })
+      return
+    }
+
+    const sonuc = (data as { silinen: number; atlanan: number }[] | null)?.[0]
+    setMesaj({
+      tip: 'ok',
+      metin:
+        `${sonuc?.silinen ?? 0} yemek kaydı geri alındı` +
+        (sonuc?.atlanan ? ` — ${sonuc.atlanan} öğrencide o tarihte kayıt yoktu.` : '.'),
     })
     setSecili(new Set())
     router.refresh()
@@ -163,24 +201,58 @@ export function TopluEkran({
       </div>
 
       {/* Eylem çubuğu */}
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 rounded-lg border border-cizgi bg-white p-4 shadow-sm">
-        <button type="button" onClick={tumunuDegistir} className="btn-ikincil">
-          {hepsiSecili ? 'Seçimi kaldır' : 'Tümünü seç'}
-        </button>
-        <span className="text-sm text-solgun">
-          <strong className="text-metin">{secili.size}</strong> seçili
-          {secili.size > 0 && <> · düşecek tutar {para(toplamTutar)}</>}
-        </span>
-        <button
-          type="button"
-          onClick={kaydet}
-          disabled={secili.size === 0 || kaydediliyor}
-          className="btn-birincil ml-auto"
-        >
-          {kaydediliyor
-            ? 'Kaydediliyor…'
-            : `${tarihBicim(gun)} için Yemek Kaydet`}
-        </button>
+      <div className="sticky top-0 z-10 space-y-3 rounded-lg border border-cizgi bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap gap-2">
+          {(['ekle', 'geri'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => {
+                setMod(m)
+                setSecili(new Set())
+                setMesaj(null)
+              }}
+              className={`rounded-md border px-3 py-2 text-sm ${
+                m === mod
+                  ? m === 'ekle'
+                    ? 'border-vurgu bg-blue-50 font-semibold text-vurgu'
+                    : 'border-red-500 bg-red-50 font-semibold text-red-700'
+                  : 'border-cizgi hover:bg-gray-50'
+              }`}
+            >
+              {m === 'ekle' ? 'Yemek Yedir' : 'Yemeği Geri Al'}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={tumunuDegistir} className="btn-ikincil">
+            {hepsiSecili ? 'Seçimi kaldır' : 'Tümünü seç'}
+          </button>
+          <span className="text-sm text-solgun">
+            <strong className="text-metin">{secili.size}</strong> seçili
+            {secili.size > 0 && (
+              <>
+                {' '}
+                · {mod === 'ekle' ? 'düşecek' : 'iade edilecek'} tutar {para(toplamTutar)}
+              </>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={mod === 'ekle' ? kaydet : geriAl}
+            disabled={secili.size === 0 || kaydediliyor}
+            className={`ml-auto ${mod === 'ekle' ? 'btn-birincil' : 'btn-tehlike'}`}
+          >
+            {kaydediliyor
+              ? mod === 'ekle'
+                ? 'Kaydediliyor…'
+                : 'Geri alınıyor…'
+              : mod === 'ekle'
+                ? `${tarihBicim(gun)} için Yemek Kaydet`
+                : `${tarihBicim(gun)} Kaydını Geri Al`}
+          </button>
+        </div>
       </div>
 
       {mesaj && (
@@ -221,19 +293,21 @@ export function TopluEkran({
               return (
                 <tr
                   key={o.student_id}
-                  onClick={() => !o.zaten_kayitli && degistir(o.student_id)}
-                  className={`${o.zaten_kayitli ? 'opacity-50' : 'cursor-pointer'} ${
-                    isaretli ? 'bg-blue-50' : ''
+                  onClick={() => secilebilirMi(o) && degistir(o.student_id)}
+                  className={`${secilebilirMi(o) ? 'cursor-pointer' : 'opacity-50'} ${
+                    isaretli ? (mod === 'ekle' ? 'bg-blue-50' : 'bg-red-50') : ''
                   }`}
                 >
                   <td>
                     <input
                       type="checkbox"
                       checked={isaretli}
-                      disabled={o.zaten_kayitli}
+                      disabled={!secilebilirMi(o)}
                       onChange={() => degistir(o.student_id)}
                       onClick={(e) => e.stopPropagation()}
-                      className="size-4 cursor-pointer accent-blue-600"
+                      className={`size-4 cursor-pointer ${
+                        mod === 'ekle' ? 'accent-blue-600' : 'accent-red-600'
+                      }`}
                       aria-label={`${o.ad_soyad} seç`}
                     />
                   </td>
@@ -242,13 +316,14 @@ export function TopluEkran({
                     {o.ad_soyad}
                     {o.zaten_kayitli && (
                       <span className="rozet ml-2 bg-slate-200 text-slate-600">
-                        zaten kayıtlı
+                        {mod === 'ekle' ? 'zaten kayıtlı' : 'kayıtlı'}
                       </span>
                     )}
                   </td>
                   <td>{o.sinif ?? '—'}</td>
                   <td>
                     <AboneRozeti tip={o.abone_tipi} />
+                    <OgrenciTipiRozeti tip={o.ogrenci_tipi} />
                   </td>
                   <td className="text-right">
                     <Bakiye tutar={o.kalan} />

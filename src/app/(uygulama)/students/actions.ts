@@ -20,10 +20,14 @@ const ogrenciSemasi = z.object({
   kimlik_no: bosNull,
   veli_adi: bosNull,
   veli_telefon: bosNull,
+  veli2_adi: bosNull,
+  veli2_telefon: bosNull,
   iskonto_orani: trSayi({ min: 0, max: 100 }),
   iskonto_tutar: trSayi({ min: 0 }),
   devir: trSayi(),
   abone_tipi: z.enum(['gunluk', 'aylik']),
+  // Ücretlendirme tipi: aylıkçının hangi taksit planına tabi olduğunu belirler
+  ogrenci_tipi: z.enum(['standart', 'birinci_sinif', 'anasinifi', 'anasinifi_etut']),
   aktif: trBoolean,
 })
 
@@ -75,6 +79,9 @@ export async function ogrenciEkle(
     p_devir: g.devir,
     p_abone_tipi: g.abone_tipi,
     p_aktif: g.aktif,
+    p_veli2_adi: g.veli2_adi,
+    p_veli2_telefon: g.veli2_telefon,
+    p_ogrenci_tipi: g.ogrenci_tipi,
   })
 
   if (error) return { hata: hataMesaji(error.message) }
@@ -92,17 +99,39 @@ export async function ogrenciGuncelle(
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
   const supabase = await supabaseServer()
+  const okulId = await aktifOkulId()
+
+  // Abone tipi değiştiyse geçmiş öğünler yeniden fiyatlandırılmalı; önce
+  // eski tipi öğreniyoruz.
+  const { data: onceki } = await supabase
+    .from('students')
+    .select('abone_tipi')
+    .eq('id', id)
+    .eq('okul_id', okulId)
+    .maybeSingle()
+
   // okul_id filtresi: başka okulun kaydı elle girilen bir id ile değiştirilemesin
   const { error } = await supabase
     .from('students')
     .update(sonuc.data)
     .eq('id', id)
-    .eq('okul_id', await aktifOkulId())
+    .eq('okul_id', okulId)
 
   if (error) return { hata: hataMesaji(error.message) }
 
+  // Günlükçü ↔ aylıkçı geçişinde geçmiş öğün kayıtları yeni tipe göre
+  // yeniden hesaplanır: aylıkçıda 0 ₺, günlükçüde güncel günlük ücret.
+  // Bakiye tahsilat − harcama olduğu için borç kendiliğinden düzelir.
+  if (onceki && onceki.abone_tipi !== sonuc.data.abone_tipi) {
+    const { error: yenilemeHatasi } = await supabase.rpc('ogun_tutarlarini_yenile', {
+      p_student_id: id,
+    })
+    if (yenilemeHatasi) return { hata: yenilemeHatasi.message }
+  }
+
   revalidatePath('/students')
   revalidatePath(`/students/${id}`)
+  revalidatePath('/reports')
   redirect(`/students/${id}`)
 }
 

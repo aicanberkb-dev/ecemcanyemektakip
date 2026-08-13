@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import { AboneRozeti, Bakiye } from '@/components/Rozetler'
+import { AboneRozeti, Bakiye, OgrenciTipiRozeti } from '@/components/Rozetler'
 import { TarihAraligi } from '@/components/TarihAraligi'
 import { ayBasiISO, bugunISO, para } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
@@ -127,8 +127,9 @@ export default async function ReportsPage({
                   </Link>
                 </td>
                 <td>{s.sinif ?? '—'}</td>
-                <td>
+                <td className="whitespace-nowrap">
                   <AboneRozeti tip={s.abone_tipi} />
+                  <OgrenciTipiRozeti tip={s.ogrenci_tipi} />
                 </td>
                 <td className="text-right tabular-nums">{para(s.devir)}</td>
                 <td className="text-right tabular-nums text-emerald-700">

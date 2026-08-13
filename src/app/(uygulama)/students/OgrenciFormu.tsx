@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { useActionState } from 'react'
 
-import type { Student } from '@/lib/types'
+import { SinifSecici } from '@/components/SinifSecici'
+import { OGRENCI_TIPI_ADLARI, OGRENCI_TIPLERI, type Student } from '@/lib/types'
 
 import type { FormDurumu } from './actions'
 
@@ -45,8 +46,8 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
           />
         </Alan>
 
-        <Alan ad="sinif" etiket="Sınıf" hata={h.sinif}>
-          <input name="sinif" defaultValue={ogrenci?.sinif ?? ''} className="girdi" />
+        <Alan ad="sinif" etiket="Sınıf / Şube" hata={h.sinif}>
+          <SinifSecici baslangic={ogrenci?.sinif} />
         </Alan>
 
         <Alan ad="kimlik_no" etiket="Kimlik / Kart No" hata={h.kimlik_no}>
@@ -65,7 +66,31 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
             placeholder="0555 555 55 55"
           />
         </Alan>
+
+        <Alan ad="veli2_adi" etiket="2. Veli Adı" hata={h.veli2_adi}>
+          <input
+            name="veli2_adi"
+            defaultValue={ogrenci?.veli2_adi ?? ''}
+            className="girdi"
+            placeholder="Banka havalesi yapan diğer kişi"
+          />
+        </Alan>
+
+        <Alan ad="veli2_telefon" etiket="2. Veli Telefon" hata={h.veli2_telefon}>
+          <input
+            name="veli2_telefon"
+            defaultValue={ogrenci?.veli2_telefon ?? ''}
+            className="girdi"
+            placeholder="0555 555 55 55"
+          />
+        </Alan>
       </div>
+
+      <p className="text-xs text-solgun">
+        Veli adlarını <strong>banka ekstresinde göründüğü gibi</strong> yazın. Ödemeyi
+        anne de baba da yapabildiği için iki alan var; ekstre aktarımı ödemeyi bu
+        adlara bakarak öğrenciyle eşleştirir.
+      </p>
 
       <div className="grid gap-4 border-t border-cizgi pt-5 sm:grid-cols-3">
         <Alan ad="abone_tipi" etiket="Abone Tipi" hata={h.abone_tipi}>
@@ -76,6 +101,20 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
           >
             <option value="gunluk">Günlükçü (yemek başına düşer)</option>
             <option value="aylik">Aylıkçı (taksitten tahsil edilir)</option>
+          </select>
+        </Alan>
+
+        <Alan ad="ogrenci_tipi" etiket="Öğrenci Tipi" hata={h.ogrenci_tipi}>
+          <select
+            name="ogrenci_tipi"
+            defaultValue={ogrenci?.ogrenci_tipi ?? 'standart'}
+            className="girdi"
+          >
+            {OGRENCI_TIPLERI.map((t) => (
+              <option key={t} value={t}>
+                {OGRENCI_TIPI_ADLARI[t]}
+              </option>
+            ))}
           </select>
         </Alan>
 

@@ -1,3 +1,4 @@
+import { aramaEslesir } from '@/lib/arama'
 import { csvMetni, csvSayi, dosyaAdi, hucre } from '@/lib/csv'
 import { bugunISO } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
@@ -31,13 +32,13 @@ export async function GET(request: Request) {
 
   let borclular = (data ?? []) as StudentBalance[]
   if (sinif) borclular = borclular.filter((o) => o.sinif === sinif)
+  // Ekrandaki süzgeçle birebir aynı eşleşme kuralı kullanılır.
   if (q?.trim()) {
-    const t = q.trim().toLocaleLowerCase('tr')
-    borclular = borclular.filter(
-      (o) =>
-        o.ad_soyad.toLocaleLowerCase('tr').includes(t) ||
-        o.ogrenci_no.includes(t) ||
-        (o.veli_adi ?? '').toLocaleLowerCase('tr').includes(t),
+    borclular = borclular.filter((o) =>
+      aramaEslesir(
+        `${o.ad_soyad} ${o.ogrenci_no} ${o.veli_adi ?? ''} ${o.veli2_adi ?? ''}`,
+        q,
+      ),
     )
   }
 

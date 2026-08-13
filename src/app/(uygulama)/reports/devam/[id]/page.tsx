@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-import { AboneRozeti } from '@/components/Rozetler'
+import { AboneRozeti, OgrenciTipiRozeti } from '@/components/Rozetler'
 import { AY_ADLARI, GUN_KISALTMA } from '@/lib/format'
 import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
@@ -66,6 +66,7 @@ export default async function DevamOgrenciPage({
             <span className="tabular-nums">{ogrenci.ogrenci_no}</span>
             {ogrenci.sinif && <span>· {ogrenci.sinif}</span>}
             <AboneRozeti tip={ogrenci.abone_tipi} />
+            <OgrenciTipiRozeti tip={ogrenci.ogrenci_tipi} />
           </p>
         </div>
         <form className="flex items-end gap-2">
