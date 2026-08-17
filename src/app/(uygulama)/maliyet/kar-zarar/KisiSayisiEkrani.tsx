@@ -8,7 +8,11 @@ import { AY_ADLARI, bugunISO, para } from '@/lib/format'
 
 import { gunlukHizmetKaydet, type MaliyetDurumu } from '../actions'
 
-export type GunlukKisi = { tarih: string; kisi_sayisi: number }
+export type GunlukKisi = {
+  tarih: string
+  kisi_sayisi: number | null
+  cikan_porsiyon: number | null
+}
 export type GunMaliyeti = { tarih: string; ozet: string | null; maliyet: number | string }
 export type OkulGunu = {
   tarih: string
@@ -19,19 +23,31 @@ export type OkulGunu = {
 
 const GUN_ADI = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt']
 
+type Satir = {
+  tarih: string
+  /** Mutfaktan çıkan porsiyon — boş ise yerin varsayılanı geçerli */
+  cikan: string
+  /** Faturalanan kişi — okula bağlı yerlerde kullanılmaz */
+  yiyen: string
+}
+
 /**
- * Bir yerin bir aylık kişi sayıları ve o ayın maliyeti.
+ * Bir yerin bir aylık çıkan porsiyon ve yiyen kişi sayıları.
  *
- * Okula bağlı yerlerde sayılar gün sonu kayıtlarından geliyor ve elle
- * değiştirilmiyor — kasada okutulan öğün zaten tek doğru kaynak. Dış hizmet
- * yerlerinde sayı genelde sabit: yerin varsayılan kişi sayısı her güne
- * otomatik yazılır, farklı olan günü elle düzeltmek yeterli.
+ * Maliyetin tabanı çıkan porsiyon: yemek mutfaktan çıktığı anda para
+ * harcanmıştır, kaç kişinin yediği bunu değiştirmez. Yiyen kişi ciroyu
+ * belirler; okullarda gün sonundan gelir, dış hizmetlerde sözleşme adedidir.
+ * Aradaki fark fire.
+ *
+ * Sabit sayı yalnızca bugüne kadarki hafta içi günlere uygulanır; henüz olmamış
+ * günü saymak ayın 17'sinde ay sonu cirosu göstermek olurdu.
  */
 export function KisiSayisiEkrani({
   noktaId,
   noktaAdi,
   okulaBagliMi,
   varsayilanKisi,
+  varsayilanCikan,
   listesizMi,
   yil,
   ay,
@@ -43,6 +59,7 @@ export function KisiSayisiEkrani({
   noktaAdi: string
   okulaBagliMi: boolean
   varsayilanKisi: number
+  varsayilanCikan: number
   listesizMi: boolean
   yil: number
   ay: number
@@ -53,6 +70,7 @@ export function KisiSayisiEkrani({
   const router = useRouter()
   const [durum, setDurum] = useState<MaliyetDurumu>({})
   const [kaydediliyor, basla] = useTransition()
+  const bugun = bugunISO()
 
   const maliyetHaritasi = useMemo(() => {
     const m = new Map<string, GunMaliyeti>()
@@ -60,40 +78,88 @@ export function KisiSayisiEkrani({
     return m
   }, [gunMaliyetleri])
 
-  // Girilmiş satır: değer boş string ise kayıt yok (varsayılan geçerli)
+  /** Okulun gün sonundan gelen yiyen sayıları */
+  const okulHaritasi = useMemo(() => {
+    const m = new Map<string, OkulGunu>()
+    for (const g of okulGunleri) m.set(g.tarih, g)
+    return m
+  }, [okulGunleri])
+
   const baslangic = useMemo(() => {
-    const mevcut = new Map(kisiler.map((k) => [k.tarih, k.kisi_sayisi]))
+    const mevcut = new Map(kisiler.map((k) => [k.tarih, k]))
     const gunSayisi = new Date(yil, ay, 0).getDate()
-    const liste: { tarih: string; deger: string }[] = []
+    const liste: Satir[] = []
     for (let g = 1; g <= gunSayisi; g++) {
       const h = new Date(yil, ay - 1, g).getDay()
-      if (h === 0 || h === 6) continue // hafta sonu yemek yok
       const tarih = `${yil}-${String(ay).padStart(2, '0')}-${String(g).padStart(2, '0')}`
-      const v = mevcut.get(tarih)
-      liste.push({ tarih, deger: v === undefined ? '' : String(v) })
+      const kayit = mevcut.get(tarih)
+      // Hafta sonu yalnızca kayıt varsa listelenir
+      if ((h === 0 || h === 6) && !kayit && !okulHaritasi.has(tarih)) continue
+      liste.push({
+        tarih,
+        cikan: kayit?.cikan_porsiyon == null ? '' : String(kayit.cikan_porsiyon),
+        yiyen: kayit?.kisi_sayisi == null ? '' : String(kayit.kisi_sayisi),
+      })
     }
     return liste
-  }, [kisiler, yil, ay])
+  }, [kisiler, okulHaritasi, yil, ay])
 
-  const [satirlar, setSatirlar] = useState(baslangic)
-  const [topluDeger, setTopluDeger] = useState('')
+  const [satirlar, setSatirlar] = useState<Satir[]>(baslangic)
+  const [topluCikan, setTopluCikan] = useState('')
 
-  function yaz(tarih: string, deger: string) {
-    setSatirlar((o) => o.map((s) => (s.tarih === tarih ? { ...s, deger } : s)))
+  function yaz(tarih: string, alan: 'cikan' | 'yiyen', deger: string) {
+    setSatirlar((o) => o.map((s) => (s.tarih === tarih ? { ...s, [alan]: deger } : s)))
     setDurum({})
   }
 
-  /**
-   * Bugüne kadarki günlere aynı sayıyı yazar; boş bırakılırsa sabit sayıya
-   * döner. Geleceğe yazmıyor — olmamış günün cirosunu göstermek istemiyoruz.
-   */
+  /** Bugüne kadarki günlere aynı çıkan miktarını yazar. */
   function hepsineUygula() {
-    const bugun = bugunISO()
     setSatirlar((o) =>
-      o.map((s) => (s.tarih <= bugun ? { ...s, deger: topluDeger.trim() } : s)),
+      o.map((s) => (s.tarih <= bugun ? { ...s, cikan: topluCikan.trim() } : s)),
     )
     setDurum({})
   }
+
+  /** Gelecek gün için sayı girilmedikçe hiçbir şey sayılmaz. */
+  const etkinCikan = (s: Satir) => {
+    if (s.cikan.trim() !== '') return Number(s.cikan) || 0
+    if (s.tarih > bugun) return 0
+    if (varsayilanCikan > 0) return varsayilanCikan
+    // Çıkan bilinmiyor: eksik hesap, yiyen kadar varsayılır
+    return etkinYiyen(s)
+  }
+
+  const etkinYiyen = (s: Satir) => {
+    if (okulaBagliMi) {
+      const o = okulHaritasi.get(s.tarih)
+      return o ? Number(o.kisi) + Number(o.misafir) : 0
+    }
+    if (s.yiyen.trim() !== '') return Number(s.yiyen) || 0
+    return s.tarih > bugun ? 0 : varsayilanKisi
+  }
+
+  const cikanBilinmiyor = (s: Satir) =>
+    s.cikan.trim() === '' && varsayilanCikan === 0 && etkinYiyen(s) > 0 && s.tarih <= bugun
+
+  const toplam = satirlar.reduce(
+    (t, s) => {
+      const cikan = etkinCikan(s)
+      const yiyen = etkinYiyen(s)
+      const birim = Number(maliyetHaritasi.get(s.tarih)?.maliyet ?? 0)
+      return {
+        cikan: t.cikan + cikan,
+        yiyen: t.yiyen + yiyen,
+        maliyet: t.maliyet + cikan * birim,
+        fire: t.fire + (cikan - yiyen) * birim,
+        ciro: t.ciro + Number(okulHaritasi.get(s.tarih)?.ciro ?? 0),
+      }
+    },
+    { cikan: 0, yiyen: 0, maliyet: 0, fire: 0, ciro: 0 },
+  )
+
+  const hizmetGunleri = satirlar.filter((s) => etkinCikan(s) > 0 || etkinYiyen(s) > 0)
+  const menusuzGun = hizmetGunleri.filter((s) => !maliyetHaritasi.has(s.tarih)).length
+  const cikansizGun = satirlar.filter(cikanBilinmiyor).length
 
   function kaydet() {
     basla(async () => {
@@ -101,7 +167,9 @@ export function KisiSayisiEkrani({
         noktaId,
         satirlar.map((x) => ({
           tarih: x.tarih,
-          kisi_sayisi: x.deger.trim() === '' ? null : Number(x.deger),
+          cikan_porsiyon: x.cikan.trim() === '' ? null : Number(x.cikan),
+          // Okula bağlı yerde yiyen sayısı gün sonundan gelir, yazılmaz
+          kisi_sayisi: okulaBagliMi || x.yiyen.trim() === '' ? null : Number(x.yiyen),
         })),
       )
       setDurum(s)
@@ -109,162 +177,40 @@ export function KisiSayisiEkrani({
     })
   }
 
-  // ------------------------------------------------------------------
-  // Okula bağlı yer: salt okunur özet
-  // ------------------------------------------------------------------
-  if (okulaBagliMi) {
-    const toplam = okulGunleri.reduce(
-      (t, g) => ({
-        kisi: t.kisi + Number(g.kisi),
-        misafir: t.misafir + Number(g.misafir),
-        ciro: t.ciro + Number(g.ciro),
-        maliyet:
-          t.maliyet +
-          (Number(g.kisi) + Number(g.misafir)) *
-            Number(maliyetHaritasi.get(g.tarih)?.maliyet ?? 0),
-      }),
-      { kisi: 0, misafir: 0, ciro: 0, maliyet: 0 },
-    )
-
-    return (
-      <div className="kart p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div>
-            <h2 className="font-semibold">
-              {noktaAdi} — {AY_ADLARI[ay - 1]} {yil}
-            </h2>
-            <p className="text-xs text-solgun">
-              Sayılar{' '}
-              <Link href="/reports/gun-sonu" className="text-vurgu hover:underline">
-                gün sonu
-              </Link>{' '}
-              kayıtlarından geliyor, elle girilmiyor. Misafirler parantez içinde; onlardan
-              ücret alınmadığı için ciroya dahil değil.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-3 overflow-x-auto">
-          <table className="tablo">
-            <thead>
-              <tr>
-                <th className="w-24">Gün</th>
-                <th className="w-32 text-right">Kişi (misafir)</th>
-                <th className="text-right">Ciro</th>
-                <th className="text-right">Kişi başı maliyet</th>
-                <th className="text-right">Günün maliyeti</th>
-                <th>Menü</th>
-              </tr>
-            </thead>
-            <tbody>
-              {okulGunleri.map((g) => {
-                const d = new Date(g.tarih)
-                const gm = maliyetHaritasi.get(g.tarih)
-                const birim = Number(gm?.maliyet ?? 0)
-                const yiyen = Number(g.kisi) + Number(g.misafir)
-                return (
-                  <tr key={g.tarih}>
-                    <td className="whitespace-nowrap">
-                      <span className="font-semibold tabular-nums">{d.getDate()}</span>
-                      <span className="ml-1 text-xs text-solgun">{GUN_ADI[d.getDay()]}</span>
-                    </td>
-                    <td className="text-right font-semibold tabular-nums">
-                      {g.kisi}
-                      {Number(g.misafir) > 0 && (
-                        <span className="font-normal text-solgun"> ({g.misafir})</span>
-                      )}
-                    </td>
-                    <td className="text-right tabular-nums">{para(g.ciro)}</td>
-                    <td className="text-right tabular-nums text-solgun">
-                      {gm ? para(birim) : '—'}
-                    </td>
-                    <td className="text-right tabular-nums">
-                      {gm ? para(yiyen * birim) : '—'}
-                    </td>
-                    <td className="text-xs text-solgun">{gm?.ozet ?? 'menü girilmemiş'}</td>
-                  </tr>
-                )
-              })}
-              {okulGunleri.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-solgun">
-                    Bu ayda yemek kaydı yok.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            {okulGunleri.length > 0 && (
-              <tfoot>
-                <tr>
-                  <td className="font-semibold">Toplam</td>
-                  <td className="text-right font-semibold tabular-nums">
-                    {toplam.kisi}
-                    {toplam.misafir > 0 && (
-                      <span className="font-normal text-solgun"> ({toplam.misafir})</span>
-                    )}
-                  </td>
-                  <td className="text-right font-semibold tabular-nums">{para(toplam.ciro)}</td>
-                  <td />
-                  <td className="text-right font-bold tabular-nums">{para(toplam.maliyet)}</td>
-                  <td />
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
-    )
-  }
-
-  // ------------------------------------------------------------------
-  // Dış hizmet yeri: sabit sayı + gün bazlı düzeltme
-  //
-  // Sabit sayı yalnızca bugüne kadarki hafta içi günlere uygulanır; henüz
-  // olmamış günü saymak ayın 17'sinde ay sonu cirosu göstermek olurdu. Menü
-  // girilmemiş olması hizmeti ortadan kaldırmaz, sadece o günün maliyetini
-  // bilinmez yapar. Yemek verilmeyen güne 0 yazılır.
-  // ------------------------------------------------------------------
-  const bugun = bugunISO()
-
-  /** Gelecek gün için elle sayı girilmedikçe kişi sayılmaz. */
-  const etkinKisi = (s: { tarih: string; deger: string }) => {
-    if (s.deger.trim() !== '') return Number(s.deger) || 0
-    return s.tarih > bugun ? 0 : varsayilanKisi
-  }
-
-  const hizmetGunleri = satirlar.filter((s) => etkinKisi(s) > 0)
-  const toplamKisi = satirlar.reduce((t, s) => t + etkinKisi(s), 0)
-  const toplamMaliyet = satirlar.reduce(
-    (t, s) => t + etkinKisi(s) * Number(maliyetHaritasi.get(s.tarih)?.maliyet ?? 0),
-    0,
-  )
-  const menusuzGun = hizmetGunleri.filter((s) => !maliyetHaritasi.has(s.tarih)).length
-
   return (
     <div className="kart p-4">
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <h2 className="font-semibold">
-            {noktaAdi} — {AY_ADLARI[ay - 1]} {yil} kişi sayıları
+            {noktaAdi} — {AY_ADLARI[ay - 1]} {yil}
           </h2>
-          <p className="text-xs text-solgun">
-            Her hücreyi tek tek değiştirebilirsiniz; sabit sayıya dokunmanız gerekmez.{' '}
-            <strong>Bugüne kadarki</strong> boş günler sabit sayıyı (
-            <strong>{varsayilanKisi || 'girilmemiş'}</strong>) kullanır, ileri tarihler gün
-            geldikçe eklenir. Yemek verilmeyen güne <strong>0</strong> yazın.{' '}
+          <p className="max-w-2xl text-xs text-solgun">
+            <strong>Çıkan</strong>, mutfaktan o yere gönderilen porsiyondur ve maliyeti
+            belirler.{' '}
+            {okulaBagliMi ? (
+              <>
+                <strong>Yiyen</strong> gün sonu kayıtlarından gelir, elle girilmez.
+              </>
+            ) : (
+              <>
+                <strong>Yiyen</strong> faturaladığınız kişi sayısıdır.
+              </>
+            )}{' '}
+            Boş bıraktığınız gün yerin sabit değerini kullanır, ileri tarihler gün geldikçe
+            eklenir.{' '}
             <Link href="/maliyet/yerler" className="text-vurgu hover:underline">
-              Sabit sayıyı değiştir
+              Sabit değerleri değiştir
             </Link>
           </p>
         </div>
         <div className="ml-auto flex items-end gap-2">
           <div>
-            <label className="etiket text-xs">Tüm günlere yaz</label>
+            <label className="etiket text-xs">Tüm günlere çıkan</label>
             <input
-              value={topluDeger}
-              onChange={(e) => setTopluDeger(e.target.value.replace(/[^0-9]/g, ''))}
+              value={topluCikan}
+              onChange={(e) => setTopluCikan(e.target.value.replace(/[^0-9]/g, ''))}
               inputMode="numeric"
-              placeholder="ör. 45"
+              placeholder="ör. 120"
               className="girdi !py-1.5 w-24"
             />
           </div>
@@ -287,9 +233,17 @@ export function KisiSayisiEkrani({
       )}
       {durum.hata && <p className="hata mt-2">{durum.hata}</p>}
 
-      {varsayilanKisi === 0 && (
+      {cikansizGun > 0 && (
         <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Bu yerin sabit kişi sayısı girilmemiş; boş bıraktığınız günler 0 kişi sayılır.{' '}
+          <strong>{cikansizGun}</strong> günün çıkan porsiyonu bilinmiyor; o günlerde maliyet
+          yiyen kişiden hesaplandı ve fire görünmüyor. Sabit çıkan porsiyonu bir kez girmeniz
+          yeter.
+        </p>
+      )}
+
+      {!okulaBagliMi && varsayilanKisi === 0 && (
+        <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Bu yerin faturalanan kişi sayısı girilmemiş; ciro 0 çıkar.{' '}
           <Link href="/maliyet/yerler" className="underline">
             Hizmet Yerleri
           </Link>{' '}
@@ -306,7 +260,7 @@ export function KisiSayisiEkrani({
         menusuzGun > 0 && (
           <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
             Hizmet verilen <strong>{menusuzGun}</strong> günün menüsü girilmemiş; o günlerin
-            maliyeti 0 ₺ sayılıyor ve kâr olduğundan yüksek görünüyor.{' '}
+            maliyeti 0 ₺ sayılıyor.{' '}
             <Link href="/menu" className="underline">
               Yemek listesinden girin
             </Link>
@@ -319,8 +273,10 @@ export function KisiSayisiEkrani({
         <table className="tablo">
           <thead>
             <tr>
-              <th className="w-24">Gün</th>
-              <th className="w-36 text-right">Kişi</th>
+              <th className="w-28">Gün</th>
+              <th className="w-36 text-right">Çıkan</th>
+              <th className="w-36 text-right">Yiyen</th>
+              <th className="text-right">Fire</th>
               <th className="text-right">Kişi başı maliyet</th>
               <th className="text-right">Günün maliyeti</th>
               <th>Menü</th>
@@ -330,15 +286,17 @@ export function KisiSayisiEkrani({
             {satirlar.map((s) => {
               const d = new Date(s.tarih)
               const gm = maliyetHaritasi.get(s.tarih)
-              const kisi = etkinKisi(s)
               const birim = Number(gm?.maliyet ?? 0)
+              const cikan = etkinCikan(s)
+              const yiyen = etkinYiyen(s)
+              const fire = cikan - yiyen
               const gelecek = s.tarih > bugun
               const bugunMu = s.tarih === bugun
               return (
                 <tr
                   key={s.tarih}
                   className={
-                    bugunMu ? 'bg-blue-50/50' : kisi === 0 ? 'bg-slate-50' : undefined
+                    bugunMu ? 'bg-blue-50/50' : cikan === 0 ? 'bg-slate-50' : undefined
                   }
                 >
                   <td className="whitespace-nowrap">
@@ -348,36 +306,90 @@ export function KisiSayisiEkrani({
                       <span className="rozet ml-2 bg-blue-100 text-blue-800">bugün</span>
                     )}
                   </td>
+
+                  {/* Çıkan — her zaman elle girilir */}
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <input
-                        value={s.deger}
-                        onChange={(e) => yaz(s.tarih, e.target.value.replace(/[^0-9]/g, ''))}
-                        inputMode="numeric"
-                        placeholder={gelecek ? '—' : String(varsayilanKisi)}
-                        title={
-                          gelecek
-                            ? 'İleri tarih: sayı biliniyorsa şimdiden yazabilirsiniz'
-                            : 'Bu güne özel sayı; boş bırakılırsa sabit sayı kullanılır'
+                        value={s.cikan}
+                        onChange={(e) =>
+                          yaz(s.tarih, 'cikan', e.target.value.replace(/[^0-9]/g, ''))
                         }
+                        inputMode="numeric"
+                        placeholder={gelecek ? '—' : String(varsayilanCikan || '?')}
+                        title="Mutfaktan bu yere gönderilen porsiyon"
                         className="w-20 rounded border border-cizgi bg-white px-2 py-1 text-right
                                    text-sm font-semibold tabular-nums outline-none
                                    placeholder:font-normal placeholder:text-slate-400
                                    focus:border-vurgu focus:ring-2 focus:ring-blue-100"
                       />
-                      <span className="w-14 text-left text-xs text-solgun">
-                        {s.deger !== '' ? 'elle' : gelecek ? 'ileride' : 'sabit'}
+                      <span className="w-12 text-left text-xs text-solgun">
+                        {s.cikan !== ''
+                          ? 'elle'
+                          : gelecek
+                            ? 'ileride'
+                            : cikanBilinmiyor(s)
+                              ? '?'
+                              : 'sabit'}
                       </span>
                     </div>
+                  </td>
+
+                  {/* Yiyen — okullarda gün sonundan, dışarıda elle */}
+                  <td className="text-right">
+                    {okulaBagliMi ? (
+                      <span className="tabular-nums">
+                        {okulHaritasi.has(s.tarih) ? (
+                          <>
+                            {okulHaritasi.get(s.tarih)!.kisi}
+                            {Number(okulHaritasi.get(s.tarih)!.misafir) > 0 && (
+                              <span className="text-solgun">
+                                {' '}
+                                ({okulHaritasi.get(s.tarih)!.misafir})
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-solgun">—</span>
+                        )}
+                      </span>
+                    ) : (
+                      <div className="flex items-center justify-end gap-1">
+                        <input
+                          value={s.yiyen}
+                          onChange={(e) =>
+                            yaz(s.tarih, 'yiyen', e.target.value.replace(/[^0-9]/g, ''))
+                          }
+                          inputMode="numeric"
+                          placeholder={gelecek ? '—' : String(varsayilanKisi)}
+                          title="Faturalanan kişi sayısı"
+                          className="w-20 rounded border border-cizgi bg-white px-2 py-1 text-right
+                                     text-sm tabular-nums outline-none
+                                     placeholder:text-slate-400
+                                     focus:border-vurgu focus:ring-2 focus:ring-blue-100"
+                        />
+                        <span className="w-12 text-left text-xs text-solgun">
+                          {s.yiyen !== '' ? 'elle' : gelecek ? '' : 'sabit'}
+                        </span>
+                      </div>
+                    )}
+                  </td>
+
+                  <td
+                    className={`text-right tabular-nums ${
+                      fire > 0 ? 'text-orange-700' : 'text-solgun'
+                    }`}
+                  >
+                    {cikan > 0 || yiyen > 0 ? fire : '—'}
                   </td>
                   <td className="text-right tabular-nums text-solgun">
                     {gm ? para(birim) : '—'}
                   </td>
                   <td className="text-right tabular-nums">
-                    {kisi > 0 && gm ? para(kisi * birim) : '—'}
+                    {cikan > 0 && gm ? para(cikan * birim) : '—'}
                   </td>
                   <td className="text-xs text-solgun">
-                    {gelecek && s.deger === '' ? (
+                    {gelecek && s.cikan === '' ? (
                       'henüz gelmedi'
                     ) : gm?.ozet ? (
                       gm.ozet
@@ -392,10 +404,23 @@ export function KisiSayisiEkrani({
           <tfoot>
             <tr>
               <td className="font-semibold">Toplam</td>
-              <td className="text-right font-semibold tabular-nums">{toplamKisi}</td>
-              <td />
-              <td className="text-right font-bold tabular-nums">{para(toplamMaliyet)}</td>
-              <td className="text-xs text-solgun">{hizmetGunleri.length} hizmet günü</td>
+              <td className="text-right font-semibold tabular-nums">{toplam.cikan}</td>
+              <td className="text-right font-semibold tabular-nums">{toplam.yiyen}</td>
+              <td
+                className={`text-right font-semibold tabular-nums ${
+                  toplam.cikan - toplam.yiyen > 0 ? 'text-orange-700' : 'text-solgun'
+                }`}
+              >
+                {toplam.cikan - toplam.yiyen}
+              </td>
+              <td className="text-right text-xs text-solgun">
+                {toplam.yiyen > 0 && `kişi başı ${para(toplam.maliyet / toplam.yiyen)}`}
+              </td>
+              <td className="text-right font-bold tabular-nums">{para(toplam.maliyet)}</td>
+              <td className="text-xs text-solgun">
+                {hizmetGunleri.length} hizmet günü
+                {toplam.fire > 0 && ` · fire ${para(toplam.fire)}`}
+              </td>
             </tr>
           </tfoot>
         </table>

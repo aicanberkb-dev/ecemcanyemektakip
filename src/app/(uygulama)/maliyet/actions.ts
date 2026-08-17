@@ -168,7 +168,9 @@ export async function receteSil(yemekAdi: string): Promise<MaliyetDurumu> {
 const noktaSemasi = z.object({
   ad: z.string().trim().min(2, 'Yer adı gerekli.'),
   liste_id: bosNull,
+  mutfak_id: bosNull,
   varsayilan_kisi_sayisi: trSayi({ min: 0 }),
+  varsayilan_cikan_porsiyon: trSayi({ min: 0 }),
 })
 
 export async function hizmetNoktasiEkle(
@@ -189,7 +191,9 @@ export async function hizmetNoktasiEkle(
   const { error } = await supabase.from('hizmet_noktalari').insert({
     ad: sonuc.data.ad.toLocaleUpperCase('tr'),
     liste_id: sonuc.data.liste_id,
+    mutfak_id: sonuc.data.mutfak_id,
     varsayilan_kisi_sayisi: Math.round(sonuc.data.varsayilan_kisi_sayisi),
+    varsayilan_cikan_porsiyon: Math.round(sonuc.data.varsayilan_cikan_porsiyon),
     sira: (enBuyuk?.sira ?? 0) + 1,
   })
   if (error) {
@@ -214,7 +218,9 @@ export async function hizmetNoktasiGuncelle(
     .update({
       ad: sonuc.data.ad.toLocaleUpperCase('tr'),
       liste_id: sonuc.data.liste_id,
+      mutfak_id: sonuc.data.mutfak_id,
       varsayilan_kisi_sayisi: Math.round(sonuc.data.varsayilan_kisi_sayisi),
+      varsayilan_cikan_porsiyon: Math.round(sonuc.data.varsayilan_cikan_porsiyon),
     })
     .eq('id', id)
   if (error) return { hata: error.message }
@@ -275,27 +281,41 @@ export async function hizmetFiyatiSil(id: string): Promise<MaliyetDurumu> {
 // ---------------------------------------------------------------------------
 
 /**
- * Bir ayın kişi sayılarını topluca yazar.
+ * Bir ayın çıkan porsiyon ve yiyen kişi sayılarını topluca yazar.
  *
- * `null` o gün için kayıt olmadığı anlamına gelir; kâr/zarar o günü yerin
- * varsayılan kişi sayısıyla hesaplar. Açıkça yazılan 0 ise “o gün hizmet
- * verilmedi” demek — bu ikisi farklı, o yüzden boş bırakmak satırı siler,
- * 0 yazmak satırı 0 olarak kaydeder.
+ * `null` o alan için kayıt olmadığı anlamına gelir; hesap yerin varsayılanına
+ * düşer. Açıkça yazılan 0 ise “o gün hizmet verilmedi” demek — bu ikisi
+ * farklı, o yüzden boş bırakmak alanı temizler, 0 yazmak 0 olarak kaydeder.
+ * İki alan da boşsa satır tümüyle silinir.
  */
 export async function gunlukHizmetKaydet(
   noktaId: string,
-  gunler: { tarih: string; kisi_sayisi: number | null }[],
+  gunler: {
+    tarih: string
+    kisi_sayisi: number | null
+    cikan_porsiyon: number | null
+  }[],
 ): Promise<MaliyetDurumu> {
   const supabase = await supabaseServer()
 
-  const dolu = gunler
-    .filter((g) => g.kisi_sayisi !== null && Number.isFinite(g.kisi_sayisi) && g.kisi_sayisi >= 0)
-    .map((g) => ({
-      hizmet_noktasi_id: noktaId,
-      tarih: g.tarih,
-      kisi_sayisi: Math.round(g.kisi_sayisi as number),
-    }))
-  const bos = gunler.filter((g) => g.kisi_sayisi === null).map((g) => g.tarih)
+  const tamsayi = (d: number | null) =>
+    d === null || !Number.isFinite(d) || d < 0 ? null : Math.round(d)
+
+  const dolu = []
+  const bos: string[] = []
+
+  for (const g of gunler) {
+    const kisi = tamsayi(g.kisi_sayisi)
+    const cikan = tamsayi(g.cikan_porsiyon)
+    if (kisi === null && cikan === null) bos.push(g.tarih)
+    else
+      dolu.push({
+        hizmet_noktasi_id: noktaId,
+        tarih: g.tarih,
+        kisi_sayisi: kisi,
+        cikan_porsiyon: cikan,
+      })
+  }
 
   if (dolu.length > 0) {
     const { error } = await supabase

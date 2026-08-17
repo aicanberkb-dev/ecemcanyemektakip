@@ -1,7 +1,12 @@
 import { bugunISO } from '@/lib/format'
 import { supabaseServer } from '@/lib/supabase/server'
 
-import { YerlerEkrani, type HizmetFiyati, type HizmetNoktasi, type ListeSecenegi } from './YerlerEkrani'
+import {
+  YerlerEkrani,
+  type HizmetFiyati,
+  type HizmetNoktasi,
+  type ListeSecenegi,
+} from './YerlerEkrani'
 
 export const metadata = { title: 'Hizmet Yerleri — Yemek Takip' }
 
@@ -9,25 +14,32 @@ export default async function YerlerPage() {
   const supabase = await supabaseServer()
   const bugun = bugunISO()
 
-  const [{ data: noktaVeri }, { data: fiyatVeri }, { data: listeVeri }, { data: tarifeVeri }] =
-    await Promise.all([
-      supabase.from('hizmet_noktalari').select('*').order('sira'),
-      supabase
-        .from('hizmet_fiyatlari')
-        .select('*')
-        .order('gecerli_baslangic', { ascending: false }),
-      supabase.from('menu_listeleri').select('id, ad').eq('aktif', true).order('sira'),
-      // Okula bağlı noktaların fiyatı ayarlardaki tarifeden gelir
-      supabase
-        .from('ucret_gecmisi')
-        .select('okul_id, gecerli_baslangic, taban_gunluk_ucret')
-        .lte('gecerli_baslangic', bugun)
-        .order('gecerli_baslangic', { ascending: false }),
-    ])
+  const [
+    { data: noktaVeri },
+    { data: fiyatVeri },
+    { data: listeVeri },
+    { data: tarifeVeri },
+    { data: mutfakVeri },
+  ] = await Promise.all([
+    supabase.from('hizmet_noktalari').select('*').order('sira'),
+    supabase
+      .from('hizmet_fiyatlari')
+      .select('*')
+      .order('gecerli_baslangic', { ascending: false }),
+    supabase.from('menu_listeleri').select('id, ad').eq('aktif', true).order('sira'),
+    // Okula bağlı noktaların fiyatı ayarlardaki tarifeden gelir
+    supabase
+      .from('ucret_gecmisi')
+      .select('okul_id, gecerli_baslangic, taban_gunluk_ucret')
+      .lte('gecerli_baslangic', bugun)
+      .order('gecerli_baslangic', { ascending: false }),
+    supabase.from('mutfaklar').select('id, ad').eq('aktif', true).order('sira'),
+  ])
 
   const noktalar = (noktaVeri ?? []) as HizmetNoktasi[]
   const fiyatlar = (fiyatVeri ?? []) as HizmetFiyati[]
   const listeler = (listeVeri ?? []) as ListeSecenegi[]
+  const mutfaklar = (mutfakVeri ?? []) as ListeSecenegi[]
 
   // Her okul için en güncel taban günlük ücret
   const okulTarifesi: Record<string, number> = {}
@@ -45,9 +57,10 @@ export default async function YerlerPage() {
       <div>
         <h1 className="baslik">Hizmet Yerleri</h1>
         <p className="text-sm text-solgun">
-          Yemek verdiğiniz yerler ve her birinin hangi menüyü yediği. Okullarımızın satış
-          fiyatı ve günlük kişi sayısı sistemin kendi içinden gelir; dışarıdaki yerlerin
-          fiyatı ve sabit kişi sayısı burada girilir.
+          Yemek verdiğiniz yerler, hangi mutfaktan beslendikleri ve hangi menüyü yedikleri.
+          Okullarımızın satış fiyatı ve yiyen kişi sayısı sistemin kendi içinden gelir;
+          <strong> çıkan porsiyon</strong> her yer için burada bir kez tanımlanır ve maliyetin
+          tabanını oluşturur.
         </p>
       </div>
 
@@ -63,6 +76,7 @@ export default async function YerlerPage() {
         noktalar={noktalar}
         fiyatlar={fiyatlar}
         listeler={listeler}
+        mutfaklar={mutfaklar}
         okulTarifesi={okulTarifesi}
       />
     </div>

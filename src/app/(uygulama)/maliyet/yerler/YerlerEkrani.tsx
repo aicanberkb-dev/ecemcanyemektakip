@@ -20,7 +20,9 @@ export type HizmetNoktasi = {
   ad: string
   liste_id: string | null
   okul_id: string | null
+  mutfak_id: string | null
   varsayilan_kisi_sayisi: number
+  varsayilan_cikan_porsiyon: number
   aktif: boolean
   sira: number
 }
@@ -38,20 +40,25 @@ export type ListeSecenegi = { id: string; ad: string }
  * Hizmet yerleri ve satış fiyatları.
  *
  * Okula bağlı yerlerde (GÖKSU, AHMET MİTHAT) fiyat ayarlardaki ücret
- * tarifesinden okunur ve kişi sayısı gün sonundan gelir — aynı bilgiyi ikinci
- * kez girmek iki kaynağın çatışması olurdu. Dışarıdaki yerlerde fiyat tarihe
- * bağlı olarak burada tutulur; sözleşme fiyatı değişince geçmiş ayların
+ * tarifesinden okunur ve yiyen kişi sayısı gün sonundan gelir — aynı bilgiyi
+ * ikinci kez girmek iki kaynağın çatışması olurdu. Dışarıdaki yerlerde fiyat
+ * tarihe bağlı olarak burada tutulur; sözleşme fiyatı değişince geçmiş ayların
  * kâr/zararı bozulmasın diye.
+ *
+ * Çıkan porsiyon her yer için burada tanımlanır: maliyetin tabanı yiyen kişi
+ * değil, mutfaktan gönderilen yemektir.
  */
 export function YerlerEkrani({
   noktalar,
   fiyatlar,
   listeler,
+  mutfaklar,
   okulTarifesi,
 }: {
   noktalar: HizmetNoktasi[]
   fiyatlar: HizmetFiyati[]
   listeler: ListeSecenegi[]
+  mutfaklar: ListeSecenegi[]
   /** okul_id → o okulun güncel taban günlük ücreti */
   okulTarifesi: Record<string, number>
 }) {
@@ -68,6 +75,7 @@ export function YerlerEkrani({
           nokta={n}
           fiyatlar={fiyatlar.filter((f) => f.hizmet_noktasi_id === n.id)}
           listeler={listeler}
+          mutfaklar={mutfaklar}
           okulFiyati={n.okul_id ? okulTarifesi[n.okul_id] : undefined}
         />
       ))}
@@ -91,7 +99,27 @@ export function YerlerEkrani({
             </select>
           </div>
           <div>
-            <label className="etiket text-xs">Sabit kişi sayısı</label>
+            <label className="etiket text-xs">Mutfak</label>
+            <select name="mutfak_id" defaultValue={mutfaklar[0]?.id ?? ''} className="girdi !py-1.5">
+              <option value="">— seçilmedi —</option>
+              {mutfaklar.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.ad}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="etiket text-xs">Çıkan porsiyon</label>
+            <input
+              name="varsayilan_cikan_porsiyon"
+              inputMode="numeric"
+              defaultValue="0"
+              className="girdi !py-1.5 w-28"
+            />
+          </div>
+          <div>
+            <label className="etiket text-xs">Faturalanan kişi</label>
             <input
               name="varsayilan_kisi_sayisi"
               inputMode="numeric"
@@ -120,11 +148,13 @@ function Nokta({
   nokta,
   fiyatlar,
   listeler,
+  mutfaklar,
   okulFiyati,
 }: {
   nokta: HizmetNoktasi
   fiyatlar: HizmetFiyati[]
   listeler: ListeSecenegi[]
+  mutfaklar: ListeSecenegi[]
   okulFiyati: number | undefined
 }) {
   const router = useRouter()
@@ -143,6 +173,7 @@ function Nokta({
   const bugun = bugunISO()
   const gecerli = fiyatlar.find((f) => f.gecerli_baslangic <= bugun)
   const liste = listeler.find((l) => l.id === nokta.liste_id)
+  const mutfak = mutfaklar.find((m) => m.id === nokta.mutfak_id)
   const okulaBagli = !!nokta.okul_id
 
   return (
@@ -169,8 +200,32 @@ function Nokta({
             </select>
           </div>
           <div>
+            <label className="etiket text-xs">Mutfak</label>
+            <select
+              name="mutfak_id"
+              defaultValue={nokta.mutfak_id ?? ''}
+              className="girdi !py-1.5"
+            >
+              <option value="">— seçilmedi —</option>
+              {mutfaklar.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.ad}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="etiket text-xs">Çıkan porsiyon</label>
+            <input
+              name="varsayilan_cikan_porsiyon"
+              inputMode="numeric"
+              defaultValue={String(nokta.varsayilan_cikan_porsiyon)}
+              className="girdi !py-1.5 w-28"
+            />
+          </div>
+          <div>
             <label className="etiket text-xs">
-              Sabit kişi sayısı{okulaBagli ? ' (kullanılmıyor)' : ''}
+              {okulaBagli ? 'Faturalanan (kullanılmıyor)' : 'Faturalanan kişi'}
             </label>
             <input
               name="varsayilan_kisi_sayisi"
@@ -200,7 +255,13 @@ function Nokta({
               )}
             </h2>
             <p className="text-xs text-solgun">
-              Menü:{' '}
+              Mutfak:{' '}
+              {mutfak ? (
+                <strong>{mutfak.ad}</strong>
+              ) : (
+                <span className="text-amber-700">seçilmemiş</span>
+              )}
+              {' · '}Menü:{' '}
               {liste ? (
                 <strong>{liste.ad}</strong>
               ) : (
@@ -208,13 +269,21 @@ function Nokta({
               )}
               {!okulaBagli && (
                 <>
-                  {' · '}Sabit kişi:{' '}
+                  {' · '}Faturalanan:{' '}
                   <strong>{nokta.varsayilan_kisi_sayisi || 'girilmemiş'}</strong>
                 </>
               )}
             </p>
           </div>
           <div className="ml-auto text-right">
+            <p className="text-xs text-solgun">Günde çıkan porsiyon</p>
+            <p className="text-lg font-bold tabular-nums">
+              {nokta.varsayilan_cikan_porsiyon || (
+                <span className="text-sm font-normal text-amber-700">girilmemiş</span>
+              )}
+            </p>
+          </div>
+          <div className="text-right">
             <p className="text-xs text-solgun">
               {okulaBagli ? 'Tarifeden gelen günlük ücret' : 'Güncel satış fiyatı'}
             </p>
@@ -265,8 +334,9 @@ function Nokta({
             <Link href="/admin/settings" className="text-vurgu hover:underline">
               Ayarlar → Ücret Tarifeleri
             </Link>
-            &apos;nden okunur, kişi sayısı da gün sonu kayıtlarından gelir. Burada elle
-            fiyat girilmez — iki yerde tutulup birbirinden ayrı düşmesin.
+            &apos;nden okunur, <strong>yiyen</strong> kişi sayısı da gün sonu kayıtlarından
+            gelir. Burada elle fiyat girilmez — iki yerde tutulup birbirinden ayrı düşmesin.
+            Maliyet ise yukarıdaki <strong>çıkan porsiyondan</strong> hesaplanır.
           </p>
         ) : (
           <>

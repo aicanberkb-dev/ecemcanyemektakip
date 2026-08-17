@@ -10,14 +10,20 @@ export const metadata = { title: 'Kâr / Zarar — Yemek Takip' }
 
 type KarZarar = {
   hizmet_noktasi: string
+  mutfak: string
   kaynak: 'okul' | 'manuel'
   gun_sayisi: number
   toplam_kisi: number
   misafir: number
+  cikan: number
+  fire_porsiyon: number
   ciro: number | string
   maliyet: number | string
+  fire_tutar: number | string
   kar: number | string
   kisi_basi_kar: number | string
+  kisi_basi_maliyet: number | string
+  cikansiz_gun: number
 }
 
 type Nokta = {
@@ -26,6 +32,7 @@ type Nokta = {
   liste_id: string | null
   okul_id: string | null
   varsayilan_kisi_sayisi: number
+  varsayilan_cikan_porsiyon: number
 }
 
 function ayAralik(yil: number, ay: number) {
@@ -52,7 +59,7 @@ export default async function KarZararPage({
     supabase.rpc('kar_zarar', { p_bas: bas, p_bit: bit }),
     supabase
       .from('hizmet_noktalari')
-      .select('id, ad, liste_id, okul_id, varsayilan_kisi_sayisi')
+      .select('id, ad, liste_id, okul_id, varsayilan_kisi_sayisi, varsayilan_cikan_porsiyon')
       .eq('aktif', true)
       .order('sira'),
   ])
@@ -64,10 +71,10 @@ export default async function KarZararPage({
 
   // Seçili yerin o ayki verileri: okula bağlıysa gün sonundan, değilse elle
   const [{ data: kisiVeri }, { data: maliyetVeri }, { data: okulVeri }] = await Promise.all([
-    secili && !secili.okul_id
+    secili
       ? supabase
           .from('gunluk_hizmet')
-          .select('tarih, kisi_sayisi')
+          .select('tarih, kisi_sayisi, cikan_porsiyon')
           .eq('hizmet_noktasi_id', secili.id)
           .gte('tarih', bas)
           .lte('tarih', bit)
@@ -88,23 +95,41 @@ export default async function KarZararPage({
     (t, r) => ({
       kisi: t.kisi + Number(r.toplam_kisi),
       misafir: t.misafir + Number(r.misafir),
+      cikan: t.cikan + Number(r.cikan),
+      fire: t.fire + Number(r.fire_porsiyon),
       ciro: t.ciro + Number(r.ciro),
       maliyet: t.maliyet + Number(r.maliyet),
+      fireTutar: t.fireTutar + Number(r.fire_tutar),
       kar: t.kar + Number(r.kar),
     }),
-    { kisi: 0, misafir: 0, ciro: 0, maliyet: 0, kar: 0 },
+    { kisi: 0, misafir: 0, cikan: 0, fire: 0, ciro: 0, maliyet: 0, fireTutar: 0, kar: 0 },
   )
+
+  const cikansizGun = rapor.reduce((t, r) => t + Number(r.cikansiz_gun), 0)
 
   return (
     <div className="space-y-4">
       <div className="yazdirma-gizle">
         <h1 className="baslik">Kâr / Zarar</h1>
         <p className="text-sm text-solgun">
-          Okullarımızda kişi sayısı gün sonu kayıtlarından, fiyat ücret tarifesinden gelir.
-          Dış hizmet yerlerinde sabit kişi sayısı ve sözleşme fiyatı kullanılır. Misafirler
-          ciroya girmez ama yemeği yedikleri için maliyete girer.
+          <strong>Maliyet mutfaktan çıkan porsiyondan</strong>, ciro yiyen/faturalanan
+          kişiden hesaplanır. Aradaki fark fire: yemek çıktığı anda para harcanmıştır, kaç
+          kişinin yediği maliyeti değiştirmez. Okullarda yiyen sayısı gün sonundan, fiyat
+          ücret tarifesinden gelir.
         </p>
       </div>
+
+      {cikansizGun > 0 && (
+        <p className="yazdirma-gizle rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <strong>{cikansizGun}</strong> günün çıkan porsiyonu girilmemiş; o günlerde
+          maliyet yiyen kişiden hesaplandı, yani <strong>fire hiç görünmüyor</strong> ve kâr
+          olduğundan yüksek. Her yer için bir kez{' '}
+          <Link href="/maliyet/yerler" className="underline">
+            çıkan porsiyon
+          </Link>{' '}
+          tanımlayın, farklı olan günü aşağıdan düzeltin.
+        </p>
+      )}
 
       <div className="kart yazdirma-gizle flex flex-wrap items-end gap-3 p-4">
         <form className="flex flex-wrap items-end gap-2">
@@ -149,11 +174,14 @@ export default async function KarZararPage({
             <tr>
               <th>Hizmet Yeri</th>
               <th className="text-right">Gün</th>
-              <th className="text-right">Kişi (misafir)</th>
+              <th className="text-right">Çıkan</th>
+              <th className="text-right">Yiyen (misafir)</th>
+              <th className="text-right">Fire</th>
               <th className="text-right">Ciro</th>
               <th className="text-right">Maliyet</th>
+              <th className="text-right">Fire ₺</th>
               <th className="text-right">Kâr / Zarar</th>
-              <th className="text-right">Kişi Başı</th>
+              <th className="text-right">Kişi Başı Maliyet</th>
             </tr>
           </thead>
           <tbody>
@@ -170,16 +198,40 @@ export default async function KarZararPage({
                   >
                     {r.kaynak === 'okul' ? 'otomatik' : 'elle'}
                   </span>
+                  <span className="block text-xs text-solgun">{r.mutfak}</span>
                 </td>
                 <td className="text-right tabular-nums">{r.gun_sayisi}</td>
+                <td className="text-right font-semibold tabular-nums">
+                  {r.cikan}
+                  {r.cikansiz_gun > 0 && (
+                    <span
+                      className="ml-1 text-amber-700"
+                      title={`${r.cikansiz_gun} günün çıkanı girilmemiş`}
+                    >
+                      ?
+                    </span>
+                  )}
+                </td>
                 <td className="text-right tabular-nums">
                   {r.toplam_kisi}
-                  {r.misafir > 0 && (
-                    <span className="text-solgun"> ({r.misafir})</span>
-                  )}
+                  {r.misafir > 0 && <span className="text-solgun"> ({r.misafir})</span>}
+                </td>
+                <td
+                  className={`text-right tabular-nums ${
+                    r.fire_porsiyon > 0 ? 'text-orange-700' : 'text-solgun'
+                  }`}
+                >
+                  {r.fire_porsiyon}
                 </td>
                 <td className="text-right tabular-nums">{para(r.ciro)}</td>
                 <td className="text-right tabular-nums">{para(r.maliyet)}</td>
+                <td
+                  className={`text-right tabular-nums ${
+                    Number(r.fire_tutar) > 0 ? 'text-orange-700' : 'text-solgun'
+                  }`}
+                >
+                  {para(r.fire_tutar)}
+                </td>
                 <td
                   className={`text-right font-semibold tabular-nums ${
                     Number(r.kar) < 0 ? 'text-red-600' : 'text-emerald-700'
@@ -187,12 +239,12 @@ export default async function KarZararPage({
                 >
                   {para(r.kar)}
                 </td>
-                <td className="text-right tabular-nums">{para(r.kisi_basi_kar)}</td>
+                <td className="text-right tabular-nums">{para(r.kisi_basi_maliyet)}</td>
               </tr>
             ))}
             {rapor.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-solgun">
+                <td colSpan={10} className="py-8 text-center text-solgun">
                   Bu ayda hesaplanacak veri yok.
                 </td>
               </tr>
@@ -203,14 +255,19 @@ export default async function KarZararPage({
               <tr>
                 <td className="font-semibold">Toplam</td>
                 <td />
+                <td className="text-right font-semibold tabular-nums">{toplam.cikan}</td>
                 <td className="text-right font-semibold tabular-nums">
                   {toplam.kisi}
                   {toplam.misafir > 0 && (
                     <span className="font-normal text-solgun"> ({toplam.misafir})</span>
                   )}
                 </td>
+                <td className="text-right font-semibold tabular-nums">{toplam.fire}</td>
                 <td className="text-right font-semibold tabular-nums">{para(toplam.ciro)}</td>
                 <td className="text-right font-semibold tabular-nums">{para(toplam.maliyet)}</td>
+                <td className="text-right font-semibold tabular-nums">
+                  {para(toplam.fireTutar)}
+                </td>
                 <td
                   className={`text-right font-bold tabular-nums ${
                     toplam.kar < 0 ? 'text-red-600' : 'text-emerald-700'
@@ -219,7 +276,7 @@ export default async function KarZararPage({
                   {para(toplam.kar)}
                 </td>
                 <td className="text-right font-semibold tabular-nums">
-                  {toplam.kisi > 0 ? para(toplam.kar / toplam.kisi) : '—'}
+                  {toplam.kisi > 0 ? para(toplam.maliyet / toplam.kisi) : '—'}
                 </td>
               </tr>
             </tfoot>
@@ -260,6 +317,7 @@ export default async function KarZararPage({
               noktaAdi={secili.ad}
               okulaBagliMi={!!secili.okul_id}
               varsayilanKisi={secili.varsayilan_kisi_sayisi}
+              varsayilanCikan={secili.varsayilan_cikan_porsiyon}
               listesizMi={!secili.liste_id}
               yil={yil}
               ay={ay}
