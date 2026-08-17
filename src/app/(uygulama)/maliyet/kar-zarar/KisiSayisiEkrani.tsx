@@ -76,9 +76,16 @@ export function KisiSayisiEkrani({
   }, [kisiler, yil, ay])
 
   const [satirlar, setSatirlar] = useState(baslangic)
+  const [topluDeger, setTopluDeger] = useState('')
 
   function yaz(tarih: string, deger: string) {
     setSatirlar((o) => o.map((s) => (s.tarih === tarih ? { ...s, deger } : s)))
+    setDurum({})
+  }
+
+  /** Ayın tamamına aynı sayıyı yazar; boş bırakılırsa sabit sayıya döner. */
+  function hepsineUygula() {
+    setSatirlar((o) => o.map((s) => ({ ...s, deger: topluDeger.trim() })))
     setDurum({})
   }
 
@@ -205,40 +212,60 @@ export function KisiSayisiEkrani({
 
   // ------------------------------------------------------------------
   // Dış hizmet yeri: sabit sayı + gün bazlı düzeltme
+  //
+  // Hafta içi her gün hizmet günüdür; menü girilmemiş olması yalnızca o günün
+  // maliyetini bilinmez yapar, hizmeti ortadan kaldırmaz. Yemek verilmeyen
+  // güne 0 yazılır.
   // ------------------------------------------------------------------
   const etkinKisi = (deger: string) => (deger.trim() === '' ? varsayilanKisi : Number(deger) || 0)
 
-  const hizmetGunleri = satirlar.filter((s) => maliyetHaritasi.has(s.tarih) || s.deger !== '')
-  const toplamKisi = hizmetGunleri.reduce((t, s) => t + etkinKisi(s.deger), 0)
-  const toplamMaliyet = hizmetGunleri.reduce(
+  const hizmetGunleri = satirlar.filter((s) => etkinKisi(s.deger) > 0)
+  const toplamKisi = satirlar.reduce((t, s) => t + etkinKisi(s.deger), 0)
+  const toplamMaliyet = satirlar.reduce(
     (t, s) => t + etkinKisi(s.deger) * Number(maliyetHaritasi.get(s.tarih)?.maliyet ?? 0),
     0,
   )
+  const menusuzGun = hizmetGunleri.filter((s) => !maliyetHaritasi.has(s.tarih)).length
 
   return (
     <div className="kart p-4">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-end gap-3">
         <div>
           <h2 className="font-semibold">
             {noktaAdi} — {AY_ADLARI[ay - 1]} {yil} kişi sayıları
           </h2>
           <p className="text-xs text-solgun">
-            Boş bırakılan gün, yerin sabit kişi sayısını (
-            <strong>{varsayilanKisi || 'girilmemiş'}</strong>) kullanır. Farklı olan günü
-            yazın; o gün hiç yemek verilmediyse <strong>0</strong> yazın.{' '}
+            Her hücreyi tek tek değiştirebilirsiniz; sabit sayıya dokunmanız gerekmez. Boş
+            bırakılan gün sabit sayıyı (<strong>{varsayilanKisi || 'girilmemiş'}</strong>)
+            kullanır, yemek verilmeyen güne <strong>0</strong> yazın.{' '}
             <Link href="/maliyet/yerler" className="text-vurgu hover:underline">
               Sabit sayıyı değiştir
             </Link>
           </p>
         </div>
-        <button
-          type="button"
-          onClick={kaydet}
-          disabled={kaydediliyor}
-          className="btn-birincil ml-auto !py-1.5"
-        >
-          {kaydediliyor ? 'Kaydediliyor…' : 'Kaydet'}
-        </button>
+        <div className="ml-auto flex items-end gap-2">
+          <div>
+            <label className="etiket text-xs">Tüm günlere yaz</label>
+            <input
+              value={topluDeger}
+              onChange={(e) => setTopluDeger(e.target.value.replace(/[^0-9]/g, ''))}
+              inputMode="numeric"
+              placeholder="ör. 45"
+              className="girdi !py-1.5 w-24"
+            />
+          </div>
+          <button type="button" onClick={hepsineUygula} className="btn-ikincil !py-1.5">
+            Uygula
+          </button>
+          <button
+            type="button"
+            onClick={kaydet}
+            disabled={kaydediliyor}
+            className="btn-birincil !py-1.5"
+          >
+            {kaydediliyor ? 'Kaydediliyor…' : 'Kaydet'}
+          </button>
+        </div>
       </div>
 
       {durum.basari && (
@@ -256,11 +283,22 @@ export function KisiSayisiEkrani({
         </p>
       )}
 
-      {listesizMi && (
+      {listesizMi ? (
         <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Bu yere menü listesi bağlanmamış; günlük maliyet hesaplanamıyor.{' '}
           <strong>Hizmet Yerleri</strong> sekmesinden bir menü seçin.
         </p>
+      ) : (
+        menusuzGun > 0 && (
+          <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Hizmet verilen <strong>{menusuzGun}</strong> günün menüsü girilmemiş; o günlerin
+            maliyeti 0 ₺ sayılıyor ve kâr olduğundan yüksek görünüyor.{' '}
+            <Link href="/menu" className="underline">
+              Yemek listesinden girin
+            </Link>
+            .
+          </p>
+        )
       )}
 
       <div className="mt-3 overflow-x-auto">
@@ -280,9 +318,8 @@ export function KisiSayisiEkrani({
               const gm = maliyetHaritasi.get(s.tarih)
               const kisi = etkinKisi(s.deger)
               const birim = Number(gm?.maliyet ?? 0)
-              const hizmetVar = !!gm || s.deger !== ''
               return (
-                <tr key={s.tarih} className={hizmetVar ? undefined : 'opacity-50'}>
+                <tr key={s.tarih} className={kisi === 0 ? 'bg-slate-50' : undefined}>
                   <td className="whitespace-nowrap">
                     <span className="font-semibold tabular-nums">{d.getDate()}</span>
                     <span className="ml-1 text-xs text-solgun">{GUN_ADI[d.getDay()]}</span>
@@ -294,13 +331,11 @@ export function KisiSayisiEkrani({
                         onChange={(e) => yaz(s.tarih, e.target.value.replace(/[^0-9]/g, ''))}
                         inputMode="numeric"
                         placeholder={String(varsayilanKisi)}
-                        className={`w-20 rounded border px-2 py-1 text-right text-sm tabular-nums
-                                    outline-none focus:border-vurgu focus:ring-2 focus:ring-blue-100
-                                    ${
-                                      s.deger
-                                        ? 'border-cizgi bg-white font-semibold'
-                                        : 'border-dashed border-slate-300 bg-slate-50'
-                                    }`}
+                        title="Bu güne özel sayı; boş bırakılırsa sabit sayı kullanılır"
+                        className="w-20 rounded border border-cizgi bg-white px-2 py-1 text-right
+                                   text-sm font-semibold tabular-nums outline-none
+                                   placeholder:font-normal placeholder:text-slate-400
+                                   focus:border-vurgu focus:ring-2 focus:ring-blue-100"
                       />
                       <span className="w-14 text-left text-xs text-solgun">
                         {s.deger === '' ? 'sabit' : 'elle'}
@@ -311,9 +346,13 @@ export function KisiSayisiEkrani({
                     {gm ? para(birim) : '—'}
                   </td>
                   <td className="text-right tabular-nums">
-                    {hizmetVar && gm ? para(kisi * birim) : '—'}
+                    {kisi > 0 && gm ? para(kisi * birim) : '—'}
                   </td>
-                  <td className="text-xs text-solgun">{gm?.ozet ?? 'menü girilmemiş'}</td>
+                  <td className="text-xs text-solgun">
+                    {gm?.ozet ?? (
+                      <span className="text-amber-700">menü girilmemiş — maliyet 0</span>
+                    )}
+                  </td>
                 </tr>
               )
             })}
