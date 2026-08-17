@@ -8,6 +8,18 @@ import { aramaEslesir } from '@/lib/arama'
 import { para } from '@/lib/format'
 import type { DevamSatiri } from '@/lib/types'
 
+type OdemeDetay = { oncesi: number; tutar: number; sonrasi: number }
+
+type Ipucu = {
+  gun: number
+  detay: OdemeDetay
+  geldi: boolean
+  /** Ekran koordinatı: kutu bu noktanın altında ya da üstünde açılır */
+  x: number
+  y: number
+  yukari: boolean
+}
+
 export function DevamTablosu({
   satirlar,
   siniflar,
@@ -24,6 +36,7 @@ export function DevamTablosu({
 }) {
   const [arama, setArama] = useState('')
   const [sinif, setSinif] = useState('')
+  const [ipucu, setIpucu] = useState<Ipucu | null>(null)
 
   const haftaSonu = useMemo(() => new Set(haftaSonuGunler), [haftaSonuGunler])
 
@@ -140,7 +153,26 @@ export function DevamTablosu({
                         key={g}
                         // Ödeme alınan gün alttan turuncu çizgiyle işaretlenir;
                         // geliş işaretiyle çakışmadan aynı hücrede görünür.
-                        className={`group relative !px-1 text-center ${
+                        onMouseEnter={
+                          d
+                            ? (e) => {
+                                const r = e.currentTarget.getBoundingClientRect()
+                                // Üstte yer yoksa aşağı açılsın: tek satır kalan
+                                // aramalarda kutu tablonun dışında kesiliyordu.
+                                const yukari = r.top > 200
+                                setIpucu({
+                                  gun: g,
+                                  detay: d,
+                                  geldi,
+                                  x: r.left + r.width / 2,
+                                  y: yukari ? r.top - 8 : r.bottom + 8,
+                                  yukari,
+                                })
+                              }
+                            : undefined
+                        }
+                        onMouseLeave={d ? () => setIpucu(null) : undefined}
+                        className={`relative !px-1 text-center ${
                           odendi ? 'border-b-4 border-amber-500' : ''
                         } ${
                           haftaSonu.has(g)
@@ -153,32 +185,6 @@ export function DevamTablosu({
                         }`}
                       >
                         {geldi ? '✓' : odendi ? '₺' : ''}
-                        {d && (
-                          <span className="pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-1 w-52 -translate-x-1/2 rounded-md bg-slate-900 px-3 py-2 text-left text-xs whitespace-normal text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
-                            <span className="mb-1 block font-semibold">
-                              {g}. gün — tahsilat
-                            </span>
-                            <span className="flex justify-between gap-2">
-                              <span className="text-slate-300">Önceki bakiye</span>
-                              <span className="tabular-nums">{para(d.oncesi)}</span>
-                            </span>
-                            <span className="flex justify-between gap-2">
-                              <span className="text-slate-300">Alınan</span>
-                              <span className="tabular-nums text-emerald-300">
-                                +{para(d.tutar)}
-                              </span>
-                            </span>
-                            <span className="mt-1 flex justify-between gap-2 border-t border-slate-700 pt-1 font-semibold">
-                              <span className="text-slate-300">Gün sonu</span>
-                              <span className="tabular-nums">{para(d.sonrasi)}</span>
-                            </span>
-                            {geldi && (
-                              <span className="mt-1 block text-slate-400">
-                                O gün yemeğe de geldi.
-                              </span>
-                            )}
-                          </span>
-                        )}
                       </td>
                     )
                   })}
@@ -199,6 +205,36 @@ export function DevamTablosu({
           </tbody>
         </table>
       </div>
+
+      {/* Tahsilat balonu tablonun dışında, sabit konumda duruyor: tablo yatay
+          kaydırmalı olduğu için hücrenin içinde çizilince kesiliyordu. */}
+      {ipucu && (
+        <div
+          className="pointer-events-none fixed z-50 w-56 rounded-md bg-slate-900 px-3 py-2 text-left text-xs text-white shadow-lg"
+          style={{
+            left: ipucu.x,
+            top: ipucu.y,
+            transform: `translate(-50%, ${ipucu.yukari ? '-100%' : '0'})`,
+          }}
+        >
+          <p className="mb-1 font-semibold">{ipucu.gun}. gün — tahsilat</p>
+          <p className="flex justify-between gap-2">
+            <span className="text-slate-300">Önceki bakiye</span>
+            <span className="tabular-nums">{para(ipucu.detay.oncesi)}</span>
+          </p>
+          <p className="flex justify-between gap-2">
+            <span className="text-slate-300">Alınan</span>
+            <span className="tabular-nums text-emerald-300">+{para(ipucu.detay.tutar)}</span>
+          </p>
+          <p className="mt-1 flex justify-between gap-2 border-t border-slate-700 pt-1 font-semibold">
+            <span className="text-slate-300">Gün sonu</span>
+            <span className="tabular-nums">{para(ipucu.detay.sonrasi)}</span>
+          </p>
+          {ipucu.geldi && (
+            <p className="mt-1 text-slate-400">O gün yemeğe de geldi.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

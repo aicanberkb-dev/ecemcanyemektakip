@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { GENEL, genelYolMu, OKUL_CEREZI } from '@/lib/okul-sabitler'
+
 const HERKESE_ACIK = ['/login', '/auth']
 
 export async function proxy(request: NextRequest) {
@@ -42,6 +44,17 @@ export async function proxy(request: NextRequest) {
   if (user && yol === '/login') {
     const url = request.nextUrl.clone()
     url.pathname = '/pos'
+    url.search = ''
+    return NextResponse.redirect(url)
+  }
+
+  // Genel modda okul seçili değil; okul verisine dayanan ekranlar boş çıkar.
+  // Boş sayfa göstermek yerine yönetim ekranına döndür. Tersi serbest: okul
+  // modundayken yemek listesi ve maliyet bağlantıları çalışmaya devam etsin,
+  // sadece ana menüde durmasınlar.
+  if (user && !acik && request.cookies.get(OKUL_CEREZI)?.value === GENEL && !genelYolMu(yol)) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/menu'
     url.search = ''
     return NextResponse.redirect(url)
   }

@@ -165,15 +165,17 @@ export async function receteSil(yemekAdi: string): Promise<MaliyetDurumu> {
 // Hizmet noktaları
 // ---------------------------------------------------------------------------
 
+const noktaSemasi = z.object({
+  ad: z.string().trim().min(2, 'Yer adı gerekli.'),
+  liste_id: bosNull,
+  varsayilan_kisi_sayisi: trSayi({ min: 0 }),
+})
+
 export async function hizmetNoktasiEkle(
   _onceki: MaliyetDurumu,
   formData: FormData,
 ): Promise<MaliyetDurumu> {
-  const sema = z.object({
-    ad: z.string().trim().min(2, 'Yer adı gerekli.'),
-    liste_id: bosNull,
-  })
-  const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
+  const sonuc = noktaSemasi.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
   const supabase = await supabaseServer()
@@ -187,6 +189,7 @@ export async function hizmetNoktasiEkle(
   const { error } = await supabase.from('hizmet_noktalari').insert({
     ad: sonuc.data.ad.toLocaleUpperCase('tr'),
     liste_id: sonuc.data.liste_id,
+    varsayilan_kisi_sayisi: Math.round(sonuc.data.varsayilan_kisi_sayisi),
     sira: (enBuyuk?.sira ?? 0) + 1,
   })
   if (error) {
@@ -202,11 +205,7 @@ export async function hizmetNoktasiGuncelle(
   _onceki: MaliyetDurumu,
   formData: FormData,
 ): Promise<MaliyetDurumu> {
-  const sema = z.object({
-    ad: z.string().trim().min(2, 'Yer adı gerekli.'),
-    liste_id: bosNull,
-  })
-  const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
+  const sonuc = noktaSemasi.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
   const supabase = await supabaseServer()
@@ -215,6 +214,7 @@ export async function hizmetNoktasiGuncelle(
     .update({
       ad: sonuc.data.ad.toLocaleUpperCase('tr'),
       liste_id: sonuc.data.liste_id,
+      varsayilan_kisi_sayisi: Math.round(sonuc.data.varsayilan_kisi_sayisi),
     })
     .eq('id', id)
   if (error) return { hata: error.message }
@@ -277,25 +277,25 @@ export async function hizmetFiyatiSil(id: string): Promise<MaliyetDurumu> {
 /**
  * Bir ayın kişi sayılarını topluca yazar.
  *
- * Sıfır girilen gün kayıtsız sayılır ve silinir: o gün hizmet verilmedi
- * demektir, kâr/zarar gün sayısına da girmemeli.
+ * `null` o gün için kayıt olmadığı anlamına gelir; kâr/zarar o günü yerin
+ * varsayılan kişi sayısıyla hesaplar. Açıkça yazılan 0 ise “o gün hizmet
+ * verilmedi” demek — bu ikisi farklı, o yüzden boş bırakmak satırı siler,
+ * 0 yazmak satırı 0 olarak kaydeder.
  */
 export async function gunlukHizmetKaydet(
   noktaId: string,
-  gunler: { tarih: string; kisi_sayisi: number }[],
+  gunler: { tarih: string; kisi_sayisi: number | null }[],
 ): Promise<MaliyetDurumu> {
   const supabase = await supabaseServer()
 
   const dolu = gunler
-    .filter((g) => Number.isFinite(g.kisi_sayisi) && g.kisi_sayisi > 0)
+    .filter((g) => g.kisi_sayisi !== null && Number.isFinite(g.kisi_sayisi) && g.kisi_sayisi >= 0)
     .map((g) => ({
       hizmet_noktasi_id: noktaId,
       tarih: g.tarih,
-      kisi_sayisi: Math.round(g.kisi_sayisi),
+      kisi_sayisi: Math.round(g.kisi_sayisi as number),
     }))
-  const bos = gunler
-    .filter((g) => !(Number.isFinite(g.kisi_sayisi) && g.kisi_sayisi > 0))
-    .map((g) => g.tarih)
+  const bos = gunler.filter((g) => g.kisi_sayisi === null).map((g) => g.tarih)
 
   if (dolu.length > 0) {
     const { error } = await supabase
@@ -314,5 +314,9 @@ export async function gunlukHizmetKaydet(
   }
 
   tazele()
-  return { basari: `${dolu.length} gün kaydedildi.` }
+  return {
+    basari:
+      `${dolu.length} gün kaydedildi` +
+      (bos.length > 0 ? ` · ${bos.length} gün varsayılana döndü.` : '.'),
+  }
 }

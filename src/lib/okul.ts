@@ -1,9 +1,15 @@
 import { cookies } from 'next/headers'
 
+import { GENEL, OKUL_CEREZI } from '@/lib/okul-sabitler'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { Okul } from '@/lib/types'
 
-export const OKUL_CEREZI = 'aktif_okul'
+export { GENEL, GENEL_YOLLAR, genelYolMu, OKUL_CEREZI } from '@/lib/okul-sabitler'
+
+/** Üst barda okul yerine "Genel" mi seçili? */
+export async function genelModu(): Promise<boolean> {
+  return (await cookies()).get(OKUL_CEREZI)?.value === GENEL
+}
 
 /** Tüm okullar, sıra numarasına göre. */
 export async function okullar(): Promise<Okul[]> {
@@ -18,14 +24,17 @@ export async function okullar(): Promise<Okul[]> {
 }
 
 /**
- * Seçili okul. Çerezdeki değer geçersizse (silinmiş okul, bozuk çerez)
- * sessizce ilk okula düşer — böylece uygulama hiçbir zaman okulsuz kalmaz.
+ * Seçili okul. Genel modda okul yoktur, null döner. Çerezdeki değer
+ * geçersizse (silinmiş okul, bozuk çerez) sessizce ilk okula düşer — böylece
+ * uygulama hiçbir zaman yanlış okulun verisini göstermez.
  */
 export async function aktifOkul(): Promise<Okul | null> {
+  const cerez = (await cookies()).get(OKUL_CEREZI)?.value
+  if (cerez === GENEL) return null
+
   const liste = await okullar()
   if (liste.length === 0) return null
 
-  const cerez = (await cookies()).get(OKUL_CEREZI)?.value
   return liste.find((o) => o.id === cerez) ?? liste[0]
 }
 

@@ -4,23 +4,29 @@ import { YazdirButonu } from '@/components/Yazdir'
 import { AY_ADLARI, para, tarih as tarihBicim } from '@/lib/format'
 import { supabaseServer } from '@/lib/supabase/server'
 
-import { Sekmeler } from '../Sekmeler'
-
-import { KisiSayisiEkrani, type GunMaliyeti, type GunlukKisi } from './KisiSayisiEkrani'
+import { KisiSayisiEkrani, type GunMaliyeti, type GunlukKisi, type OkulGunu } from './KisiSayisiEkrani'
 
 export const metadata = { title: 'Kâr / Zarar — Yemek Takip' }
 
 type KarZarar = {
   hizmet_noktasi: string
+  kaynak: 'okul' | 'manuel'
   gun_sayisi: number
   toplam_kisi: number
+  misafir: number
   ciro: number | string
   maliyet: number | string
   kar: number | string
   kisi_basi_kar: number | string
 }
 
-type Nokta = { id: string; ad: string; liste_id: string | null }
+type Nokta = {
+  id: string
+  ad: string
+  liste_id: string | null
+  okul_id: string | null
+  varsayilan_kisi_sayisi: number
+}
 
 function ayAralik(yil: number, ay: number) {
   return {
@@ -44,7 +50,11 @@ export default async function KarZararPage({
 
   const [{ data: raporVeri }, { data: noktaVeri }] = await Promise.all([
     supabase.rpc('kar_zarar', { p_bas: bas, p_bit: bit }),
-    supabase.from('hizmet_noktalari').select('id, ad, liste_id').eq('aktif', true).order('sira'),
+    supabase
+      .from('hizmet_noktalari')
+      .select('id, ad, liste_id, okul_id, varsayilan_kisi_sayisi')
+      .eq('aktif', true)
+      .order('sira'),
   ])
 
   const rapor = (raporVeri ?? []) as KarZarar[]
@@ -52,9 +62,9 @@ export default async function KarZararPage({
 
   const secili = noktalar.find((n) => n.id === q.nokta) ?? noktalar[0] ?? null
 
-  // Seçili yerin o ayki kişi sayıları ve günlük menü maliyeti
-  const [{ data: kisiVeri }, { data: maliyetVeri }] = await Promise.all([
-    secili
+  // Seçili yerin o ayki verileri: okula bağlıysa gün sonundan, değilse elle
+  const [{ data: kisiVeri }, { data: maliyetVeri }, { data: okulVeri }] = await Promise.all([
+    secili && !secili.okul_id
       ? supabase
           .from('gunluk_hizmet')
           .select('tarih, kisi_sayisi')
@@ -65,19 +75,24 @@ export default async function KarZararPage({
     secili?.liste_id
       ? supabase.rpc('ay_menu_maliyeti', { p_liste_id: secili.liste_id, p_bas: bas, p_bit: bit })
       : Promise.resolve({ data: null }),
+    secili?.okul_id
+      ? supabase.rpc('okul_gunluk_ozet', { p_okul_id: secili.okul_id, p_bas: bas, p_bit: bit })
+      : Promise.resolve({ data: null }),
   ])
 
   const kisiler = (kisiVeri ?? []) as GunlukKisi[]
   const gunMaliyetleri = (maliyetVeri ?? []) as GunMaliyeti[]
+  const okulGunleri = (okulVeri ?? []) as OkulGunu[]
 
   const toplam = rapor.reduce(
     (t, r) => ({
       kisi: t.kisi + Number(r.toplam_kisi),
+      misafir: t.misafir + Number(r.misafir),
       ciro: t.ciro + Number(r.ciro),
       maliyet: t.maliyet + Number(r.maliyet),
       kar: t.kar + Number(r.kar),
     }),
-    { kisi: 0, ciro: 0, maliyet: 0, kar: 0 },
+    { kisi: 0, misafir: 0, ciro: 0, maliyet: 0, kar: 0 },
   )
 
   return (
@@ -85,13 +100,10 @@ export default async function KarZararPage({
       <div className="yazdirma-gizle">
         <h1 className="baslik">Kâr / Zarar</h1>
         <p className="text-sm text-solgun">
-          Ciro = kişi sayısı × satış fiyatı. Maliyet = kişi sayısı × o günkü menünün
-          reçete maliyeti.
+          Okullarımızda kişi sayısı gün sonu kayıtlarından, fiyat ücret tarifesinden gelir.
+          Dış hizmet yerlerinde sabit kişi sayısı ve sözleşme fiyatı kullanılır. Misafirler
+          ciroya girmez ama yemeği yedikleri için maliyete girer.
         </p>
-      </div>
-
-      <div className="yazdirma-gizle">
-        <Sekmeler />
       </div>
 
       <div className="kart yazdirma-gizle flex flex-wrap items-end gap-3 p-4">
@@ -137,7 +149,7 @@ export default async function KarZararPage({
             <tr>
               <th>Hizmet Yeri</th>
               <th className="text-right">Gün</th>
-              <th className="text-right">Toplam Kişi</th>
+              <th className="text-right">Kişi (misafir)</th>
               <th className="text-right">Ciro</th>
               <th className="text-right">Maliyet</th>
               <th className="text-right">Kâr / Zarar</th>
@@ -147,9 +159,25 @@ export default async function KarZararPage({
           <tbody>
             {rapor.map((r) => (
               <tr key={r.hizmet_noktasi}>
-                <td className="font-medium">{r.hizmet_noktasi}</td>
+                <td className="font-medium">
+                  {r.hizmet_noktasi}
+                  <span
+                    className={`rozet ml-2 ${
+                      r.kaynak === 'okul'
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {r.kaynak === 'okul' ? 'otomatik' : 'elle'}
+                  </span>
+                </td>
                 <td className="text-right tabular-nums">{r.gun_sayisi}</td>
-                <td className="text-right tabular-nums">{r.toplam_kisi}</td>
+                <td className="text-right tabular-nums">
+                  {r.toplam_kisi}
+                  {r.misafir > 0 && (
+                    <span className="text-solgun"> ({r.misafir})</span>
+                  )}
+                </td>
                 <td className="text-right tabular-nums">{para(r.ciro)}</td>
                 <td className="text-right tabular-nums">{para(r.maliyet)}</td>
                 <td
@@ -165,7 +193,7 @@ export default async function KarZararPage({
             {rapor.length === 0 && (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-solgun">
-                  Bu ayda kişi sayısı girilmemiş. Aşağıdan girin.
+                  Bu ayda hesaplanacak veri yok.
                 </td>
               </tr>
             )}
@@ -175,7 +203,12 @@ export default async function KarZararPage({
               <tr>
                 <td className="font-semibold">Toplam</td>
                 <td />
-                <td className="text-right font-semibold tabular-nums">{toplam.kisi}</td>
+                <td className="text-right font-semibold tabular-nums">
+                  {toplam.kisi}
+                  {toplam.misafir > 0 && (
+                    <span className="font-normal text-solgun"> ({toplam.misafir})</span>
+                  )}
+                </td>
                 <td className="text-right font-semibold tabular-nums">{para(toplam.ciro)}</td>
                 <td className="text-right font-semibold tabular-nums">{para(toplam.maliyet)}</td>
                 <td
@@ -225,11 +258,14 @@ export default async function KarZararPage({
               key={`${secili.id}-${yil}-${ay}`}
               noktaId={secili.id}
               noktaAdi={secili.ad}
+              okulaBagliMi={!!secili.okul_id}
+              varsayilanKisi={secili.varsayilan_kisi_sayisi}
               listesizMi={!secili.liste_id}
               yil={yil}
               ay={ay}
               kisiler={kisiler}
               gunMaliyetleri={gunMaliyetleri}
+              okulGunleri={okulGunleri}
             />
           </div>
         )

@@ -1,7 +1,6 @@
 import { supabaseServer } from '@/lib/supabase/server'
 
 import { MalzemeBolumu, type Malzeme } from './MalzemeBolumu'
-import { Sekmeler } from './Sekmeler'
 
 export const metadata = { title: 'Malzemeler — Yemek Takip' }
 
@@ -32,8 +31,6 @@ export default async function MalzemelerPage() {
           Zincirin ilk halkası burası.
         </p>
       </div>
-
-      <Sekmeler />
 
       {fiyatsiz > 0 && (
         <p className="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800">

@@ -27,8 +27,9 @@ export default async function MenuPage({
   const yil = Number(q.yil) || simdi.getFullYear()
   const ay = Number(q.ay) || simdi.getMonth() + 1
 
+  // Genel modda okul seçili değil: bütün listeler görünür. Bir okul
+  // seçiliyken o okulun listesi + bağımsız listeler görünür.
   const okul = await aktifOkul()
-  if (!okul) return null
 
   const supabase = await supabaseServer()
 
@@ -40,13 +41,14 @@ export default async function MenuPage({
 
   const tumListeler = (listeVeri ?? []) as Liste[]
 
-  // Diğer okulun listesi bu okulda görünmesin; bağımsız listeler herkeste var.
-  const listeler = tumListeler.filter((l) => l.okul_id === null || l.okul_id === okul.id)
+  const listeler = okul
+    ? tumListeler.filter((l) => l.okul_id === null || l.okul_id === okul.id)
+    : tumListeler
   if (listeler.length === 0) return null
 
   const secili =
     listeler.find((l) => l.id === q.liste) ??
-    listeler.find((l) => l.okul_id === okul.id) ??
+    (okul ? listeler.find((l) => l.okul_id === okul.id) : undefined) ??
     listeler[0]
 
   const bas = `${yil}-${String(ay).padStart(2, '0')}-01`
@@ -85,7 +87,13 @@ export default async function MenuPage({
             buradan hesaplanır.
           </p>
         </div>
-        <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
+        <span
+          className={`rozet ${
+            okul ? 'bg-blue-100 text-blue-800' : 'bg-violet-100 text-violet-800'
+          }`}
+        >
+          {okul?.ad ?? 'GENEL'}
+        </span>
       </div>
 
       {/* Liste seçimi */}

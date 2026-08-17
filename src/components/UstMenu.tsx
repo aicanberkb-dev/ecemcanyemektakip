@@ -10,14 +10,25 @@ import type { Okul } from '@/lib/types'
 const BAGLANTILAR = [
   { yol: '/pos', ad: 'Yemekhane' },
   { yol: '/toplu', ad: 'Toplu Giriş' },
-  { yol: '/menu', ad: 'Yemek Listesi' },
-  { yol: '/maliyet', ad: 'Maliyet' },
   { yol: '/dashboard', ad: 'Özet' },
   { yol: '/students', ad: 'Öğrenciler' },
   { yol: '/payments/new', ad: 'Tahsilat' },
   { yol: '/payments/ekstre', ad: 'Ekstre Aktar' },
   { yol: '/reports', ad: 'Raporlar' },
   { yol: '/admin/settings', ad: 'Ayarlar' },
+]
+
+/** Genel modun menüsü: okula bağlı olmayan yönetim ekranları. */
+const GENEL_BAGLANTILAR = [
+  { yol: '/menu', ad: 'Yemek Listesi' },
+  { yol: '/maliyet', ad: 'Maliyet' },
+]
+
+const MALIYET_ALT = [
+  { yol: '/maliyet', ad: 'Malzemeler' },
+  { yol: '/maliyet/receteler', ad: 'Reçeteler' },
+  { yol: '/maliyet/yerler', ad: 'Hizmet Yerleri' },
+  { yol: '/maliyet/kar-zarar', ad: 'Kâr / Zarar' },
 ]
 
 const RAPOR_ALT = [
@@ -42,10 +53,13 @@ export function UstMenu({
   kullanici,
   okullar,
   aktifOkulId,
+  genel,
 }: {
   kullanici: string
   okullar: Okul[]
   aktifOkulId: string
+  /** Genel mod: okul ekranları yerine yönetim ekranları gösterilir */
+  genel: boolean
 }) {
   const yol = usePathname()
   const [acikMenu, setAcikMenu] = useState(false)
@@ -57,23 +71,27 @@ export function UstMenu({
         ? yol.startsWith('/admin')
         : yol === hedef || yol.startsWith(`${hedef}/`)
 
+  const menu = genel ? GENEL_BAGLANTILAR : BAGLANTILAR
+
   const altMenu = yol.startsWith('/reports')
     ? RAPOR_ALT
     : yol.startsWith('/admin')
       ? AYAR_ALT
-      : null
+      : yol.startsWith('/maliyet')
+        ? MALIYET_ALT
+        : null
 
   return (
     <header className="yazdirma-gizle border-b border-cizgi bg-white">
       <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-3">
-        <Link href="/pos" className="text-lg font-bold tracking-tight text-vurgu">
+        <Link href={genel ? '/menu' : '/pos'} className="text-lg font-bold tracking-tight text-vurgu">
           Yemek Takip
         </Link>
 
         <OkulSecici okullar={okullar} aktifId={aktifOkulId} />
 
         <nav className="hidden flex-1 items-center gap-1 md:flex">
-          {BAGLANTILAR.map((b) => (
+          {menu.map((b) => (
             <Link
               key={b.yol}
               href={b.yol}
@@ -106,7 +124,10 @@ export function UstMenu({
 
       {acikMenu && (
         <nav className="flex flex-col border-t border-cizgi px-4 py-2 md:hidden">
-          {[...BAGLANTILAR, ...RAPOR_ALT.slice(1), ...AYAR_ALT.slice(1)].map((b) => (
+          {(genel
+            ? [...GENEL_BAGLANTILAR, ...MALIYET_ALT.slice(1)]
+            : [...BAGLANTILAR, ...RAPOR_ALT.slice(1), ...AYAR_ALT.slice(1)]
+          ).map((b) => (
             <Link
               key={b.yol}
               href={b.yol}

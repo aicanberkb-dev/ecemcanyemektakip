@@ -1,7 +1,6 @@
 import { supabaseServer } from '@/lib/supabase/server'
 
 import type { Malzeme } from '../MalzemeBolumu'
-import { Sekmeler } from '../Sekmeler'
 
 import { ReceteEkrani, type ReceteSatiri, type YemekOzeti } from './ReceteEkrani'
 
@@ -32,8 +31,6 @@ export default async function ReceteterPage() {
           buradan çıkar: gramaj × malzeme birim fiyatı.
         </p>
       </div>
-
-      <Sekmeler />
 
       {eksik > 0 && (
         <p className="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-800">
