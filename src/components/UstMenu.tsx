@@ -10,6 +10,8 @@ import type { Okul } from '@/lib/types'
 const BAGLANTILAR = [
   { yol: '/pos', ad: 'Yemekhane' },
   { yol: '/toplu', ad: 'Toplu Giriş' },
+  { yol: '/menu', ad: 'Yemek Listesi' },
+  { yol: '/maliyet', ad: 'Maliyet' },
   { yol: '/dashboard', ad: 'Özet' },
   { yol: '/students', ad: 'Öğrenciler' },
   { yol: '/payments/new', ad: 'Tahsilat' },
@@ -25,6 +27,7 @@ const RAPOR_ALT = [
   { yol: '/reports/nakit', ad: 'Nakit' },
   { yol: '/reports/devam', ad: 'Devam Çizelgesi' },
   { yol: '/reports/yoklama', ad: '1. Sınıf Yoklama' },
+  { yol: '/reports/yemek', ad: 'Yemek Katılımı' },
   { yol: '/reports/tahsilat', ad: 'Tahsilat Geçmişi' },
   { yol: '/reports/taksit', ad: 'Taksit Takibi' },
 ]

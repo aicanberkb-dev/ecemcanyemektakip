@@ -52,6 +52,22 @@ export default async function TopluPage({
     zaten_kayitli: kayitli.has(o.student_id),
   }))
 
+  // Seçili günün tarifesi: geçmişe dönük giriş o günün fiyatından yapılsın
+  const { data: tarifeVeri } = await supabase
+    .rpc('ucretler', { p_okul_id: okul.id, p_tarih: gun })
+    .maybeSingle()
+
+  const tarife = tarifeVeri as {
+    taban_gunluk_ucret: number
+    ucretli_ogun_ucreti: number
+    misafir_ogun_ucreti: number
+  } | null
+
+  const ucretliVarsayilan =
+    Number(tarife?.ucretli_ogun_ucreti ?? 0) > 0
+      ? Number(tarife!.ucretli_ogun_ucreti)
+      : Number(tarife?.taban_gunluk_ucret ?? 0)
+
   const siniflar = [...new Set(ogrenciler.map((o) => o.sinif).filter(Boolean))].sort() as string[]
 
   return (
@@ -69,8 +85,10 @@ export default async function TopluPage({
       <TopluEkran
         key={`${okul.id}-${gun}`}
         gun={gun}
+        okulId={okul.id}
         ogrenciler={ogrenciler}
         siniflar={siniflar}
+        ucretliVarsayilan={ucretliVarsayilan}
       />
     </div>
   )

@@ -22,7 +22,8 @@ export default async function GunSonuPage({
   const okul = await aktifOkul()
   if (!okul) return null
 
-  const [{ data: ozetVeri }, { data: yiyenVeri }, { data: serbestVeri }] = await Promise.all([
+  const [{ data: ozetVeri }, { data: yiyenVeri }, { data: serbestVeri }, { data: menuVeri }] =
+    await Promise.all([
     supabase.rpc('gun_sonu', { p_okul_id: okul.id, p_tarih: gun }),
     supabase
       .from('transactions')
@@ -37,11 +38,25 @@ export default async function GunSonuPage({
       .eq('okul_id', okul.id)
       .eq('tarih', gun)
       .order('created_at'),
+    // O günün menüsü: okulun kendi listesinden, kaç kişinin hangi yemeğe
+    // geldiği buradan izleniyor
+    supabase
+      .from('menu_gunleri')
+      .select('corba, ana_yemek, yardimci, ek, menu_listeleri!inner(okul_id)')
+      .eq('menu_listeleri.okul_id', okul.id)
+      .eq('tarih', gun)
+      .maybeSingle(),
   ])
 
   const ozet = (ozetVeri?.[0] ?? null) as GunSonu | null
   const yiyenler = (yiyenVeri ?? []) as Yiyen[]
   const serbestler = (serbestVeri ?? []) as SerbestOgun[]
+  const menu = menuVeri as unknown as {
+    corba: string | null
+    ana_yemek: string | null
+    yardimci: string | null
+    ek: string | null
+  } | null
 
   return (
     <div className="space-y-4">
@@ -62,6 +77,41 @@ export default async function GunSonuPage({
           Bugün
         </Link>
       </form>
+
+      {/* O günün menüsü — katılım sayısıyla birlikte okunsun diye üstte */}
+      <div className="kart p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-semibold">Günün Menüsü</h2>
+          <Link href="/menu" className="text-sm text-vurgu hover:underline">
+            Yemek listesini düzenle →
+          </Link>
+        </div>
+        {menu ? (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {[
+              ['Çorba', menu.corba, 'bg-orange-100 text-orange-900'],
+              ['Ana Yemek', menu.ana_yemek, 'bg-red-100 text-red-900'],
+              ['Yardımcı', menu.yardimci, 'bg-amber-100 text-amber-900'],
+              ['4. Kalem', menu.ek, 'bg-sky-100 text-sky-900'],
+            ]
+              .filter(([, deger]) => deger)
+              .map(([etiket, deger, renk]) => (
+                <span key={etiket as string} className={`rounded-md px-3 py-2 ${renk}`}>
+                  <span className="block text-xs opacity-70">{etiket}</span>
+                  <span className="font-semibold">{deger}</span>
+                </span>
+              ))}
+          </div>
+        ) : (
+          <p className="mt-1 text-sm text-solgun">
+            Bu güne menü girilmemiş.{' '}
+            <Link href="/menu" className="text-vurgu hover:underline">
+              Yemek listesinden ekleyin
+            </Link>
+            .
+          </p>
+        )}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Sayac baslik="Günlükçü" adet={ozet?.gunlukcu ?? 0} alt={para(ozet?.gunlukcu_tutar ?? 0)} renk="bg-blue-50 text-blue-800" />

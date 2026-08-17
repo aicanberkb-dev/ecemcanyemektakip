@@ -75,6 +75,106 @@ export async function okulAdiGuncelle(
   return { basari: 'Okul adı güncellendi.' }
 }
 
+/**
+ * Ücret tarifeleri.
+ *
+ * Yeni tarife eklemek geçmişi değiştirmez: her öğün kendi tarihindeki
+ * tarifeden fiyatlanır. app_settings'teki alanlar "şu an geçerli" değer
+ * olarak ayrıca güncellenir; ekranlar oradan okuyor.
+ */
+const tarifeSemasi = z.object({
+  gecerli_baslangic: z.string().min(1, 'Geçerlilik başlangıcı gerekli.'),
+  taban_gunluk_ucret: trSayi({ min: 0 }),
+  ucretli_ogun_ucreti: trSayi({ min: 0 }),
+  misafir_ogun_ucreti: trSayi({ min: 0 }),
+  aciklama: bosNull,
+})
+
+/** Bugün geçerli tarifeyi app_settings'e yansıtır (ekranlar oradan okuyor). */
+async function guncelTarifeyiYansit(okulId: string) {
+  const supabase = await supabaseServer()
+  const bugun = new Date().toISOString().slice(0, 10)
+
+  const { data } = await supabase
+    .from('ucret_gecmisi')
+    .select('taban_gunluk_ucret, ucretli_ogun_ucreti, misafir_ogun_ucreti')
+    .eq('okul_id', okulId)
+    .lte('gecerli_baslangic', bugun)
+    .order('gecerli_baslangic', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (data) {
+    await supabase.from('app_settings').update(data).eq('okul_id', okulId)
+  }
+}
+
+export async function tarifeEkle(
+  _onceki: AyarDurumu,
+  formData: FormData,
+): Promise<AyarDurumu> {
+  const sonuc = tarifeSemasi.safeParse(Object.fromEntries(formData.entries()))
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const supabase = await supabaseServer()
+  const okulId = await aktifOkulId()
+  const { error } = await supabase
+    .from('ucret_gecmisi')
+    .insert({ ...sonuc.data, okul_id: okulId })
+
+  if (error) {
+    return {
+      hata: error.message.includes('ucret_gecmisi_okul_id_gecerli_baslangic_key')
+        ? 'Bu tarihte başlayan bir tarife zaten var. Mevcut satırı düzeltin.'
+        : error.message,
+    }
+  }
+
+  await guncelTarifeyiYansit(okulId)
+  revalidatePath('/admin/settings')
+  revalidatePath('/pos')
+  return { basari: 'Tarife eklendi.' }
+}
+
+export async function tarifeGuncelle(
+  id: string,
+  _onceki: AyarDurumu,
+  formData: FormData,
+): Promise<AyarDurumu> {
+  const sonuc = tarifeSemasi.safeParse(Object.fromEntries(formData.entries()))
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const supabase = await supabaseServer()
+  const okulId = await aktifOkulId()
+  const { error } = await supabase
+    .from('ucret_gecmisi')
+    .update(sonuc.data)
+    .eq('id', id)
+    .eq('okul_id', okulId)
+
+  if (error) return { hata: error.message }
+
+  await guncelTarifeyiYansit(okulId)
+  revalidatePath('/admin/settings')
+  revalidatePath('/pos')
+  return { basari: 'Tarife güncellendi.' }
+}
+
+export async function tarifeSil(id: string) {
+  const supabase = await supabaseServer()
+  const okulId = await aktifOkulId()
+  const { error } = await supabase
+    .from('ucret_gecmisi')
+    .delete()
+    .eq('id', id)
+    .eq('okul_id', okulId)
+  if (error) throw new Error(error.message)
+
+  await guncelTarifeyiYansit(okulId)
+  revalidatePath('/admin/settings')
+  revalidatePath('/pos')
+}
+
 export async function taksitEkle(
   _onceki: AyarDurumu,
   formData: FormData,

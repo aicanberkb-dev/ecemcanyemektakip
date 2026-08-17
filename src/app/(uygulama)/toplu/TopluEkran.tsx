@@ -25,12 +25,17 @@ type Mesaj = { tip: 'ok' | 'hata'; metin: string }
 
 export function TopluEkran({
   gun,
+  okulId,
   ogrenciler,
   siniflar,
+  ucretliVarsayilan,
 }: {
   gun: string
+  okulId: string
   ogrenciler: TopluOgrenci[]
   siniflar: string[]
+  /** Seçili günün tarifesinden gelen ücretli öğün fiyatı */
+  ucretliVarsayilan: number
 }) {
   const router = useRouter()
   const supabase = useMemo(() => supabaseBrowser(), [])
@@ -42,6 +47,8 @@ export function TopluEkran({
   // Toplu girişte hata yapılabiliyor; aynı ekrandan geri alınabilmeli.
   const [mod, setMod] = useState<'ekle' | 'geri'>('ekle')
   const [mesaj, setMesaj] = useState<Mesaj | null>(null)
+  // Kayıttan sonra adet ve fiyat kutuları varsayılana dönsün
+  const [sifirlama, setSifirlama] = useState(0)
 
   // Zaten kaydı olanlar seçilemez
   const secilebilir = ogrenciler.filter((o) => !o.zaten_kayitli)
@@ -117,6 +124,36 @@ export function TopluEkran({
         (sonuc?.atlanan ? ` — ${sonuc.atlanan} öğrenci zaten kayıtlıydı, atlandı.` : '.'),
     })
     setSecili(new Set())
+    router.refresh()
+  }
+
+  async function serbestKaydet(tip: 'ucretli' | 'misafir', adet: number, fiyat?: number) {
+    if (kaydediliyor) return
+    setKaydediliyor(true)
+
+    const { data, error } = await supabase.rpc('serbest_ogun_kaydet', {
+      p_okul_id: okulId,
+      p_tip: tip,
+      p_adet: adet,
+      p_tarih: gun,
+      p_birim_tutar: Number.isFinite(fiyat) ? fiyat : null,
+    })
+
+    setKaydediliyor(false)
+    if (error) {
+      setMesaj({ tip: 'hata', metin: error.message })
+      return
+    }
+    const s = (data as { eklenen: number; gun_toplami: number; birim_tutar: number }[] | null)?.[0]
+    const ad = tip === 'ucretli' ? 'Ücretli' : 'Misafir'
+    setMesaj({
+      tip: 'ok',
+      metin:
+        `${ad}: ${s?.eklenen ?? adet} kayıt ${tarihBicim(gun)} tarihine eklendi` +
+        `${Number(s?.birim_tutar ?? 0) > 0 ? ` (birim ${para(s!.birim_tutar)})` : ''}` +
+        ` — o gün toplam ${s?.gun_toplami ?? '?'}.`,
+    })
+    setSifirlama((n) => n + 1)
     router.refresh()
   }
 
@@ -265,6 +302,38 @@ export function TopluEkran({
         </p>
       )}
 
+      {/* Serbest öğünler — öğrenciye bağlı değil, seçimden bağımsız çalışır.
+          Bilgisayarın hiç açılamadığı bir günün ücretli/misafir kayıtları da
+          buradan geçmişe dönük girilebilsin diye ekranda. */}
+      <div className="kart space-y-3 p-4">
+        <div>
+          <h2 className="font-semibold">Ücretli ve Misafir Öğün — {tarihBicim(gun)}</h2>
+          <p className="text-sm text-solgun">
+            Öğrenciye bağlı olmayan öğünler. Seçtiğiniz tarihe işlenir; fiyat o günün
+            tarifesinden gelir, gerekirse değiştirebilirsiniz.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-4">
+          {/* key: kayıttan sonra adet ve fiyat varsayılana döner */}
+          <SerbestGiris
+            key={`ucretli-${sifirlama}`}
+            etiket="Ücretli"
+            renk="bg-yellow-400 hover:bg-yellow-500 text-slate-900"
+            varsayilanFiyat={ucretliVarsayilan}
+            bekliyor={kaydediliyor}
+            onGonder={(adet, fiyat) => serbestKaydet('ucretli', adet, fiyat)}
+          />
+          {/* Misafir personel: ücret alınmıyor, sadece sayaç */}
+          <SerbestGiris
+            key={`misafir-${sifirlama}`}
+            etiket="Misafir"
+            renk="bg-purple-600 hover:bg-purple-700 text-white"
+            bekliyor={kaydediliyor}
+            onGonder={(adet) => serbestKaydet('misafir', adet)}
+          />
+        </div>
+      </div>
+
       {/* Liste */}
       <div className="kart overflow-x-auto">
         <table className="tablo">
@@ -355,6 +424,91 @@ export function TopluEkran({
           )}
         </table>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Serbest öğün girişi: adet + birim fiyat.
+ *
+ * Fiyat seçili günün tarifesinden hazır gelir; o işlem için değiştirilebilir,
+ * tarife değişmez.
+ */
+function SerbestGiris({
+  etiket,
+  renk,
+  varsayilanFiyat,
+  bekliyor,
+  onGonder,
+}: {
+  etiket: string
+  renk: string
+  /** Verilmezse fiyat kutusu çıkmaz (misafir gibi ücretsiz öğünler) */
+  varsayilanFiyat?: number
+  bekliyor: boolean
+  onGonder: (adet: number, fiyat?: number) => void
+}) {
+  const fiyatliMi = varsayilanFiyat !== undefined
+  const [adet, setAdet] = useState('1')
+  const [fiyat, setFiyat] = useState(
+    fiyatliMi ? String(varsayilanFiyat).replace('.', ',') : '',
+  )
+
+  const sayi = Math.min(500, Math.max(1, Number(adet) || 1))
+  const fiyatSayi = Number(fiyat.replace(/\./g, '').replace(',', '.'))
+  const gecerli = !fiyatliMi || (fiyat.trim() !== '' && Number.isFinite(fiyatSayi) && fiyatSayi >= 0)
+  const degistirildi = fiyatliMi && gecerli && fiyatSayi !== varsayilanFiyat
+
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <label className="text-xs text-solgun">
+        <span className="block">Adet</span>
+        <input
+          type="number"
+          min={1}
+          max={500}
+          value={adet}
+          onChange={(e) => setAdet(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          className="w-16 rounded border border-cizgi bg-white px-2 py-1.5 text-center
+                     text-sm font-medium text-metin tabular-nums outline-none
+                     focus:border-vurgu focus:ring-2 focus:ring-blue-100"
+        />
+      </label>
+      {fiyatliMi && (
+        <label className="text-xs text-solgun">
+          <span className="block">Birim ₺</span>
+          <input
+            inputMode="decimal"
+            value={fiyat}
+            onChange={(e) => setFiyat(e.target.value)}
+            onFocus={(e) => e.target.select()}
+            className={`w-24 rounded border bg-white px-2 py-1.5 text-center text-sm
+                        font-medium tabular-nums outline-none focus:ring-2 focus:ring-blue-100
+                        ${
+                          !gecerli
+                            ? 'border-red-400 text-red-700'
+                            : degistirildi
+                              ? 'border-amber-400 text-amber-800'
+                              : 'border-cizgi text-metin'
+                        }`}
+          />
+        </label>
+      )}
+      <button
+        type="button"
+        disabled={bekliyor || !gecerli}
+        onClick={() => onGonder(sayi, fiyatliMi ? fiyatSayi : undefined)}
+        className={`rounded-lg px-4 py-2 text-sm font-semibold transition
+                    disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white ${renk}`}
+      >
+        {etiket} Ekle
+      </button>
+      {degistirildi && (
+        <span className="self-center text-xs text-amber-700">
+          tarife {para(varsayilanFiyat!)}
+        </span>
+      )}
     </div>
   )
 }

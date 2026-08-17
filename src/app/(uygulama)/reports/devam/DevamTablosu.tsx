@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 
 import { AramaKutusu } from '@/components/AramaKutusu'
 import { aramaEslesir } from '@/lib/arama'
+import { para } from '@/lib/format'
 import type { DevamSatiri } from '@/lib/types'
 
 export function DevamTablosu({
@@ -132,18 +133,14 @@ export function DevamTablosu({
                   </td>
                   {gunler.map((g) => {
                     const geldi = geldigi.has(g)
+                    const d = s.odeme_detay?.[String(g)]
                     const odendi = odeme.has(g)
                     return (
                       <td
                         key={g}
-                        title={
-                          [geldi ? 'yemeğe geldi' : null, odendi ? 'ödeme alındı' : null]
-                            .filter(Boolean)
-                            .join(' · ') || undefined
-                        }
                         // Ödeme alınan gün alttan turuncu çizgiyle işaretlenir;
                         // geliş işaretiyle çakışmadan aynı hücrede görünür.
-                        className={`!px-1 text-center ${
+                        className={`group relative !px-1 text-center ${
                           odendi ? 'border-b-4 border-amber-500' : ''
                         } ${
                           haftaSonu.has(g)
@@ -156,6 +153,32 @@ export function DevamTablosu({
                         }`}
                       >
                         {geldi ? '✓' : odendi ? '₺' : ''}
+                        {d && (
+                          <span className="pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-1 w-52 -translate-x-1/2 rounded-md bg-slate-900 px-3 py-2 text-left text-xs whitespace-normal text-white opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+                            <span className="mb-1 block font-semibold">
+                              {g}. gün — tahsilat
+                            </span>
+                            <span className="flex justify-between gap-2">
+                              <span className="text-slate-300">Önceki bakiye</span>
+                              <span className="tabular-nums">{para(d.oncesi)}</span>
+                            </span>
+                            <span className="flex justify-between gap-2">
+                              <span className="text-slate-300">Alınan</span>
+                              <span className="tabular-nums text-emerald-300">
+                                +{para(d.tutar)}
+                              </span>
+                            </span>
+                            <span className="mt-1 flex justify-between gap-2 border-t border-slate-700 pt-1 font-semibold">
+                              <span className="text-slate-300">Gün sonu</span>
+                              <span className="tabular-nums">{para(d.sonrasi)}</span>
+                            </span>
+                            {geldi && (
+                              <span className="mt-1 block text-slate-400">
+                                O gün yemeğe de geldi.
+                              </span>
+                            )}
+                          </span>
+                        )}
                       </td>
                     )
                   })}

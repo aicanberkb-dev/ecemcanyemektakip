@@ -8,7 +8,16 @@ import type { GunSonu, PosSonuc, SerbestOgunTipi } from '@/lib/types'
 
 type Mesaj = { tip: 'ok' | 'hata'; metin: string }
 
-export function PosEkrani({ okulId, okulAdi }: { okulId: string; okulAdi: string }) {
+export function PosEkrani({
+  okulId,
+  okulAdi,
+  ucretliVarsayilan,
+}: {
+  okulId: string
+  okulAdi: string
+  /** Bugünkü tarifeden gelen ücretli öğün fiyatı; ekranda değiştirilebilir */
+  ucretliVarsayilan: number
+}) {
   const supabase = useMemo(() => supabaseBrowser(), [])
   const aramaRef = useRef<HTMLInputElement>(null)
 
@@ -19,6 +28,9 @@ export function PosEkrani({ okulId, okulAdi }: { okulId: string; okulAdi: string
   const [mesaj, setMesaj] = useState<Mesaj | null>(null)
   const [kaydediliyor, setKaydediliyor] = useState(false)
   const [ozet, setOzet] = useState<GunSonu | null>(null)
+  // Her serbest öğün kaydından sonra artar; adet ve fiyat kutularını
+  // varsayılana döndürmek için AdetliButon'a key olarak verilir.
+  const [sifirlama, setSifirlama] = useState(0)
 
   const odakla = useCallback(() => {
     aramaRef.current?.focus()
@@ -159,14 +171,16 @@ export function PosEkrani({ okulId, okulAdi }: { okulId: string; okulAdi: string
     ozetYenile()
   }
 
-  async function serbestKaydet(tip: SerbestOgunTipi, adet: number) {
+  async function serbestKaydet(tip: SerbestOgunTipi, adet: number, birim?: number) {
     if (kaydediliyor) return
     setKaydediliyor(true)
 
+    // Fiyat girilmemişse sunucu o günün tarifesini uygular.
     const { data, error } = await supabase.rpc('serbest_ogun_kaydet', {
       p_okul_id: okulId,
       p_tip: tip,
       p_adet: adet,
+      p_birim_tutar: Number.isFinite(birim) ? birim : null,
     })
 
     setKaydediliyor(false)
@@ -183,6 +197,7 @@ export function PosEkrani({ okulId, okulAdi }: { okulId: string; okulAdi: string
         `${Number(sonuc?.birim_tutar ?? 0) > 0 ? ` (birim ${para(sonuc!.birim_tutar)})` : ''}` +
         ` — bugün toplam ${sonuc?.gun_toplami ?? '?'}.`,
     })
+    setSifirlama((n) => n + 1)
     vazgec()
     ozetYenile()
   }
@@ -320,16 +335,24 @@ export function PosEkrani({ okulId, okulAdi }: { okulId: string; okulAdi: string
             Öğrenci Yemek Yedir
           </OgunButonu>
 
+          {/* key: her kayıttan sonra bileşen sıfırlanır — fiyat tarifeye,
+              adet 1'e döner. Değiştirilmiş fiyatın sonraki işlemde de
+              kullanılması sessiz bir hataya yol açıyordu. */}
           <AdetliButon
+            key={`ucretli-${sifirlama}`}
             renk="bg-yellow-400 hover:bg-yellow-500"
             metinRengi="text-slate-900"
             etkin={!kaydediliyor}
-            onGonder={(adet) => serbestKaydet('ucretli', adet)}
+            varsayilanFiyat={ucretliVarsayilan}
+            onGonder={(adet, fiyat) => serbestKaydet('ucretli', adet, fiyat)}
           >
             Ücretli
           </AdetliButon>
 
+          {/* Misafir personelimiz: ücret alınmıyor, buton yalnızca sayaç.
+              Bu yüzden fiyat kutusu yok. */}
           <AdetliButon
+            key={`misafir-${sifirlama}`}
             renk="bg-purple-600 hover:bg-purple-700"
             etkin={!kaydediliyor}
             onGonder={(adet) => serbestKaydet('misafir', adet)}
@@ -421,6 +444,9 @@ export function PosEkrani({ okulId, okulAdi }: { okulId: string; okulAdi: string
 /**
  * Adet kutulu buton: varsayılan 1, elle değiştirilebilir.
  * "Yemekten sonra 3 kişi ücretli yedi" gibi toplu girişler için.
+ *
+ * `varsayilanFiyat` verilirse birim fiyat kutusu da çıkar: tarifedeki fiyat
+ * hazır gelir, gerekirse o işlem için değiştirilir. Tarife değişmez.
  */
 function AdetliButon({
   children,
@@ -429,6 +455,7 @@ function AdetliButon({
   kenarlik = '',
   etkin,
   kucuk,
+  varsayilanFiyat,
   onGonder,
 }: {
   children: React.ReactNode
@@ -437,17 +464,27 @@ function AdetliButon({
   kenarlik?: string
   etkin: boolean
   kucuk?: boolean
-  onGonder: (adet: number) => void
+  varsayilanFiyat?: number
+  onGonder: (adet: number, fiyat?: number) => void
 }) {
   const [adet, setAdet] = useState('1')
+  const [fiyat, setFiyat] = useState(
+    varsayilanFiyat === undefined ? '' : String(varsayilanFiyat).replace('.', ','),
+  )
   const sayi = Math.min(500, Math.max(1, Number(adet) || 1))
+
+  // Türkçe virgüllü giriş kabul edilir
+  const fiyatSayi = Number(fiyat.replace(/\./g, '').replace(',', '.'))
+  const fiyatGecerli = fiyat.trim() !== '' && Number.isFinite(fiyatSayi) && fiyatSayi >= 0
+  const degistirildi =
+    varsayilanFiyat !== undefined && fiyatGecerli && fiyatSayi !== varsayilanFiyat
 
   return (
     <div className="flex flex-col gap-1">
       <button
         type="button"
-        disabled={!etkin}
-        onClick={() => onGonder(sayi)}
+        disabled={!etkin || (varsayilanFiyat !== undefined && !fiyatGecerli)}
+        onClick={() => onGonder(sayi, varsayilanFiyat === undefined ? undefined : fiyatSayi)}
         className={`rounded-lg px-3 font-semibold transition
           ${kucuk ? 'py-3 text-sm' : 'py-6 text-base'}
           disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white
@@ -455,20 +492,47 @@ function AdetliButon({
       >
         {children}
       </button>
-      <label className="flex items-center gap-1.5 text-xs text-solgun">
-        <span>Adet</span>
-        <input
-          type="number"
-          min={1}
-          max={500}
-          value={adet}
-          onChange={(e) => setAdet(e.target.value)}
-          onFocus={(e) => e.target.select()}
-          className="w-16 rounded border border-cizgi bg-white px-2 py-1 text-center
-                     text-sm font-medium text-metin tabular-nums outline-none
-                     focus:border-vurgu focus:ring-2 focus:ring-blue-100"
-        />
-      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5 text-xs text-solgun">
+          <span>Adet</span>
+          <input
+            type="number"
+            min={1}
+            max={500}
+            value={adet}
+            onChange={(e) => setAdet(e.target.value)}
+            onFocus={(e) => e.target.select()}
+            className="w-16 rounded border border-cizgi bg-white px-2 py-1 text-center
+                       text-sm font-medium text-metin tabular-nums outline-none
+                       focus:border-vurgu focus:ring-2 focus:ring-blue-100"
+          />
+        </label>
+        {varsayilanFiyat !== undefined && (
+          <label className="flex items-center gap-1.5 text-xs text-solgun">
+            <span>Fiyat ₺</span>
+            <input
+              inputMode="decimal"
+              value={fiyat}
+              onChange={(e) => setFiyat(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              className={`w-20 rounded border bg-white px-2 py-1 text-center text-sm
+                          font-medium tabular-nums outline-none focus:ring-2 focus:ring-blue-100
+                          ${
+                            !fiyatGecerli
+                              ? 'border-red-400 text-red-700'
+                              : degistirildi
+                                ? 'border-amber-400 text-amber-800'
+                                : 'border-cizgi text-metin'
+                          }`}
+            />
+          </label>
+        )}
+      </div>
+      {degistirildi && (
+        <p className="text-xs text-amber-700">
+          Tarife {para(varsayilanFiyat)} — bu işlem için değiştirildi
+        </p>
+      )}
     </div>
   )
 }

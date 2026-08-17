@@ -4,12 +4,12 @@ import { aktifOkul } from '@/lib/okul'
 import { sezonSec } from '@/lib/sezon'
 import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
-import type { AppSettings, TaksitPlani } from '@/lib/types'
+import type { AppSettings, TaksitPlani, UcretGecmisi } from '@/lib/types'
 
 import { OkulAdiFormu } from './OkulAdiFormu'
 import { SezonBolumu } from './SezonBolumu'
 import { TaksitPlaniBolumu } from './TaksitPlaniBolumu'
-import { UcretFormu } from './UcretFormu'
+import { UcretGecmisiBolumu } from './UcretGecmisiBolumu'
 
 export const metadata = { title: 'Ayarlar — Yemek Takip' }
 
@@ -27,7 +27,7 @@ export default async function SettingsPage({
   const liste = await sezonlariGetir(okul.id)
   const sezon = sezonSec(liste, sezonQ)
 
-  const [{ data: ayarVeri }, { data: planVeri }] = await Promise.all([
+  const [{ data: ayarVeri }, { data: planVeri }, { data: tarifeVeri }] = await Promise.all([
     supabase.from('app_settings').select('*').eq('okul_id', okul.id).maybeSingle(),
     sezon
       ? supabase
@@ -36,10 +36,17 @@ export default async function SettingsPage({
           .eq('sezon_id', sezon.id)
           .order('vade_tarihi')
       : Promise.resolve({ data: null }),
+    supabase
+      .from('ucret_gecmisi')
+      .select('*')
+      .eq('okul_id', okul.id)
+      .order('gecerli_baslangic', { ascending: false }),
   ])
 
   const ayar = ayarVeri as AppSettings | null
   const plan = (planVeri ?? []) as TaksitPlani[]
+  const tarifeler = (tarifeVeri ?? []) as UcretGecmisi[]
+  const bugun = new Date().toISOString().slice(0, 10)
 
   return (
     <div className="space-y-5">
@@ -63,18 +70,12 @@ export default async function SettingsPage({
       </section>
 
       <section className="kart p-6">
-        <h2 className="mb-1 font-semibold">Ücretler</h2>
+        <h2 className="mb-1 font-semibold">Ücret Tarifeleri</h2>
         <p className="mb-4 text-sm text-solgun">
           Yemek fiyatları burada tanımlanır ve sunucuda hesaplanır — kasa ekranından
           değiştirilemez.
         </p>
-        {ayar ? (
-          <UcretFormu ayar={ayar} />
-        ) : (
-          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            Bu okul için ayar satırı bulunamadı.
-          </p>
-        )}
+        <UcretGecmisiBolumu tarifeler={tarifeler} bugun={bugun} />
       </section>
 
       <section className="kart p-6">

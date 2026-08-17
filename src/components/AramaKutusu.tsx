@@ -9,6 +9,12 @@ export type AramaOnerisi = {
   etiket: string
   /** Sağda küçük punto ile görünen ek bilgi (sınıf, no, tutar…) */
   alt?: string
+  /**
+   * Kaydın kimliği. Verilirse seçim "şu kaydı göster" anlamına gelir; aynı
+   * adı taşıyan başka kayıtlar listeye karışmaz. Yoksa metin araması olarak
+   * çalışır.
+   */
+  id?: string
 }
 
 /**
@@ -24,6 +30,7 @@ export function AramaKutusu({
   ipucu,
   sonuc,
   oneriler = [],
+  oneriSec,
   genislik = 'min-w-56 flex-1',
 }: {
   deger: string
@@ -34,6 +41,11 @@ export function AramaKutusu({
   sonuc?: string
   /** Kutunun altında listelenecek eşleşmeler. Boşsa öneri gösterilmez. */
   oneriler?: AramaOnerisi[]
+  /**
+   * Listeden bir öneri seçildiğinde çağrılır. Kimlikli önerilerde çağıran
+   * taraf o kayda kilitlenebilir; aksi halde yalnızca metin araması yapılır.
+   */
+  oneriSec?: (o: AramaOnerisi) => void
   genislik?: string
 }) {
   const id = useId()
@@ -46,7 +58,8 @@ export function AramaKutusu({
   const listeAcik = acik && deger.trim() !== '' && gosterilecek.length > 0
 
   function sec(o: AramaOnerisi) {
-    degistir(o.deger)
+    if (oneriSec) oneriSec(o)
+    else degistir(o.deger)
     setAcik(false)
     setVurgulu(-1)
   }

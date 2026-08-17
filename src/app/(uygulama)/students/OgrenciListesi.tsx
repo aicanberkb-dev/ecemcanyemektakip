@@ -16,7 +16,13 @@ export type OgrenciSatiri = {
   sinif: string | null
   kimlik_no: string | null
   veli_adi: string | null
+  veli_telefon: string | null
   veli2_adi: string | null
+  veli2_telefon: string | null
+  iskonto_orani: number
+  iskonto_tutar: number
+  devir: number
+  ogun_sayisi: number
   kardes_grup_id: string | null
   abone_tipi: AboneTipi
   ogrenci_tipi: OgrenciTipi
@@ -165,7 +171,13 @@ export function OgrenciListesi({
               <th>No</th>
               <th>Ad Soyad</th>
               <th>Sınıf</th>
-              <th>Abone</th>
+              <th>Abone / Tip</th>
+              <th>Veli</th>
+              <th>Telefon</th>
+              <th>Kimlik / Kart</th>
+              <th className="text-right">İskonto</th>
+              <th className="text-right">Devir</th>
+              <th className="text-right">Öğün</th>
               <th className="text-right">Alınan</th>
               <th className="text-right">Harcanan</th>
               <th className="text-right">Kalan</th>
@@ -197,6 +209,43 @@ export function OgrenciListesi({
                   <AboneRozeti tip={o.abone_tipi} />
                   <OgrenciTipiRozeti tip={o.ogrenci_tipi} />
                 </td>
+                <td className="whitespace-nowrap">
+                  {o.veli_adi ?? '—'}
+                  {o.veli2_adi && (
+                    <span className="block text-xs text-solgun">{o.veli2_adi}</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap">
+                  {o.veli_telefon ? (
+                    <a
+                      href={`tel:${o.veli_telefon.replace(/\s/g, '')}`}
+                      className="text-vurgu hover:underline"
+                    >
+                      {o.veli_telefon}
+                    </a>
+                  ) : (
+                    <span className="text-solgun">—</span>
+                  )}
+                  {o.veli2_telefon && (
+                    <span className="block text-xs text-solgun">{o.veli2_telefon}</span>
+                  )}
+                </td>
+                <td className="tabular-nums text-solgun">{o.kimlik_no ?? '—'}</td>
+                <td className="text-right tabular-nums text-solgun">
+                  {o.iskonto_orani > 0 || o.iskonto_tutar > 0 ? (
+                    <span className="text-amber-700">
+                      {o.iskonto_orani > 0 && `%${o.iskonto_orani}`}
+                      {o.iskonto_orani > 0 && o.iskonto_tutar > 0 && ' + '}
+                      {o.iskonto_tutar > 0 && para(o.iskonto_tutar)}
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+                <td className="text-right tabular-nums text-solgun">
+                  {o.devir !== 0 ? para(o.devir) : '—'}
+                </td>
+                <td className="text-right tabular-nums text-solgun">{o.ogun_sayisi}</td>
                 <td className="text-right tabular-nums">{para(o.alinan_para)}</td>
                 <td className="text-right tabular-nums">{para(o.harcanan)}</td>
                 <td className="text-right">
@@ -209,7 +258,7 @@ export function OgrenciListesi({
             ))}
             {suzulmus.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-solgun">
+                <td colSpan={14} className="py-8 text-center text-solgun">
                   {arama.trim() ? `"${arama}" ile eşleşen öğrenci yok.` : 'Kayıt bulunamadı.'}
                 </td>
               </tr>
@@ -218,7 +267,7 @@ export function OgrenciListesi({
           {suzulmus.length > 0 && (
             <tfoot>
               <tr className="bg-slate-50 font-semibold">
-                <td colSpan={6} className="px-3 py-2">
+                <td colSpan={12} className="px-3 py-2">
                   {suzulmus.length} öğrenci · {borcluSayisi} borçlu
                 </td>
                 <td className="px-3 py-2 text-right">

@@ -152,6 +152,19 @@ export type Sezon = {
   updated_at: string
 }
 
+/** Tarihli ücret tarifesi: öğün, ait olduğu günün tarifesinden fiyatlanır. */
+export type UcretGecmisi = {
+  id: string
+  okul_id: string
+  gecerli_baslangic: string
+  taban_gunluk_ucret: number
+  ucretli_ogun_ucreti: number
+  misafir_ogun_ucreti: number
+  aciklama: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type TaksitPlani = {
   id: string
   sezon_id: string
@@ -241,6 +254,8 @@ export type DevamSatiri = {
   geldigi_gunler: number[]
   /** O ay tahsilat alınan günler — çizelgede işaretlenir */
   odeme_gunleri: number[]
+  /** Gün numarası → o günün tahsilatı ve öncesi/sonrası bakiye */
+  odeme_detay: Record<string, { tutar: number; oncesi: number; sonrasi: number }>
   geldi_sayisi: number
   gelmedi_sayisi: number
 }

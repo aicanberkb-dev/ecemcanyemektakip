@@ -22,14 +22,17 @@ export type TahsilatSatiri = {
 
 export function TahsilatListesi({ kayitlar }: { kayitlar: TahsilatSatiri[] }) {
   const [arama, setArama] = useState('')
+  // Öneriden bir öğrenci seçilirse o kayda kilitlenilir: "Ayşe" araması
+  // Ayşe Urgancı'yı da getiriyordu, seçim yapıldığında bu olmamalı.
+  const [seciliId, setSeciliId] = useState<string | null>(null)
 
-  const suzulmus = useMemo(
-    () =>
-      arama.trim()
-        ? kayitlar.filter((k) => aramaEslesir(`${k.ad_soyad} ${k.ogrenci_no} ${k.sinif ?? ''}`, arama))
-        : kayitlar,
-    [kayitlar, arama],
-  )
+  const suzulmus = useMemo(() => {
+    if (seciliId) return kayitlar.filter((k) => k.student_id === seciliId)
+    if (!arama.trim()) return kayitlar
+    return kayitlar.filter((k) =>
+      aramaEslesir(`${k.ad_soyad} ${k.ogrenci_no} ${k.sinif ?? ''}`, arama),
+    )
+  }, [kayitlar, arama, seciliId])
 
   // Kutunun altında görünecek öneriler: eşleşen kayıtlardaki farklı öğrenciler.
   const oneriler = useMemo(() => {
@@ -39,9 +42,10 @@ export function TahsilatListesi({ kayitlar }: { kayitlar: TahsilatSatiri[] }) {
         gorulen.set(k.student_id, { ad: k.ad_soyad, no: k.ogrenci_no, sinif: k.sinif })
       }
     }
-    return [...gorulen.values()]
-      .sort((a, b) => a.ad.localeCompare(b.ad, 'tr'))
-      .map((o) => ({
+    return [...gorulen.entries()]
+      .sort((a, b) => a[1].ad.localeCompare(b[1].ad, 'tr'))
+      .map(([id, o]) => ({
+        id,
         deger: o.ad,
         etiket: o.ad,
         alt: [o.no, o.sinif].filter(Boolean).join(' · '),
@@ -72,10 +76,21 @@ export function TahsilatListesi({ kayitlar }: { kayitlar: TahsilatSatiri[] }) {
       <div className="kart p-4">
         <AramaKutusu
           deger={arama}
-          degistir={setArama}
+          degistir={(v) => {
+            setArama(v)
+            setSeciliId(null)
+          }}
+          oneriSec={(o) => {
+            setArama(o.deger)
+            setSeciliId(o.id ?? null)
+          }}
           etiket="Öğrenci ara"
           ipucu="Adın herhangi bir parçası yeter: öm · be · or"
-          sonuc={`${suzulmus.length} / ${kayitlar.length} işlem`}
+          sonuc={
+            seciliId
+              ? `yalnızca ${arama} · ${suzulmus.length} işlem`
+              : `${suzulmus.length} / ${kayitlar.length} işlem`
+          }
           oneriler={oneriler}
         />
       </div>
