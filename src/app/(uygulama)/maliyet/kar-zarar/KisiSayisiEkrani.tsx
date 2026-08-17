@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 
-import { AY_ADLARI, para } from '@/lib/format'
+import { AY_ADLARI, bugunISO, para } from '@/lib/format'
 
 import { gunlukHizmetKaydet, type MaliyetDurumu } from '../actions'
 
@@ -83,9 +83,15 @@ export function KisiSayisiEkrani({
     setDurum({})
   }
 
-  /** Ayın tamamına aynı sayıyı yazar; boş bırakılırsa sabit sayıya döner. */
+  /**
+   * Bugüne kadarki günlere aynı sayıyı yazar; boş bırakılırsa sabit sayıya
+   * döner. Geleceğe yazmıyor — olmamış günün cirosunu göstermek istemiyoruz.
+   */
   function hepsineUygula() {
-    setSatirlar((o) => o.map((s) => ({ ...s, deger: topluDeger.trim() })))
+    const bugun = bugunISO()
+    setSatirlar((o) =>
+      o.map((s) => (s.tarih <= bugun ? { ...s, deger: topluDeger.trim() } : s)),
+    )
     setDurum({})
   }
 
@@ -213,16 +219,23 @@ export function KisiSayisiEkrani({
   // ------------------------------------------------------------------
   // Dış hizmet yeri: sabit sayı + gün bazlı düzeltme
   //
-  // Hafta içi her gün hizmet günüdür; menü girilmemiş olması yalnızca o günün
-  // maliyetini bilinmez yapar, hizmeti ortadan kaldırmaz. Yemek verilmeyen
-  // güne 0 yazılır.
+  // Sabit sayı yalnızca bugüne kadarki hafta içi günlere uygulanır; henüz
+  // olmamış günü saymak ayın 17'sinde ay sonu cirosu göstermek olurdu. Menü
+  // girilmemiş olması hizmeti ortadan kaldırmaz, sadece o günün maliyetini
+  // bilinmez yapar. Yemek verilmeyen güne 0 yazılır.
   // ------------------------------------------------------------------
-  const etkinKisi = (deger: string) => (deger.trim() === '' ? varsayilanKisi : Number(deger) || 0)
+  const bugun = bugunISO()
 
-  const hizmetGunleri = satirlar.filter((s) => etkinKisi(s.deger) > 0)
-  const toplamKisi = satirlar.reduce((t, s) => t + etkinKisi(s.deger), 0)
+  /** Gelecek gün için elle sayı girilmedikçe kişi sayılmaz. */
+  const etkinKisi = (s: { tarih: string; deger: string }) => {
+    if (s.deger.trim() !== '') return Number(s.deger) || 0
+    return s.tarih > bugun ? 0 : varsayilanKisi
+  }
+
+  const hizmetGunleri = satirlar.filter((s) => etkinKisi(s) > 0)
+  const toplamKisi = satirlar.reduce((t, s) => t + etkinKisi(s), 0)
   const toplamMaliyet = satirlar.reduce(
-    (t, s) => t + etkinKisi(s.deger) * Number(maliyetHaritasi.get(s.tarih)?.maliyet ?? 0),
+    (t, s) => t + etkinKisi(s) * Number(maliyetHaritasi.get(s.tarih)?.maliyet ?? 0),
     0,
   )
   const menusuzGun = hizmetGunleri.filter((s) => !maliyetHaritasi.has(s.tarih)).length
@@ -235,9 +248,10 @@ export function KisiSayisiEkrani({
             {noktaAdi} — {AY_ADLARI[ay - 1]} {yil} kişi sayıları
           </h2>
           <p className="text-xs text-solgun">
-            Her hücreyi tek tek değiştirebilirsiniz; sabit sayıya dokunmanız gerekmez. Boş
-            bırakılan gün sabit sayıyı (<strong>{varsayilanKisi || 'girilmemiş'}</strong>)
-            kullanır, yemek verilmeyen güne <strong>0</strong> yazın.{' '}
+            Her hücreyi tek tek değiştirebilirsiniz; sabit sayıya dokunmanız gerekmez.{' '}
+            <strong>Bugüne kadarki</strong> boş günler sabit sayıyı (
+            <strong>{varsayilanKisi || 'girilmemiş'}</strong>) kullanır, ileri tarihler gün
+            geldikçe eklenir. Yemek verilmeyen güne <strong>0</strong> yazın.{' '}
             <Link href="/maliyet/yerler" className="text-vurgu hover:underline">
               Sabit sayıyı değiştir
             </Link>
@@ -316,13 +330,23 @@ export function KisiSayisiEkrani({
             {satirlar.map((s) => {
               const d = new Date(s.tarih)
               const gm = maliyetHaritasi.get(s.tarih)
-              const kisi = etkinKisi(s.deger)
+              const kisi = etkinKisi(s)
               const birim = Number(gm?.maliyet ?? 0)
+              const gelecek = s.tarih > bugun
+              const bugunMu = s.tarih === bugun
               return (
-                <tr key={s.tarih} className={kisi === 0 ? 'bg-slate-50' : undefined}>
+                <tr
+                  key={s.tarih}
+                  className={
+                    bugunMu ? 'bg-blue-50/50' : kisi === 0 ? 'bg-slate-50' : undefined
+                  }
+                >
                   <td className="whitespace-nowrap">
                     <span className="font-semibold tabular-nums">{d.getDate()}</span>
                     <span className="ml-1 text-xs text-solgun">{GUN_ADI[d.getDay()]}</span>
+                    {bugunMu && (
+                      <span className="rozet ml-2 bg-blue-100 text-blue-800">bugün</span>
+                    )}
                   </td>
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -330,15 +354,19 @@ export function KisiSayisiEkrani({
                         value={s.deger}
                         onChange={(e) => yaz(s.tarih, e.target.value.replace(/[^0-9]/g, ''))}
                         inputMode="numeric"
-                        placeholder={String(varsayilanKisi)}
-                        title="Bu güne özel sayı; boş bırakılırsa sabit sayı kullanılır"
+                        placeholder={gelecek ? '—' : String(varsayilanKisi)}
+                        title={
+                          gelecek
+                            ? 'İleri tarih: sayı biliniyorsa şimdiden yazabilirsiniz'
+                            : 'Bu güne özel sayı; boş bırakılırsa sabit sayı kullanılır'
+                        }
                         className="w-20 rounded border border-cizgi bg-white px-2 py-1 text-right
                                    text-sm font-semibold tabular-nums outline-none
                                    placeholder:font-normal placeholder:text-slate-400
                                    focus:border-vurgu focus:ring-2 focus:ring-blue-100"
                       />
                       <span className="w-14 text-left text-xs text-solgun">
-                        {s.deger === '' ? 'sabit' : 'elle'}
+                        {s.deger !== '' ? 'elle' : gelecek ? 'ileride' : 'sabit'}
                       </span>
                     </div>
                   </td>
@@ -349,7 +377,11 @@ export function KisiSayisiEkrani({
                     {kisi > 0 && gm ? para(kisi * birim) : '—'}
                   </td>
                   <td className="text-xs text-solgun">
-                    {gm?.ozet ?? (
+                    {gelecek && s.deger === '' ? (
+                      'henüz gelmedi'
+                    ) : gm?.ozet ? (
+                      gm.ozet
+                    ) : (
                       <span className="text-amber-700">menü girilmemiş — maliyet 0</span>
                     )}
                   </td>
