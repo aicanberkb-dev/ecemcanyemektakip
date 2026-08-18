@@ -16,7 +16,7 @@ export const OKUL_CEREZI = 'aktif_okul'
 export const GENEL = 'genel'
 
 /** Yalnızca genel modda açılan yollar. */
-export const GENEL_YOLLAR = ['/menu', '/maliyet']
+export const GENEL_YOLLAR = ['/menu', '/maliyet', '/finans']
 
 export function genelYolMu(yol: string): boolean {
   return GENEL_YOLLAR.some((p) => yol === p || yol.startsWith(`${p}/`))

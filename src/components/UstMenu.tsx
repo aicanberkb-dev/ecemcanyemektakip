@@ -22,6 +22,13 @@ const BAGLANTILAR = [
 const GENEL_BAGLANTILAR = [
   { yol: '/menu', ad: 'Yemek Listesi' },
   { yol: '/maliyet', ad: 'Maliyet' },
+  { yol: '/finans', ad: 'Finans' },
+]
+
+const FINANS_ALT = [
+  { yol: '/finans', ad: 'Senetler' },
+  { yol: '/finans/alacaklar', ad: 'Alacaklar' },
+  { yol: '/finans/maaslar', ad: 'Maaşlar' },
 ]
 
 const MALIYET_ALT = [
@@ -79,7 +86,9 @@ export function UstMenu({
       ? AYAR_ALT
       : yol.startsWith('/maliyet')
         ? MALIYET_ALT
-        : null
+        : yol.startsWith('/finans')
+          ? FINANS_ALT
+          : null
 
   return (
     <header className="yazdirma-gizle border-b border-cizgi bg-white">
@@ -125,7 +134,7 @@ export function UstMenu({
       {acikMenu && (
         <nav className="flex flex-col border-t border-cizgi px-4 py-2 md:hidden">
           {(genel
-            ? [...GENEL_BAGLANTILAR, ...MALIYET_ALT.slice(1)]
+            ? [...GENEL_BAGLANTILAR, ...MALIYET_ALT.slice(1), ...FINANS_ALT.slice(1)]
             : [...BAGLANTILAR, ...RAPOR_ALT.slice(1), ...AYAR_ALT.slice(1)]
           ).map((b) => (
             <Link
