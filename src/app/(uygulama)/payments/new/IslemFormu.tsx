@@ -1,12 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState, useState } from 'react'
+import { useActionState, useEffect, useMemo, useState } from 'react'
 
 import { OdemeYontemiSecici } from '@/components/OdemeYontemiSecici'
 import { OgrenciSecici, type SeciliOgrenci } from '@/components/OgrenciSecici'
-import { bugunISO, para } from '@/lib/format'
-import type { OdemeYontemi } from '@/lib/types'
+import { bugunISO, para, tarih as tarihBicim } from '@/lib/format'
+import { supabaseBrowser } from '@/lib/supabase/client'
+import type { OdemeYontemi, Transaction } from '@/lib/types'
 
 import { tahsilatEkle, type IslemDurumu } from '../../islem-actions'
 import { SonTahsilatlar } from './SonTahsilatlar'
@@ -22,6 +23,8 @@ export function IslemFormu({
   okulId: string
   baslangic: SeciliOgrenci | null
 }) {
+  const supabase = useMemo(() => supabaseBrowser(), [])
+
   const [ogrenci, setOgrenci] = useState<SeciliOgrenci | null>(baslangic)
   const [yontem, setYontem] = useState<OdemeYontemi | null>(null)
   // Mükerrer kontrolü için tarih ve tutar kontrollü tutulur
@@ -29,9 +32,69 @@ export function IslemFormu({
   const [tutar, setTutar] = useState('')
   const [durum, gonder, bekliyor] = useActionState(tahsilatEkle, {} as IslemDurumu)
 
+  // Geçmiş tahsilatlar burada tutuluyor: hem alttaki listeyi besliyor hem de
+  // kaydetmeden önce "aynı güne ödeme var mı" kontrolünü mümkün kılıyor.
+  const [gecmis, setGecmis] = useState<{ studentId: string | null; kayitlar: Transaction[] }>({
+    studentId: null,
+    kayitlar: [],
+  })
+
+  const studentId = ogrenci?.student_id ?? null
+
+  useEffect(() => {
+    if (!studentId) return
+
+    let iptal = false
+    supabase
+      .from('transactions')
+      .select('*')
+      .eq('student_id', studentId)
+      .eq('tip', 'tahsilat')
+      .order('tarih', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(20)
+      .then(({ data }) => {
+        if (!iptal) setGecmis({ studentId, kayitlar: (data ?? []) as Transaction[] })
+      })
+
+    return () => {
+      iptal = true
+    }
+  }, [studentId, supabase, durum.zaman])
+
+  // Kayıttan sonra bakiye sunucudan geldiği gibi yazılır; öğrenci seçili kalır.
+  const [islenenZaman, setIslenenZaman] = useState<number | undefined>(undefined)
+  if (durum.zaman && durum.zaman !== islenenZaman) {
+    setIslenenZaman(durum.zaman)
+    if (durum.yeniBakiye !== undefined && ogrenci) {
+      setOgrenci({ ...ogrenci, kalan: durum.yeniBakiye })
+    }
+    setTutar('')
+  }
+
+  const kayitlar = gecmis.studentId === studentId ? gecmis.kayitlar : []
+  const ayniGun = kayitlar.filter((k) => k.tarih === tarih)
+
+  /**
+   * Aynı güne zaten ödeme varsa onay ister.
+   *
+   * Aynı gün ikinci bir ödeme almak mümkün, o yüzden hata değil uyarı: en sık
+   * karşılaşılan durum tarihi değiştirmeyi unutmak.
+   */
+  function gondermedenOnce(e: React.FormEvent<HTMLFormElement>) {
+    if (ayniGun.length === 0) return
+    const toplam = ayniGun.reduce((t, k) => t + Number(k.tutar), 0)
+    const onay = confirm(
+      `${ogrenci?.ad_soyad ?? 'Bu öğrenci'} için ${tarihBicim(tarih)} tarihine zaten ` +
+        `${ayniGun.length} ödeme girilmiş (toplam ${para(toplam)}).\n\n` +
+        'Tarihi değiştirmeyi unutmuş olabilirsiniz.\nYine de kaydedilsin mi?',
+    )
+    if (!onay) e.preventDefault()
+  }
+
   return (
     <div className="kart space-y-5 p-6">
-      <form action={gonder} className="space-y-4">
+      <form action={gonder} onSubmit={gondermedenOnce} className="space-y-4">
         <div>
           <label className="etiket">Öğrenci *</label>
           <OgrenciSecici okulId={okulId} baslangic={baslangic} onSecim={setOgrenci} />
@@ -49,9 +112,14 @@ export function IslemFormu({
               name="tarih"
               value={tarih}
               onChange={(e) => setTarih(e.target.value)}
-              className="girdi"
+              className={`girdi ${ayniGun.length > 0 ? 'border-amber-400' : ''}`}
             />
             {durum.alanlar?.tarih && <p className="hata">{durum.alanlar.tarih}</p>}
+            {ayniGun.length > 0 && (
+              <p className="mt-1 text-xs font-medium text-amber-700">
+                Bu tarihe {ayniGun.length} ödeme girilmiş
+              </p>
+            )}
           </div>
 
           <div>
@@ -118,10 +186,11 @@ export function IslemFormu({
       </form>
 
       <SonTahsilatlar
-        studentId={ogrenci?.student_id ?? null}
+        studentId={studentId}
         tarih={tarih}
         tutar={tutar}
-        yenile={durum.zaman}
+        kayitlar={kayitlar}
+        yukleniyor={!!studentId && gecmis.studentId !== studentId}
       />
 
       <p className="border-t border-cizgi pt-4 text-sm text-solgun">

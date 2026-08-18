@@ -150,14 +150,18 @@ export function PorsiyonEkrani({
     return tarih > bugun ? 0 : varsayilanKisi
   }
 
-  /** Bir kalemin o günkü porsiyonu: girilen → yerin sabiti → yiyen kişi */
+  /**
+   * Bir kalemin o günkü porsiyonu.
+   *
+   * Kendi okullarımızda tahmin yürütmüyoruz: ne yazıldıysa o. Gerçek sayıyı
+   * yemekhane biliyor ve giriyor; sistemin sayı önermesi hem yanıltıcı hem de
+   * girilmiş veriyle karıştırılmaya açıktı. Dış hizmet yerlerinde ise sabit
+   * porsiyon var, çünkü oralara her gün aynı miktar gidiyor.
+   */
   function etkinPorsiyon(tarih: string, yemek: string): number {
     const d = porsiyon[`${tarih}|${yemek}`]
     if (d !== undefined && d.trim() !== '') return Number(d) || 0
-    if (tarih > bugun) return 0
-    // Okulda o gün hiç yemek kaydı yoksa hizmet verilmemiştir; menü girilmiş
-    // olması yemeğin çıktığı anlamına gelmiyor. Elle yazılırsa geçerli olur.
-    if (okulaBagliMi && !okulHaritasi.has(tarih)) return 0
+    if (okulaBagliMi || tarih > bugun) return 0
     return varsayilanCikan > 0 ? varsayilanCikan : etkinYiyen(tarih)
   }
 
@@ -181,6 +185,30 @@ export function PorsiyonEkrani({
       const k = gun[s]
       return k ? t + etkinPorsiyon(tarih, k.yemek) * k.birim : t
     }, 0)
+  }
+
+  /**
+   * O günün fire tutarı: her kalemde gönderilenin yiyenden fazlası.
+   *
+   * Kalem kalem hesaplanıyor çünkü porsiyonlar bilerek farklı: ıspanak 50
+   * gönderilip 80 kişi geldiyse orada fire yok, tatlı 100 gönderilip 80 kişi
+   * geldiyse 20 porsiyon çöpe gitmiş demektir.
+   */
+  function gunFiresi(tarih: string): { porsiyon: number; tutar: number } {
+    const gun = menuHaritasi.get(tarih)
+    if (!gun) return { porsiyon: 0, tutar: 0 }
+    const yiyen = etkinYiyen(tarih)
+    return SLOTLAR.reduce(
+      (t, s) => {
+        const k = gun[s]
+        if (!k) return t
+        const artan = etkinPorsiyon(tarih, k.yemek) - yiyen
+        return artan > 0
+          ? { porsiyon: t.porsiyon + artan, tutar: t.tutar + artan * k.birim }
+          : t
+      },
+      { porsiyon: 0, tutar: 0 },
+    )
   }
 
   function gunPorsiyonu(tarih: string): number {
@@ -246,22 +274,23 @@ export function PorsiyonEkrani({
       yiyen: t.yiyen + etkinYiyen(tarih),
       maliyet: t.maliyet + gunMaliyeti(tarih),
       ciro: t.ciro + gunCirosu(tarih),
+      fire: t.fire + gunFiresi(tarih).tutar,
+      firePorsiyon: t.firePorsiyon + gunFiresi(tarih).porsiyon,
     }),
-    { porsiyon: 0, yiyen: 0, maliyet: 0, ciro: 0 },
+    { porsiyon: 0, yiyen: 0, maliyet: 0, ciro: 0, fire: 0, firePorsiyon: 0 },
   )
 
   const menusuzGun = gunler.filter(
     (t) => !menuHaritasi.has(t) && gunPorsiyonu(t) + etkinYiyen(t) > 0,
   ).length
+  /** Menüsü olan ama porsiyonu hiç girilmemiş günler — maliyeti 0 çıkar. */
   const cikansizGun = gunler.filter(
     (t) =>
       t <= bugun &&
-      varsayilanCikan === 0 &&
       menuHaritasi.has(t) &&
-      SLOTLAR.every((s) => {
-        const k = menuHaritasi.get(t)![s]
-        return !k || porsiyon[`${t}|${k.yemek}`] === undefined
-      }),
+      gunPorsiyonu(t) === 0 &&
+      // Okullarda o gün yemek yiyen yoksa zaten hizmet verilmemiştir
+      (!okulaBagliMi || okulHaritasi.has(t)),
   ).length
 
   return (
@@ -272,13 +301,22 @@ export function PorsiyonEkrani({
             {noktaAdi} — {AY_ADLARI[ay - 1]} {yil} çıkan porsiyonlar
           </h2>
           <p className="max-w-3xl text-xs text-solgun">
-            Her yemeğin kaç kişilik çıktığını ayrı yazın — ıspanak 50, tatlı 100 olabilir.
-            Boş bıraktığınız kalem yerin sabit porsiyonunu (
-            <strong>{varsayilanCikan || 'girilmemiş'}</strong>) kullanır, ileri tarihler gün
-            geldikçe eklenir.{' '}
-            <Link href="/maliyet/yerler" className="text-vurgu hover:underline">
-              Sabit değerleri değiştir
-            </Link>
+            Her yemeğin kaç kişilik çıktığını ayrı yazın — ıspanak 50, tatlı 100 olabilir.{' '}
+            {okulaBagliMi ? (
+              <>
+                Burada tahmin yürütülmez: <strong>yalnızca yazdığınız</strong> porsiyonlar
+                maliyete girer, boş kalem 0 sayılır.
+              </>
+            ) : (
+              <>
+                Boş bıraktığınız kalem yerin sabit porsiyonunu (
+                <strong>{varsayilanCikan || 'girilmemiş'}</strong>) kullanır, ileri tarihler
+                gün geldikçe eklenir.{' '}
+                <Link href="/maliyet/yerler" className="text-vurgu hover:underline">
+                  Sabit değerleri değiştir
+                </Link>
+              </>
+            )}
           </p>
         </div>
         <div className="ml-auto flex items-end gap-2">
@@ -358,6 +396,7 @@ export function PorsiyonEkrani({
                 </th>
               ))}
               <th className="w-28 text-right">Yiyen</th>
+              <th className="text-right">Fire</th>
               <th className="text-right">Ciro</th>
               <th className="text-right">Maliyet</th>
               <th className="text-right">Kâr / Zarar</th>
@@ -370,6 +409,7 @@ export function PorsiyonEkrani({
               const gelecek = tarih > bugun
               const bugunMu = tarih === bugun
               const okulGunu = okulHaritasi.get(tarih)
+              const yiyenSayisi = etkinYiyen(tarih)
               return (
                 <tr key={tarih} className={bugunMu ? 'bg-blue-50/50' : undefined}>
                   <td className="whitespace-nowrap">
@@ -404,7 +444,9 @@ export function PorsiyonEkrani({
                               setDurum({})
                             }}
                             inputMode="numeric"
-                            placeholder={gelecek ? '—' : String(varsayilanCikan || '?')}
+                            placeholder={
+                              gelecek || okulaBagliMi ? '—' : String(varsayilanCikan || '?')
+                            }
                             title={`${k.yemek} — kaç kişilik çıktı`}
                             className="w-16 rounded border border-cizgi bg-white px-1.5 py-0.5
                                        text-right text-sm font-semibold tabular-nums outline-none
@@ -415,6 +457,16 @@ export function PorsiyonEkrani({
                             {k.birim > 0 ? para(p * k.birim) : '0 ₺'}
                           </span>
                         </div>
+                        {/* Bu kalemde gönderilenin yiyenden fazlası çöpe gitti */}
+                        {p - yiyenSayisi > 0 && (
+                          <div
+                            className="text-[10px] font-medium text-orange-700"
+                            title={`${k.yemek}: ${p} çıktı, ${yiyenSayisi} kişi yedi`}
+                          >
+                            fire {p - yiyenSayisi}
+                            {k.birim > 0 && ` · ${para((p - yiyenSayisi) * k.birim)}`}
+                          </div>
+                        )}
                       </td>
                     )
                   })}
@@ -454,10 +506,30 @@ export function PorsiyonEkrani({
                   {(() => {
                     const ciro = gunCirosu(tarih)
                     const maliyet = gunMaliyeti(tarih)
+                    const fire = gunFiresi(tarih)
                     const kar = ciro - maliyet
                     const veriVar = ciro > 0 || maliyet > 0
                     return (
                       <>
+                        <td
+                          className={`text-right tabular-nums ${
+                            fire.tutar > 0 ? 'text-orange-700' : 'text-solgun'
+                          }`}
+                        >
+                          {fire.porsiyon > 0 ? (
+                            <>
+                              {para(fire.tutar)}{' '}
+                              <span
+                                className="font-normal"
+                                title={`${fire.porsiyon} öğün çöpe gitti`}
+                              >
+                                ({fire.porsiyon})
+                              </span>
+                            </>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
                         <td className="text-right tabular-nums">
                           {ciro > 0 ? para(ciro) : <span className="text-solgun">—</span>}
                         </td>
@@ -487,6 +559,16 @@ export function PorsiyonEkrani({
                   ` · kişi başı gerçek maliyet ${para(toplam.maliyet / toplam.yiyen)}`}
               </td>
               <td className="text-right font-semibold tabular-nums">{toplam.yiyen}</td>
+              <td
+                className={`text-right font-semibold tabular-nums ${
+                  toplam.fire > 0 ? 'text-orange-700' : 'text-solgun'
+                }`}
+              >
+                {para(toplam.fire)}
+                {toplam.firePorsiyon > 0 && (
+                  <span className="font-normal"> ({toplam.firePorsiyon})</span>
+                )}
+              </td>
               <td className="text-right font-semibold tabular-nums">{para(toplam.ciro)}</td>
               <td className="text-right font-semibold tabular-nums">{para(toplam.maliyet)}</td>
               <td

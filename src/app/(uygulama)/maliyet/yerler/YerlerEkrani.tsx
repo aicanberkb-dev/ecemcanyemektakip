@@ -181,13 +181,18 @@ function Nokta({
               ))}
             </select>
           </div>
+          {/* Okullarda porsiyon tahmin edilmiyor; gerçek sayı her gün
+              Kâr/Zarar ekranından yemek bazında giriliyor. */}
           <div>
-            <label className="etiket text-xs">Çıkan porsiyon</label>
+            <label className="etiket text-xs">
+              {okulaBagli ? 'Çıkan porsiyon (kullanılmıyor)' : 'Çıkan porsiyon'}
+            </label>
             <input
               name="varsayilan_cikan_porsiyon"
               inputMode="numeric"
               defaultValue={String(nokta.varsayilan_cikan_porsiyon)}
-              className="girdi !py-1.5 w-28"
+              disabled={okulaBagli}
+              className="girdi !py-1.5 w-28 disabled:bg-slate-100 disabled:text-solgun"
             />
           </div>
           <div>
@@ -239,8 +244,12 @@ function Nokta({
           <div className="ml-auto text-right">
             <p className="text-xs text-solgun">Günde çıkan porsiyon</p>
             <p className="text-lg font-bold tabular-nums">
-              {nokta.varsayilan_cikan_porsiyon || (
-                <span className="text-sm font-normal text-amber-700">girilmemiş</span>
+              {okulaBagli ? (
+                <span className="text-sm font-normal text-solgun">gün gün girilir</span>
+              ) : (
+                nokta.varsayilan_cikan_porsiyon || (
+                  <span className="text-sm font-normal text-amber-700">girilmemiş</span>
+                )
               )}
             </p>
           </div>
@@ -297,7 +306,11 @@ function Nokta({
             </Link>
             &apos;nden okunur, <strong>yiyen</strong> kişi sayısı da gün sonu kayıtlarından
             gelir. Burada elle fiyat girilmez — iki yerde tutulup birbirinden ayrı düşmesin.
-            Maliyet ise yukarıdaki <strong>çıkan porsiyondan</strong> hesaplanır.
+            Çıkan porsiyon da tahmin edilmez:{' '}
+            <Link href="/maliyet/kar-zarar" className="text-vurgu hover:underline">
+              Kâr/Zarar
+            </Link>{' '}
+            ekranında gün gün, yemek yemek girilir.
           </p>
         ) : (
           <>

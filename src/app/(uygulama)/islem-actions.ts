@@ -13,6 +13,13 @@ export type IslemDurumu = {
   alanlar?: Record<string, string>
   /** Her başarılı kayıtta değişir; geçmiş listesinin tazelenmesini tetikler */
   zaman?: number
+  /**
+   * Kayıt sonrası öğrencinin yeni bakiyesi.
+   *
+   * Ekrandaki bakiye satırı bununla güncelleniyor. Sayfayı tazelemek de
+   * çalışırdı ama seçili öğrenci kayboluyor ve baştan aranması gerekiyordu.
+   */
+  yeniBakiye?: number
 }
 
 function alanHatalari(hata: z.ZodError): Record<string, string> {
@@ -79,11 +86,23 @@ export async function tahsilatEkle(
 
   if (error) return { hata: error.message }
 
+  // Kayıt sonrası bakiyeyi hemen okuyup geri veriyoruz: ekrandaki "güncel
+  // bakiye" satırı eski değeri göstermesin.
+  const { data: bakiye } = await supabase
+    .from('student_balances')
+    .select('kalan')
+    .eq('student_id', sonuc.data.student_id)
+    .maybeSingle()
+
   revalidatePath('/students')
   revalidatePath(`/students/${sonuc.data.student_id}`)
   revalidatePath('/reports/tahsilat')
   revalidatePath('/dashboard')
-  return { basari: 'Tahsilat kaydedildi.', zaman: Date.now() }
+  return {
+    basari: 'Tahsilat kaydedildi.',
+    zaman: Date.now(),
+    yeniBakiye: bakiye ? Number(bakiye.kalan) : undefined,
+  }
 }
 
 /**

@@ -1,63 +1,34 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
 
 import { para, tarih as tarihBicim } from '@/lib/format'
-import { supabaseBrowser } from '@/lib/supabase/client'
 import { ODEME_YONTEMI_ADLARI, type Transaction } from '@/lib/types'
 
 /**
  * Seçili öğrencinin geçmiş tahsilatları. Girilmekte olan tarih ve tutarla
  * eşleşen kayıt varsa mükerrer uyarısı verir — aynı ödemenin iki kez
  * girilmesi en sık yapılan hata.
+ *
+ * Kayıtları formdan alıyor: aynı veriyi kaydetmeden önceki "aynı güne ödeme
+ * var mı" onayı da kullanıyor, iki kez çekmenin anlamı yok.
  */
 export function SonTahsilatlar({
   studentId,
   tarih,
   tutar,
-  yenile,
+  kayitlar,
+  yukleniyor,
 }: {
   studentId: string | null
   tarih: string
   tutar: string
-  /** Her başarılı kayıtta değişir, liste tazelenir */
-  yenile?: number
+  kayitlar: Transaction[]
+  yukleniyor: boolean
 }) {
-  const supabase = useMemo(() => supabaseBrowser(), [])
-  // Veriyi hangi öğrenciye ait olduğuyla birlikte tutuyoruz; böylece öğrenci
-  // değişince eski liste görünmez ve effect içinde setState gerekmez.
-  const [veri, setVeri] = useState<{ studentId: string | null; kayitlar: Transaction[] }>({
-    studentId: null,
-    kayitlar: [],
-  })
-
-  useEffect(() => {
-    if (!studentId) return
-
-    let iptal = false
-    supabase
-      .from('transactions')
-      .select('*')
-      .eq('student_id', studentId)
-      .eq('tip', 'tahsilat')
-      .order('tarih', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(20)
-      .then(({ data }) => {
-        if (!iptal) setVeri({ studentId, kayitlar: (data ?? []) as Transaction[] })
-      })
-
-    return () => {
-      iptal = true
-    }
-  }, [studentId, supabase, yenile])
-
   if (!studentId) return null
 
-  const hazir = veri.studentId === studentId
-  const yukleniyor = !hazir
-  const gosterilen = hazir ? veri.kayitlar : []
+  const gosterilen = kayitlar
 
   // Türkçe ondalık (virgül) da kabul edilir
   const girilenTutar = Number(tutar.trim().replace(/\./g, '').replace(',', '.'))

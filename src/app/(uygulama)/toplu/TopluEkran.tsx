@@ -240,15 +240,7 @@ export function TopluEkran({
     <div className="space-y-4">
       {/* Tarih + filtreler */}
       <div className="kart flex flex-wrap items-end gap-3 p-4">
-        <form className="flex items-end gap-2">
-          <div>
-            <label className="etiket" htmlFor="gun">
-              Tarih
-            </label>
-            <input id="gun" type="date" name="gun" defaultValue={gun} className="girdi" />
-          </div>
-          <button className="btn-ikincil">Değiştir</button>
-        </form>
+        <TarihSecici gun={gun} />
 
         <div className="min-w-48 flex-1">
           <label className="etiket" htmlFor="ara">
@@ -507,6 +499,91 @@ export function TopluEkran({
           )}
         </table>
       </div>
+    </div>
+  )
+}
+
+/** Bir günü ISO biçimine çevirir. */
+function isoYap(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate(),
+  ).padStart(2, '0')}`
+}
+
+function haftaSonuMu(iso: string): boolean {
+  const h = new Date(`${iso}T00:00:00`).getDay()
+  return h === 0 || h === 6
+}
+
+/** Verilen yönde bir sonraki iş gününü bulur. */
+function isGunuKaydir(iso: string, yon: 1 | -1): string {
+  const d = new Date(`${iso}T00:00:00`)
+  do {
+    d.setDate(d.getDate() + yon)
+  } while (d.getDay() === 0 || d.getDay() === 6)
+  return isoYap(d)
+}
+
+/**
+ * Toplu girişin tarih seçicisi — yalnızca iş günleri.
+ *
+ * Hafta sonu okul yok, o günlere yemek kaydı girilmemeli. Tarayıcının tarih
+ * kutusunda tek tek günleri kapatmak mümkün olmadığı için hafta sonu seçimi
+ * engelleniyor; ok tuşları da hafta sonlarını atlayarak ilerliyor.
+ */
+function TarihSecici({ gun }: { gun: string }) {
+  const router = useRouter()
+  const [secim, setSecim] = useState(gun)
+  const gecersiz = haftaSonuMu(secim)
+
+  function git(hedef: string) {
+    setSecim(hedef)
+    router.push(`/toplu?gun=${hedef}`)
+  }
+
+  return (
+    <div>
+      <label className="etiket" htmlFor="gun">
+        Tarih <span className="font-normal text-solgun">(hafta içi)</span>
+      </label>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => git(isGunuKaydir(gun, -1))}
+          className="btn-ikincil !px-2.5"
+          aria-label="Önceki iş günü"
+        >
+          ‹
+        </button>
+        <input
+          id="gun"
+          type="date"
+          value={secim}
+          onChange={(e) => setSecim(e.target.value)}
+          className={`girdi ${gecersiz ? 'border-red-400' : ''}`}
+        />
+        <button
+          type="button"
+          onClick={() => git(isGunuKaydir(gun, 1))}
+          className="btn-ikincil !px-2.5"
+          aria-label="Sonraki iş günü"
+        >
+          ›
+        </button>
+        <button
+          type="button"
+          disabled={gecersiz || secim === gun}
+          onClick={() => git(secim)}
+          className="btn-ikincil disabled:opacity-40"
+        >
+          Değiştir
+        </button>
+      </div>
+      {gecersiz && (
+        <p className="mt-1 text-xs font-medium text-red-600">
+          Hafta sonu okul yok — bir iş günü seçin.
+        </p>
+      )}
     </div>
   )
 }

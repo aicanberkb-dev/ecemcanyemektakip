@@ -7,13 +7,29 @@ import { TopluEkran, type TopluOgrenci } from './TopluEkran'
 
 export const metadata = { title: 'Toplu Yemek Yedir — Yemek Takip' }
 
+/** Hafta sonuysa bir önceki cumaya çeker; iş gününü olduğu gibi bırakır. */
+function isGunuYap(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  const h = d.getDay()
+  if (h === 6) d.setDate(d.getDate() - 1) // Cumartesi → Cuma
+  else if (h === 0) d.setDate(d.getDate() - 2) // Pazar → Cuma
+  else return iso
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate(),
+  ).padStart(2, '0')}`
+}
+
 export default async function TopluPage({
   searchParams,
 }: {
   searchParams: Promise<{ gun?: string }>
 }) {
   const { gun: gunQ } = await searchParams
-  const gun = gunQ || bugunISO()
+  // Hafta sonu okul yok: hafta sonuna denk gelen bir gün istenirse (bugün
+  // cumartesiyse ya da adres çubuğuna elle yazıldıysa) en yakın önceki iş
+  // gününe düşülür.
+  const gun = isGunuYap(gunQ || bugunISO())
 
   const okul = await aktifOkul()
   if (!okul) return null
