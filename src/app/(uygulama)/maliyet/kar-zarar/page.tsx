@@ -10,6 +10,7 @@ import {
   type GunlukCikan,
   type GunlukKisi,
   type OkulGunu,
+  type SatisFiyati,
 } from './PorsiyonEkrani'
 
 export const metadata = { title: 'Kâr / Zarar — Yemek Takip' }
@@ -73,8 +74,13 @@ export default async function KarZararPage({
   const secili = noktalar.find((n) => n.id === q.nokta) ?? noktalar[0] ?? null
 
   // Seçili yerin o ayki verileri: okula bağlıysa yiyen gün sonundan gelir
-  const [{ data: kisiVeri }, { data: kalemVeri }, { data: okulVeri }, { data: cikanVeri }] =
-    await Promise.all([
+  const [
+    { data: kisiVeri },
+    { data: kalemVeri },
+    { data: okulVeri },
+    { data: cikanVeri },
+    { data: fiyatVeri },
+  ] = await Promise.all([
       secili
         ? supabase
             .from('gunluk_hizmet')
@@ -101,12 +107,21 @@ export default async function KarZararPage({
             .gte('tarih', bas)
             .lte('tarih', bit)
         : Promise.resolve({ data: null }),
+      // Dış hizmet yerlerinin günlük cirosu bu tarihli fiyatlardan çıkar
+      secili && !secili.okul_id
+        ? supabase
+            .from('hizmet_fiyatlari')
+            .select('gecerli_baslangic, kisi_basi_fiyat')
+            .eq('hizmet_noktasi_id', secili.id)
+            .order('gecerli_baslangic', { ascending: false })
+        : Promise.resolve({ data: null }),
     ])
 
   const kisiler = (kisiVeri ?? []) as GunlukKisi[]
   const kalemler = (kalemVeri ?? []) as GunKalemleri[]
   const okulGunleri = (okulVeri ?? []) as OkulGunu[]
   const cikanlar = (cikanVeri ?? []) as GunlukCikan[]
+  const fiyatlar = (fiyatVeri ?? []) as SatisFiyati[]
 
   const toplam = rapor.reduce(
     (t, r) => ({
@@ -319,6 +334,7 @@ export default async function KarZararPage({
               kalemler={kalemler}
               cikanlar={cikanlar}
               okulGunleri={okulGunleri}
+              fiyatlar={fiyatlar}
             />
           </div>
         )

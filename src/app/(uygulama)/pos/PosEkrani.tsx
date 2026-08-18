@@ -202,16 +202,26 @@ export function PosEkrani({
     ozetYenile()
   }
 
-  async function serbestGeriAl(tip: SerbestOgunTipi, adet: number) {
+  async function serbestGeriAl(tip: SerbestOgunTipi, adet: number, birim?: number) {
     if (kaydediliyor) return
     const ad = tip === 'ucretli' ? 'ücretli' : 'misafir'
-    if (!confirm(`${adet} adet ${ad} öğün kaydı silinsin mi?`)) return
+    const fiyatli = Number.isFinite(birim)
+    if (
+      !confirm(
+        `${adet} adet ${ad} öğün kaydı silinsin mi?` +
+          (fiyatli ? `\nBirim ${para(birim!)} — toplam ${para(adet * birim!)} iade edilecek.` : ''),
+      )
+    )
+      return
 
     setKaydediliyor(true)
+    // Tutar verilirse yalnızca o fiyattan girilmiş kayıtlar geri alınır;
+    // yetmezse sunucu hata verir, sessizce başka tutar silinmez.
     const { data, error } = await supabase.rpc('serbest_ogun_geri_al', {
       p_okul_id: okulId,
       p_tip: tip,
       p_adet: adet,
+      p_birim_tutar: fiyatli ? birim : null,
     })
 
     setKaydediliyor(false)
@@ -219,11 +229,15 @@ export function PosEkrani({
       setMesaj({ tip: 'hata', metin: error.message })
       return
     }
-    const sonuc = (data as { silinen: number; gun_toplami: number }[] | null)?.[0]
+    const sonuc = (data as { silinen: number; gun_toplami: number; iade_tutari: number }[] | null)?.[0]
     setMesaj({
       tip: 'ok',
-      metin: `${tip === 'ucretli' ? 'Ücretli' : 'Misafir'}: ${sonuc?.silinen ?? adet} kayıt geri alındı — bugün toplam ${sonuc?.gun_toplami ?? '?'}.`,
+      metin:
+        `${tip === 'ucretli' ? 'Ücretli' : 'Misafir'}: ${sonuc?.silinen ?? adet} kayıt geri alındı` +
+        `${Number(sonuc?.iade_tutari ?? 0) > 0 ? ` (${para(sonuc!.iade_tutari)} iade)` : ''}` +
+        ` — bugün toplam ${sonuc?.gun_toplami ?? '?'}.`,
     })
+    setSifirlama((n) => n + 1)
     vazgec()
     ozetYenile()
   }
@@ -384,18 +398,24 @@ export function PosEkrani({
               {!secili && <span className="mt-0.5 block text-xs">önce öğrenci seçin</span>}
             </button>
 
+            {/* Fiyat kutusu burada da var: taban dışı bir tutardan tahsilat
+                yapıldıysa iadesi de o tutardan olmalı. key ile her işlemden
+                sonra tabana döner. */}
             <AdetliButon
+              key={`ucretli-geri-${sifirlama}`}
               renk="bg-white hover:bg-red-100"
               metinRengi="text-red-700"
               kenarlik="border border-red-300"
               etkin={!kaydediliyor}
               kucuk
-              onGonder={(adet) => serbestGeriAl('ucretli', adet)}
+              varsayilanFiyat={ucretliVarsayilan}
+              onGonder={(adet, fiyat) => serbestGeriAl('ucretli', adet, fiyat)}
             >
               Ücretli Geri Al
             </AdetliButon>
 
             <AdetliButon
+              key={`misafir-geri-${sifirlama}`}
               renk="bg-white hover:bg-red-100"
               metinRengi="text-red-700"
               kenarlik="border border-red-300"

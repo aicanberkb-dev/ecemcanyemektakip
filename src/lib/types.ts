@@ -106,8 +106,6 @@ export type StudentBalance = {
 export type AppSettings = {
   id: string
   taban_gunluk_ucret: number
-  ucretli_ogun_ucreti: number
-  misafir_ogun_ucreti: number
   created_at: string
   updated_at: string
 }
@@ -152,14 +150,17 @@ export type Sezon = {
   updated_at: string
 }
 
-/** Tarihli ücret tarifesi: öğün, ait olduğu günün tarifesinden fiyatlanır. */
+/**
+ * Tarihli ücret tarifesi: öğün, ait olduğu günün tarifesinden fiyatlanır.
+ *
+ * Tek kalem yeter — ücretli öğün taban günlük ücrete tabi, misafirden ücret
+ * alınmıyor.
+ */
 export type UcretGecmisi = {
   id: string
   okul_id: string
   gecerli_baslangic: string
   taban_gunluk_ucret: number
-  ucretli_ogun_ucreti: number
-  misafir_ogun_ucreti: number
   aciklama: string | null
   created_at: string
   updated_at: string

@@ -157,6 +157,52 @@ export function TopluEkran({
     router.refresh()
   }
 
+  /**
+   * Ücretli/misafir öğün geri alma.
+   *
+   * Tutar verilirse yalnızca o fiyattan girilmiş kayıtlar silinir; o gün
+   * yeterli kayıt yoksa sunucu hata verir. Sessizce başka tutarlı bir kaydı
+   * silmek kasayı bozardı.
+   */
+  async function serbestGeriAl(tip: 'ucretli' | 'misafir', adet: number, fiyat?: number) {
+    if (kaydediliyor) return
+    const ad = tip === 'ucretli' ? 'ücretli' : 'misafir'
+    const fiyatli = Number.isFinite(fiyat)
+    if (
+      !confirm(
+        `${tarihBicim(gun)} tarihinden ${adet} adet ${ad} öğün kaydı SİLİNECEK.` +
+          (fiyatli ? `\nBirim ${para(fiyat!)} — toplam ${para(adet * fiyat!)} iade edilecek.` : '') +
+          '\nOnaylıyor musunuz?',
+      )
+    )
+      return
+
+    setKaydediliyor(true)
+    const { data, error } = await supabase.rpc('serbest_ogun_geri_al', {
+      p_okul_id: okulId,
+      p_tip: tip,
+      p_adet: adet,
+      p_tarih: gun,
+      p_birim_tutar: fiyatli ? fiyat : null,
+    })
+
+    setKaydediliyor(false)
+    if (error) {
+      setMesaj({ tip: 'hata', metin: error.message })
+      return
+    }
+    const s = (data as { silinen: number; gun_toplami: number; iade_tutari: number }[] | null)?.[0]
+    setMesaj({
+      tip: 'ok',
+      metin:
+        `${tip === 'ucretli' ? 'Ücretli' : 'Misafir'}: ${s?.silinen ?? adet} kayıt geri alındı` +
+        `${Number(s?.iade_tutari ?? 0) > 0 ? ` (${para(s!.iade_tutari)} iade)` : ''}` +
+        ` — o gün toplam ${s?.gun_toplami ?? '?'}.`,
+    })
+    setSifirlama((n) => n + 1)
+    router.refresh()
+  }
+
   async function geriAl() {
     if (secili.size === 0 || kaydediliyor) return
     if (
@@ -305,31 +351,68 @@ export function TopluEkran({
       {/* Serbest öğünler — öğrenciye bağlı değil, seçimden bağımsız çalışır.
           Bilgisayarın hiç açılamadığı bir günün ücretli/misafir kayıtları da
           buradan geçmişe dönük girilebilsin diye ekranda. */}
-      <div className="kart space-y-3 p-4">
+      {/* Butonlar ekranın modunu izler: yemek yedirme modundaysak ekler,
+          geri alma modundaysak geri alır. İki ayrı yerde durmaları, hangi
+          moddayken hangisine basıldığını karıştırmaya açıktı. */}
+      <div
+        className={`kart space-y-3 p-4 ${
+          mod === 'geri' ? 'border-red-200 bg-red-50/40' : ''
+        }`}
+      >
         <div>
-          <h2 className="font-semibold">Ücretli ve Misafir Öğün — {tarihBicim(gun)}</h2>
+          <h2 className="font-semibold">
+            Ücretli ve Misafir Öğün — {tarihBicim(gun)}
+            <span
+              className={`rozet ml-2 ${
+                mod === 'ekle' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
+              }`}
+            >
+              {mod === 'ekle' ? 'ekleme' : 'geri alma'}
+            </span>
+          </h2>
           <p className="text-sm text-solgun">
             Öğrenciye bağlı olmayan öğünler. Seçtiğiniz tarihe işlenir; fiyat o günün
             tarifesinden gelir, gerekirse değiştirebilirsiniz.
+            {mod === 'geri' && (
+              <>
+                {' '}
+                Geri alırken girdiğiniz tutar, <strong>o gün o fiyattan</strong> girilmiş
+                kayıtlarla eşleşmeli — yoksa sistem uyarır.
+              </>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-4">
-          {/* key: kayıttan sonra adet ve fiyat varsayılana döner */}
+          {/* key: işlemden sonra adet ve fiyat varsayılana döner */}
           <SerbestGiris
-            key={`ucretli-${sifirlama}`}
-            etiket="Ücretli"
-            renk="bg-yellow-400 hover:bg-yellow-500 text-slate-900"
+            key={`ucretli-${mod}-${sifirlama}`}
+            etiket={mod === 'ekle' ? 'Ücretli Ekle' : 'Ücretli Geri Al'}
+            renk={
+              mod === 'ekle'
+                ? 'bg-yellow-400 hover:bg-yellow-500 text-slate-900'
+                : 'bg-white hover:bg-red-100 text-red-700 border border-red-300'
+            }
             varsayilanFiyat={ucretliVarsayilan}
             bekliyor={kaydediliyor}
-            onGonder={(adet, fiyat) => serbestKaydet('ucretli', adet, fiyat)}
+            onGonder={(adet, fiyat) =>
+              mod === 'ekle'
+                ? serbestKaydet('ucretli', adet, fiyat)
+                : serbestGeriAl('ucretli', adet, fiyat)
+            }
           />
           {/* Misafir personel: ücret alınmıyor, sadece sayaç */}
           <SerbestGiris
-            key={`misafir-${sifirlama}`}
-            etiket="Misafir"
-            renk="bg-purple-600 hover:bg-purple-700 text-white"
+            key={`misafir-${mod}-${sifirlama}`}
+            etiket={mod === 'ekle' ? 'Misafir Ekle' : 'Misafir Geri Al'}
+            renk={
+              mod === 'ekle'
+                ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                : 'bg-white hover:bg-red-100 text-red-700 border border-red-300'
+            }
             bekliyor={kaydediliyor}
-            onGonder={(adet) => serbestKaydet('misafir', adet)}
+            onGonder={(adet) =>
+              mod === 'ekle' ? serbestKaydet('misafir', adet) : serbestGeriAl('misafir', adet)
+            }
           />
         </div>
       </div>
@@ -502,7 +585,7 @@ function SerbestGiris({
         className={`rounded-lg px-4 py-2 text-sm font-semibold transition
                     disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white ${renk}`}
       >
-        {etiket} Ekle
+        {etiket}
       </button>
       {degistirildi && (
         <span className="self-center text-xs text-amber-700">

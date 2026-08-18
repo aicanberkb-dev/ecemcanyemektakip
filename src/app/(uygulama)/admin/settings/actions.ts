@@ -27,11 +27,7 @@ export async function ucretleriGuncelle(
   _onceki: AyarDurumu,
   formData: FormData,
 ): Promise<AyarDurumu> {
-  const sema = z.object({
-    taban_gunluk_ucret: trSayi({ min: 0 }),
-    ucretli_ogun_ucreti: trSayi({ min: 0 }),
-    misafir_ogun_ucreti: trSayi({ min: 0 }),
-  })
+  const sema = z.object({ taban_gunluk_ucret: trSayi({ min: 0 }) })
 
   const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
@@ -85,8 +81,6 @@ export async function okulAdiGuncelle(
 const tarifeSemasi = z.object({
   gecerli_baslangic: z.string().min(1, 'Geçerlilik başlangıcı gerekli.'),
   taban_gunluk_ucret: trSayi({ min: 0 }),
-  ucretli_ogun_ucreti: trSayi({ min: 0 }),
-  misafir_ogun_ucreti: trSayi({ min: 0 }),
   aciklama: bosNull,
 })
 
@@ -97,7 +91,7 @@ async function guncelTarifeyiYansit(okulId: string) {
 
   const { data } = await supabase
     .from('ucret_gecmisi')
-    .select('taban_gunluk_ucret, ucretli_ogun_ucreti, misafir_ogun_ucreti')
+    .select('taban_gunluk_ucret')
     .eq('okul_id', okulId)
     .lte('gecerli_baslangic', bugun)
     .order('gecerli_baslangic', { ascending: false })

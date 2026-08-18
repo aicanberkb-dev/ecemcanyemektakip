@@ -10,6 +10,7 @@ import { gunlukHizmetKaydet, type MaliyetDurumu } from '../actions'
 
 export type GunlukKisi = { tarih: string; kisi_sayisi: number | null }
 export type GunlukCikan = { tarih: string; yemek_adi: string; porsiyon: number }
+export type SatisFiyati = { gecerli_baslangic: string; kisi_basi_fiyat: number | string }
 export type OkulGunu = {
   tarih: string
   kisi: number
@@ -67,6 +68,7 @@ export function PorsiyonEkrani({
   kalemler,
   cikanlar,
   okulGunleri,
+  fiyatlar,
 }: {
   noktaId: string
   noktaAdi: string
@@ -80,6 +82,8 @@ export function PorsiyonEkrani({
   kalemler: GunKalemleri[]
   cikanlar: GunlukCikan[]
   okulGunleri: OkulGunu[]
+  /** Dış hizmet yerlerinin tarihli satış fiyatları, en yeni önce */
+  fiyatlar: SatisFiyati[]
 }) {
   const router = useRouter()
   const [durum, setDurum] = useState<MaliyetDurumu>({})
@@ -151,7 +155,23 @@ export function PorsiyonEkrani({
     const d = porsiyon[`${tarih}|${yemek}`]
     if (d !== undefined && d.trim() !== '') return Number(d) || 0
     if (tarih > bugun) return 0
+    // Okulda o gün hiç yemek kaydı yoksa hizmet verilmemiştir; menü girilmiş
+    // olması yemeğin çıktığı anlamına gelmiyor. Elle yazılırsa geçerli olur.
+    if (okulaBagliMi && !okulHaritasi.has(tarih)) return 0
     return varsayilanCikan > 0 ? varsayilanCikan : etkinYiyen(tarih)
+  }
+
+  /**
+   * O günün cirosu.
+   *
+   * Okullarda gün sonu kayıtlarından hazır geliyor (günlükçünün gerçek tutarı,
+   * aylıkçının o günkü tarifesi, ücretli öğünler). Dış hizmet yerlerinde
+   * faturalanan kişi × o tarihte geçerli sözleşme fiyatı.
+   */
+  function gunCirosu(tarih: string): number {
+    if (okulaBagliMi) return Number(okulHaritasi.get(tarih)?.ciro ?? 0)
+    const f = fiyatlar.find((x) => x.gecerli_baslangic <= tarih)
+    return etkinYiyen(tarih) * Number(f?.kisi_basi_fiyat ?? 0)
   }
 
   function gunMaliyeti(tarih: string): number {
@@ -225,13 +245,13 @@ export function PorsiyonEkrani({
       porsiyon: t.porsiyon + gunPorsiyonu(tarih),
       yiyen: t.yiyen + etkinYiyen(tarih),
       maliyet: t.maliyet + gunMaliyeti(tarih),
-      ciro: t.ciro + Number(okulHaritasi.get(tarih)?.ciro ?? 0),
+      ciro: t.ciro + gunCirosu(tarih),
     }),
     { porsiyon: 0, yiyen: 0, maliyet: 0, ciro: 0 },
   )
 
   const menusuzGun = gunler.filter(
-    (t) => !menuHaritasi.has(t) && (etkinYiyen(t) > 0 || t <= bugun),
+    (t) => !menuHaritasi.has(t) && gunPorsiyonu(t) + etkinYiyen(t) > 0,
   ).length
   const cikansizGun = gunler.filter(
     (t) =>
@@ -338,7 +358,9 @@ export function PorsiyonEkrani({
                 </th>
               ))}
               <th className="w-28 text-right">Yiyen</th>
-              <th className="text-right">Günün maliyeti</th>
+              <th className="text-right">Ciro</th>
+              <th className="text-right">Maliyet</th>
+              <th className="text-right">Kâr / Zarar</th>
             </tr>
           </thead>
           <tbody>
@@ -429,9 +451,29 @@ export function PorsiyonEkrani({
                     )}
                   </td>
 
-                  <td className="text-right font-semibold tabular-nums">
-                    {gun ? para(gunMaliyeti(tarih)) : <span className="text-solgun">—</span>}
-                  </td>
+                  {(() => {
+                    const ciro = gunCirosu(tarih)
+                    const maliyet = gunMaliyeti(tarih)
+                    const kar = ciro - maliyet
+                    const veriVar = ciro > 0 || maliyet > 0
+                    return (
+                      <>
+                        <td className="text-right tabular-nums">
+                          {ciro > 0 ? para(ciro) : <span className="text-solgun">—</span>}
+                        </td>
+                        <td className="text-right tabular-nums">
+                          {gun ? para(maliyet) : <span className="text-solgun">—</span>}
+                        </td>
+                        <td
+                          className={`text-right font-semibold tabular-nums ${
+                            !veriVar ? 'text-solgun' : kar < 0 ? 'text-red-600' : 'text-emerald-700'
+                          }`}
+                        >
+                          {veriVar ? para(kar) : '—'}
+                        </td>
+                      </>
+                    )
+                  })()}
                 </tr>
               )
             })}
@@ -439,16 +481,21 @@ export function PorsiyonEkrani({
           <tfoot>
             <tr>
               <td className="font-semibold">Toplam</td>
-              <td colSpan={3} className="text-xs text-solgun">
+              <td colSpan={4} className="text-xs text-solgun">
                 {toplam.porsiyon} porsiyon çıktı
                 {toplam.yiyen > 0 &&
                   ` · kişi başı gerçek maliyet ${para(toplam.maliyet / toplam.yiyen)}`}
               </td>
-              <td className="text-right text-xs text-solgun">
-                {okulaBagliMi && toplam.ciro > 0 && `ciro ${para(toplam.ciro)}`}
-              </td>
               <td className="text-right font-semibold tabular-nums">{toplam.yiyen}</td>
-              <td className="text-right font-bold tabular-nums">{para(toplam.maliyet)}</td>
+              <td className="text-right font-semibold tabular-nums">{para(toplam.ciro)}</td>
+              <td className="text-right font-semibold tabular-nums">{para(toplam.maliyet)}</td>
+              <td
+                className={`text-right font-bold tabular-nums ${
+                  toplam.ciro - toplam.maliyet < 0 ? 'text-red-600' : 'text-emerald-700'
+                }`}
+              >
+                {para(toplam.ciro - toplam.maliyet)}
+              </td>
             </tr>
           </tfoot>
         </table>

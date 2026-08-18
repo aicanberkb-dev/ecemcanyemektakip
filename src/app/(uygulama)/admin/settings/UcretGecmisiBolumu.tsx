@@ -38,7 +38,8 @@ export function UcretGecmisiBolumu({
       <p className="text-sm text-solgun">
         Her tarife bir <strong>başlangıç tarihinden</strong> itibaren geçerlidir. Bir
         öğün, ait olduğu günün tarifesinden fiyatlanır — geçmişe dönük toplu giriş
-        yaptığınızda o tarihteki fiyat uygulanır, bugünkü değil.
+        yaptığınızda o tarihteki fiyat uygulanır, bugünkü değil. Ücretli öğün de bu
+        günlük ücrete tabidir; misafirden ücret alınmaz.
       </p>
 
       <div className="overflow-x-auto">
@@ -47,8 +48,6 @@ export function UcretGecmisiBolumu({
             <tr>
               <th>Geçerlilik Başlangıcı</th>
               <th className="text-right">Günlük Ücret</th>
-              <th className="text-right">Ücretli Öğün</th>
-              <th className="text-right">Misafir Öğün</th>
               <th>Açıklama</th>
               <th className="text-right">İşlem</th>
             </tr>
@@ -64,7 +63,7 @@ export function UcretGecmisiBolumu({
             ))}
             {sirali.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-6 text-center text-solgun">
+                <td colSpan={4} className="py-6 text-center text-solgun">
                   Tarife tanımlı değil.
                 </td>
               </tr>
@@ -94,26 +93,6 @@ export function UcretGecmisiBolumu({
             {durum.alanlar?.taban_gunluk_ucret && (
               <p className="hata">{durum.alanlar.taban_gunluk_ucret}</p>
             )}
-          </div>
-          <div>
-            <label className="etiket text-xs">Ücretli öğün (₺)</label>
-            <input
-              name="ucretli_ogun_ucreti"
-              inputMode="decimal"
-              defaultValue={gecerli ? String(gecerli.ucretli_ogun_ucreti).replace('.', ',') : ''}
-              className="girdi !py-1.5 w-32"
-              required
-            />
-          </div>
-          <div>
-            <label className="etiket text-xs">Misafir öğün (₺)</label>
-            <input
-              name="misafir_ogun_ucreti"
-              inputMode="decimal"
-              defaultValue={gecerli ? String(gecerli.misafir_ogun_ucreti).replace('.', ',') : ''}
-              className="girdi !py-1.5 w-32"
-              required
-            />
           </div>
           <div className="min-w-40 flex-1">
             <label className="etiket text-xs">Açıklama</label>
@@ -165,7 +144,7 @@ function TarifeSatiri({
   if (duzenle) {
     return (
       <tr className="bg-blue-50/40">
-        <td colSpan={6} className="px-3 py-3">
+        <td colSpan={4} className="px-3 py-3">
           <form action={gonder} className="flex flex-wrap items-end gap-3">
             <div>
               <label className="etiket text-xs">Başlangıç</label>
@@ -182,24 +161,6 @@ function TarifeSatiri({
                 name="taban_gunluk_ucret"
                 inputMode="decimal"
                 defaultValue={String(tarife.taban_gunluk_ucret).replace('.', ',')}
-                className="girdi !py-1.5 w-28"
-              />
-            </div>
-            <div>
-              <label className="etiket text-xs">Ücretli</label>
-              <input
-                name="ucretli_ogun_ucreti"
-                inputMode="decimal"
-                defaultValue={String(tarife.ucretli_ogun_ucreti).replace('.', ',')}
-                className="girdi !py-1.5 w-28"
-              />
-            </div>
-            <div>
-              <label className="etiket text-xs">Misafir</label>
-              <input
-                name="misafir_ogun_ucreti"
-                inputMode="decimal"
-                defaultValue={String(tarife.misafir_ogun_ucreti).replace('.', ',')}
                 className="girdi !py-1.5 w-28"
               />
             </div>
@@ -236,8 +197,6 @@ function TarifeSatiri({
         )}
       </td>
       <td className="text-right tabular-nums">{para(tarife.taban_gunluk_ucret)}</td>
-      <td className="text-right tabular-nums">{para(tarife.ucretli_ogun_ucreti)}</td>
-      <td className="text-right tabular-nums">{para(tarife.misafir_ogun_ucreti)}</td>
       <td className="text-solgun">{tarife.aciklama ?? '—'}</td>
       <td className="text-right whitespace-nowrap">
         <button

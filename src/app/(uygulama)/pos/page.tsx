@@ -16,16 +16,8 @@ export default async function PosPage() {
     .rpc('ucretler', { p_okul_id: okul.id })
     .maybeSingle()
 
-  const tarife = data as {
-    taban_gunluk_ucret: number
-    ucretli_ogun_ucreti: number
-    misafir_ogun_ucreti: number
-  } | null
-
-  const ucretliVarsayilan =
-    Number(tarife?.ucretli_ogun_ucreti ?? 0) > 0
-      ? Number(tarife!.ucretli_ogun_ucreti)
-      : Number(tarife?.taban_gunluk_ucret ?? 0)
+  const tarife = data as { taban_gunluk_ucret: number } | null
+  const ucretliVarsayilan = Number(tarife?.taban_gunluk_ucret ?? 0)
 
   // key: okul değişince ekran tamamen sıfırlanır, önceki okulun öğrencisi kalmaz
   return (
