@@ -20,11 +20,22 @@ type Props = {
   okulId: string
   ad?: string
   baslangic?: SeciliOgrenci | null
+  /**
+   * Seçim anındaki bakiye eskiyebilir: aynı ekrandan tahsilat girilince
+   * öğrencinin kalanı değişiyor. Verilirse gösterilen tutar buradan okunur.
+   */
+  bakiye?: number
   onSecim?: (ogrenci: SeciliOgrenci | null) => void
 }
 
 /** Öğrenci no / kimlik / isim ile canlı arayan autocomplete (tek okul içinde). */
-export function OgrenciSecici({ okulId, ad = 'student_id', baslangic, onSecim }: Props) {
+export function OgrenciSecici({
+  okulId,
+  ad = 'student_id',
+  baslangic,
+  bakiye,
+  onSecim,
+}: Props) {
   const supabase = useMemo(() => supabaseBrowser(), [])
   const [terim, setTerim] = useState('')
   const [sonuclar, setSonuclar] = useState<PosSonuc[]>([])
@@ -77,6 +88,8 @@ export function OgrenciSecici({ okulId, ad = 'student_id', baslangic, onSecim }:
   }
 
   if (secili) {
+    // Dışarıdan bakiye verildiyse o geçerli — seçim anındaki değer eskimiş olabilir
+    const gosterilenKalan = bakiye ?? secili.kalan
     return (
       <div>
         <input type="hidden" name={ad} value={secili.student_id} />
@@ -91,10 +104,10 @@ export function OgrenciSecici({ okulId, ad = 'student_id', baslangic, onSecim }:
           </div>
           <span
             className={`font-semibold tabular-nums ${
-              secili.kalan < 0 ? 'text-red-600' : 'text-emerald-700'
+              gosterilenKalan < 0 ? 'text-red-600' : 'text-emerald-700'
             }`}
           >
-            {para(secili.kalan)}
+            {para(gosterilenKalan)}
           </span>
           <button
             type="button"

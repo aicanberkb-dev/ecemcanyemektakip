@@ -97,7 +97,12 @@ export function IslemFormu({
       <form action={gonder} onSubmit={gondermedenOnce} className="space-y-4">
         <div>
           <label className="etiket">Öğrenci *</label>
-          <OgrenciSecici okulId={okulId} baslangic={baslangic} onSecim={setOgrenci} />
+          <OgrenciSecici
+            okulId={okulId}
+            baslangic={baslangic}
+            bakiye={ogrenci?.kalan}
+            onSecim={setOgrenci}
+          />
           {durum.alanlar?.student_id && <p className="hata">{durum.alanlar.student_id}</p>}
         </div>
 
@@ -159,14 +164,8 @@ export function IslemFormu({
           />
         </div>
 
-        {ogrenci && (
-          <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-solgun">
-            {ogrenci.ad_soyad} — güncel bakiye{' '}
-            <strong className={ogrenci.kalan < 0 ? 'text-red-600' : 'text-emerald-700'}>
-              {para(ogrenci.kalan)}
-            </strong>
-          </p>
-        )}
+        {/* Bakiye yalnızca öğrenci kutusunda gösteriliyor: aynı sayıyı iki
+            yerde tutmak, biri güncellenip diğeri kalınca kafa karıştırıyordu. */}
 
         {durum.hata && (
           <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{durum.hata}</p>
