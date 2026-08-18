@@ -20,7 +20,6 @@ export type HizmetNoktasi = {
   ad: string
   liste_id: string | null
   okul_id: string | null
-  mutfak_id: string | null
   varsayilan_kisi_sayisi: number
   varsayilan_cikan_porsiyon: number
   aktif: boolean
@@ -46,19 +45,17 @@ export type ListeSecenegi = { id: string; ad: string }
  * kâr/zararı bozulmasın diye.
  *
  * Çıkan porsiyon her yer için burada tanımlanır: maliyetin tabanı yiyen kişi
- * değil, mutfaktan gönderilen yemektir.
+ * değil, yemekhaneden gönderilen yemektir.
  */
 export function YerlerEkrani({
   noktalar,
   fiyatlar,
   listeler,
-  mutfaklar,
   okulTarifesi,
 }: {
   noktalar: HizmetNoktasi[]
   fiyatlar: HizmetFiyati[]
   listeler: ListeSecenegi[]
-  mutfaklar: ListeSecenegi[]
   /** okul_id → o okulun güncel taban günlük ücreti */
   okulTarifesi: Record<string, number>
 }) {
@@ -75,7 +72,6 @@ export function YerlerEkrani({
           nokta={n}
           fiyatlar={fiyatlar.filter((f) => f.hizmet_noktasi_id === n.id)}
           listeler={listeler}
-          mutfaklar={mutfaklar}
           okulFiyati={n.okul_id ? okulTarifesi[n.okul_id] : undefined}
         />
       ))}
@@ -94,17 +90,6 @@ export function YerlerEkrani({
               {listeler.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.ad}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="etiket text-xs">Mutfak</label>
-            <select name="mutfak_id" defaultValue={mutfaklar[0]?.id ?? ''} className="girdi !py-1.5">
-              <option value="">— seçilmedi —</option>
-              {mutfaklar.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.ad}
                 </option>
               ))}
             </select>
@@ -148,13 +133,11 @@ function Nokta({
   nokta,
   fiyatlar,
   listeler,
-  mutfaklar,
   okulFiyati,
 }: {
   nokta: HizmetNoktasi
   fiyatlar: HizmetFiyati[]
   listeler: ListeSecenegi[]
-  mutfaklar: ListeSecenegi[]
   okulFiyati: number | undefined
 }) {
   const router = useRouter()
@@ -173,7 +156,6 @@ function Nokta({
   const bugun = bugunISO()
   const gecerli = fiyatlar.find((f) => f.gecerli_baslangic <= bugun)
   const liste = listeler.find((l) => l.id === nokta.liste_id)
-  const mutfak = mutfaklar.find((m) => m.id === nokta.mutfak_id)
   const okulaBagli = !!nokta.okul_id
 
   return (
@@ -195,21 +177,6 @@ function Nokta({
               {listeler.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.ad}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="etiket text-xs">Mutfak</label>
-            <select
-              name="mutfak_id"
-              defaultValue={nokta.mutfak_id ?? ''}
-              className="girdi !py-1.5"
-            >
-              <option value="">— seçilmedi —</option>
-              {mutfaklar.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.ad}
                 </option>
               ))}
             </select>
@@ -255,13 +222,7 @@ function Nokta({
               )}
             </h2>
             <p className="text-xs text-solgun">
-              Mutfak:{' '}
-              {mutfak ? (
-                <strong>{mutfak.ad}</strong>
-              ) : (
-                <span className="text-amber-700">seçilmemiş</span>
-              )}
-              {' · '}Menü:{' '}
+              Menü:{' '}
               {liste ? (
                 <strong>{liste.ad}</strong>
               ) : (

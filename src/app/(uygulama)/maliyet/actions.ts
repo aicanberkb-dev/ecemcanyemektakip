@@ -168,7 +168,6 @@ export async function receteSil(yemekAdi: string): Promise<MaliyetDurumu> {
 const noktaSemasi = z.object({
   ad: z.string().trim().min(2, 'Yer adı gerekli.'),
   liste_id: bosNull,
-  mutfak_id: bosNull,
   varsayilan_kisi_sayisi: trSayi({ min: 0 }),
   varsayilan_cikan_porsiyon: trSayi({ min: 0 }),
 })
@@ -191,7 +190,6 @@ export async function hizmetNoktasiEkle(
   const { error } = await supabase.from('hizmet_noktalari').insert({
     ad: sonuc.data.ad.toLocaleUpperCase('tr'),
     liste_id: sonuc.data.liste_id,
-    mutfak_id: sonuc.data.mutfak_id,
     varsayilan_kisi_sayisi: Math.round(sonuc.data.varsayilan_kisi_sayisi),
     varsayilan_cikan_porsiyon: Math.round(sonuc.data.varsayilan_cikan_porsiyon),
     sira: (enBuyuk?.sira ?? 0) + 1,
@@ -218,8 +216,7 @@ export async function hizmetNoktasiGuncelle(
     .update({
       ad: sonuc.data.ad.toLocaleUpperCase('tr'),
       liste_id: sonuc.data.liste_id,
-      mutfak_id: sonuc.data.mutfak_id,
-      varsayilan_kisi_sayisi: Math.round(sonuc.data.varsayilan_kisi_sayisi),
+        varsayilan_kisi_sayisi: Math.round(sonuc.data.varsayilan_kisi_sayisi),
       varsayilan_cikan_porsiyon: Math.round(sonuc.data.varsayilan_cikan_porsiyon),
     })
     .eq('id', id)
@@ -280,63 +277,90 @@ export async function hizmetFiyatiSil(id: string): Promise<MaliyetDurumu> {
 // Günlük kişi sayıları
 // ---------------------------------------------------------------------------
 
+const tamsayi = (d: number | null) =>
+  d === null || !Number.isFinite(d) || d < 0 ? null : Math.round(d)
+
 /**
- * Bir ayın çıkan porsiyon ve yiyen kişi sayılarını topluca yazar.
+ * Bir ayın çıkan porsiyonlarını ve faturalanan kişi sayılarını yazar.
  *
- * `null` o alan için kayıt olmadığı anlamına gelir; hesap yerin varsayılanına
- * düşer. Açıkça yazılan 0 ise “o gün hizmet verilmedi” demek — bu ikisi
- * farklı, o yüzden boş bırakmak alanı temizler, 0 yazmak 0 olarak kaydeder.
- * İki alan da boşsa satır tümüyle silinir.
+ * Porsiyon yemek bazında tutulur: aynı gün 50 kişilik ıspanak, 100 kişilik
+ * tatlı çıkabiliyor. Boş bırakılan kalem yerin varsayılan porsiyonunu kullanır;
+ * açıkça yazılan 0 "o kalem hiç çıkmadı" demek — bu ikisi farklı olduğu için
+ * boş bırakmak satırı siler, 0 yazmak 0 olarak kaydeder.
  */
 export async function gunlukHizmetKaydet(
   noktaId: string,
-  gunler: {
-    tarih: string
-    kisi_sayisi: number | null
-    cikan_porsiyon: number | null
-  }[],
+  gunler: { tarih: string; kisi_sayisi: number | null }[],
+  cikanlar: { tarih: string; yemek_adi: string; porsiyon: number | null }[],
 ): Promise<MaliyetDurumu> {
   const supabase = await supabaseServer()
 
-  const tamsayi = (d: number | null) =>
-    d === null || !Number.isFinite(d) || d < 0 ? null : Math.round(d)
-
-  const dolu = []
-  const bos: string[] = []
-
+  // Faturalanan kişi sayıları
+  const kisiDolu = []
+  const kisiBos: string[] = []
   for (const g of gunler) {
     const kisi = tamsayi(g.kisi_sayisi)
-    const cikan = tamsayi(g.cikan_porsiyon)
-    if (kisi === null && cikan === null) bos.push(g.tarih)
-    else
-      dolu.push({
-        hizmet_noktasi_id: noktaId,
-        tarih: g.tarih,
-        kisi_sayisi: kisi,
-        cikan_porsiyon: cikan,
-      })
+    if (kisi === null) kisiBos.push(g.tarih)
+    else kisiDolu.push({ hizmet_noktasi_id: noktaId, tarih: g.tarih, kisi_sayisi: kisi })
   }
 
-  if (dolu.length > 0) {
+  if (kisiDolu.length > 0) {
     const { error } = await supabase
       .from('gunluk_hizmet')
-      .upsert(dolu, { onConflict: 'hizmet_noktasi_id,tarih' })
+      .upsert(kisiDolu, { onConflict: 'hizmet_noktasi_id,tarih' })
     if (error) return { hata: error.message }
   }
-
-  if (bos.length > 0) {
+  if (kisiBos.length > 0) {
     const { error } = await supabase
       .from('gunluk_hizmet')
       .delete()
       .eq('hizmet_noktasi_id', noktaId)
-      .in('tarih', bos)
+      .in('tarih', kisiBos)
     if (error) return { hata: error.message }
   }
 
-  tazele()
-  return {
-    basari:
-      `${dolu.length} gün kaydedildi` +
-      (bos.length > 0 ? ` · ${bos.length} gün varsayılana döndü.` : '.'),
+  // Yemek bazlı çıkan porsiyonlar
+  const cikanDolu = []
+  const cikanBos: { tarih: string; yemek_adi: string }[] = []
+  for (const c of cikanlar) {
+    const p = tamsayi(c.porsiyon)
+    if (p === null) cikanBos.push({ tarih: c.tarih, yemek_adi: c.yemek_adi })
+    else
+      cikanDolu.push({
+        hizmet_noktasi_id: noktaId,
+        tarih: c.tarih,
+        yemek_adi: c.yemek_adi,
+        porsiyon: p,
+      })
   }
+
+  if (cikanDolu.length > 0) {
+    const { error } = await supabase
+      .from('gunluk_cikan')
+      .upsert(cikanDolu, { onConflict: 'hizmet_noktasi_id,tarih,yemek_adi' })
+    if (error) return { hata: error.message }
+  }
+
+  // Temizlenen kalemler: tarih bazında toplayıp tek sorguda sil
+  if (cikanBos.length > 0) {
+    const tarihler = [...new Set(cikanBos.map((c) => c.tarih))]
+    const { data: mevcut, error: okumaHatasi } = await supabase
+      .from('gunluk_cikan')
+      .select('id, tarih, yemek_adi')
+      .eq('hizmet_noktasi_id', noktaId)
+      .in('tarih', tarihler)
+    if (okumaHatasi) return { hata: okumaHatasi.message }
+
+    const silinecek = (mevcut ?? [])
+      .filter((m) => cikanBos.some((c) => c.tarih === m.tarih && c.yemek_adi === m.yemek_adi))
+      .map((m) => m.id)
+
+    if (silinecek.length > 0) {
+      const { error } = await supabase.from('gunluk_cikan').delete().in('id', silinecek)
+      if (error) return { hata: error.message }
+    }
+  }
+
+  tazele()
+  return { basari: `${cikanDolu.length} porsiyon girişi kaydedildi.` }
 }
