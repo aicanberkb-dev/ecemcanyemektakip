@@ -23,6 +23,7 @@ const GENEL_BAGLANTILAR = [
   { yol: '/menu', ad: 'Yemek Listesi' },
   { yol: '/maliyet', ad: 'Maliyet' },
   { yol: '/finans', ad: 'Finans' },
+  { yol: '/yedek', ad: 'Yedek' },
 ]
 
 const FINANS_ALT = [
