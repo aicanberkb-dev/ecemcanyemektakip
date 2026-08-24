@@ -25,6 +25,7 @@ function tazele() {
   revalidatePath('/maliyet')
   revalidatePath('/maliyet/receteler')
   revalidatePath('/maliyet/kar-zarar')
+  revalidatePath('/maliyet/giderler')
 }
 
 // ---------------------------------------------------------------------------
@@ -363,4 +364,89 @@ export async function gunlukHizmetKaydet(
 
   tazele()
   return { basari: `${cikanDolu.length} porsiyon girişi kaydedildi.` }
+}
+
+// ---------------------------------------------------------------------------
+// Genel giderler — yer bazlı
+//
+// Her hizmet yerinin kendi personeli ve kendi sabit giderleri var. Gider
+// doğrudan yere yazılır, yerler arasında dağıtılmaz.
+// ---------------------------------------------------------------------------
+
+const giderSemasi = z.object({
+  hizmet_noktasi_id: z.uuid('Hizmet yeri seçin.'),
+  kategori: z.enum(['sgk', 'kira', 'mazot', 'maas', 'diger']),
+  tur: z.string().trim().min(2, 'Gider adı gerekli.'),
+  donem_yil: trSayi({ min: 2000, max: 2100 }),
+  donem_ay: trSayi({ min: 1, max: 12 }),
+  tutar: trSayi({ min: 0 }),
+  aciklama: bosNull,
+})
+
+export async function genelGiderEkle(
+  _onceki: MaliyetDurumu,
+  formData: FormData,
+): Promise<MaliyetDurumu> {
+  const sonuc = giderSemasi.safeParse(Object.fromEntries(formData.entries()))
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase.from('donemsel_giderler').insert({
+    ...sonuc.data,
+    tur: sonuc.data.tur.toLocaleUpperCase('tr'),
+    donem_yil: Math.round(sonuc.data.donem_yil),
+    donem_ay: Math.round(sonuc.data.donem_ay),
+  })
+  if (error) return { hata: error.message }
+
+  tazele()
+  return { basari: 'Gider kaydedildi.' }
+}
+
+export async function genelGiderTutarKaydet(
+  id: string,
+  tutar: number,
+): Promise<MaliyetDurumu> {
+  if (!Number.isFinite(tutar) || tutar < 0) return { hata: 'Geçerli bir tutar girin.' }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase
+    .from('donemsel_giderler')
+    .update({ tutar })
+    .eq('id', id)
+  if (error) return { hata: error.message }
+
+  tazele()
+  return { basari: 'Güncellendi.' }
+}
+
+export async function genelGiderSil(id: string): Promise<MaliyetDurumu> {
+  const supabase = await supabaseServer()
+  const { error } = await supabase.from('donemsel_giderler').delete().eq('id', id)
+  if (error) return { hata: error.message }
+
+  tazele()
+  return { basari: 'Gider silindi.' }
+}
+
+/**
+ * Personeli bir hizmet yerine bağlar.
+ *
+ * Maaşın hangi yerin maliyetine gireceği buradan belli oluyor. Boş bırakılan
+ * personelin maaşı hiçbir yere yazılmaz — yemekhane dışında çalışanlar için
+ * doğru davranış bu.
+ */
+export async function personelYeriAta(
+  personelId: string,
+  hizmetNoktasiId: string | null,
+): Promise<MaliyetDurumu> {
+  const supabase = await supabaseServer()
+  const { error } = await supabase
+    .from('personeller')
+    .update({ hizmet_noktasi_id: hizmetNoktasiId })
+    .eq('id', personelId)
+  if (error) return { hata: error.message }
+
+  tazele()
+  return { basari: 'Personel yeri güncellendi.' }
 }

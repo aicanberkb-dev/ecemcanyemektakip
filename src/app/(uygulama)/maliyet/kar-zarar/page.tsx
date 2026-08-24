@@ -23,10 +23,12 @@ type KarZarar = {
   misafir: number
   cikan_porsiyon: number
   ciro: number | string
-  maliyet: number | string
+  malzeme_maliyeti: number | string
+  genel_gider: number | string
+  toplam_maliyet: number | string
   kar: number | string
-  kisi_basi_kar: number | string
   kisi_basi_maliyet: number | string
+  kisi_basi_kar: number | string
   cikansiz_gun: number
 }
 
@@ -129,10 +131,12 @@ export default async function KarZararPage({
       misafir: t.misafir + Number(r.misafir),
       cikan: t.cikan + Number(r.cikan_porsiyon),
       ciro: t.ciro + Number(r.ciro),
-      maliyet: t.maliyet + Number(r.maliyet),
+      malzeme: t.malzeme + Number(r.malzeme_maliyeti),
+      gider: t.gider + Number(r.genel_gider),
+      maliyet: t.maliyet + Number(r.toplam_maliyet),
       kar: t.kar + Number(r.kar),
     }),
-    { kisi: 0, misafir: 0, cikan: 0, ciro: 0, maliyet: 0, kar: 0 },
+    { kisi: 0, misafir: 0, cikan: 0, ciro: 0, malzeme: 0, gider: 0, maliyet: 0, kar: 0 },
   )
 
   const cikansizGun = rapor.reduce((t, r) => t + Number(r.cikansiz_gun), 0)
@@ -142,7 +146,7 @@ export default async function KarZararPage({
       <div className="yazdirma-gizle">
         <h1 className="baslik">Kâr / Zarar</h1>
         <p className="text-sm text-solgun">
-          <strong>Maliyet, yemekhaneden çıkan porsiyondan</strong> hesaplanır — her yemek
+          <strong>Maliyet = malzeme + genel gider.</strong> Malzeme, yemekhaneden çıkan porsiyondan hesaplanır — her yemek
           kendi porsiyonuyla: aynı gün 50 kişilik ıspanak, 100 kişilik tatlı çıkabilir.
           Ciro yiyen/faturalanan kişiden gelir; okullarda yiyen sayısı gün sonundan, fiyat
           ücret tarifesinden okunur.
@@ -207,7 +211,9 @@ export default async function KarZararPage({
               <th className="text-right">Çıkan Porsiyon</th>
               <th className="text-right">Yiyen (misafir)</th>
               <th className="text-right">Ciro</th>
-              <th className="text-right">Maliyet</th>
+              <th className="text-right">Malzeme</th>
+              <th className="text-right">Genel Gider</th>
+              <th className="text-right">Toplam Maliyet</th>
               <th className="text-right">Kâr / Zarar</th>
               <th className="text-right">Kişi Başı Maliyet</th>
             </tr>
@@ -244,7 +250,13 @@ export default async function KarZararPage({
                   {r.misafir > 0 && <span className="text-solgun"> ({r.misafir})</span>}
                 </td>
                 <td className="text-right tabular-nums">{para(r.ciro)}</td>
-                <td className="text-right tabular-nums">{para(r.maliyet)}</td>
+                <td className="text-right tabular-nums">{para(r.malzeme_maliyeti)}</td>
+                <td className="text-right tabular-nums text-violet-700">
+                  {para(r.genel_gider)}
+                </td>
+                <td className="text-right font-semibold tabular-nums">
+                  {para(r.toplam_maliyet)}
+                </td>
                 <td
                   className={`text-right font-semibold tabular-nums ${
                     Number(r.kar) < 0 ? 'text-red-600' : 'text-emerald-700'
@@ -257,7 +269,7 @@ export default async function KarZararPage({
             ))}
             {rapor.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-8 text-center text-solgun">
+                <td colSpan={10} className="py-8 text-center text-solgun">
                   Bu ayda hesaplanacak veri yok.
                 </td>
               </tr>
@@ -276,6 +288,10 @@ export default async function KarZararPage({
                   )}
                 </td>
                 <td className="text-right font-semibold tabular-nums">{para(toplam.ciro)}</td>
+                <td className="text-right font-semibold tabular-nums">{para(toplam.malzeme)}</td>
+                <td className="text-right font-semibold tabular-nums text-violet-700">
+                  {para(toplam.gider)}
+                </td>
                 <td className="text-right font-semibold tabular-nums">{para(toplam.maliyet)}</td>
                 <td
                   className={`text-right font-bold tabular-nums ${

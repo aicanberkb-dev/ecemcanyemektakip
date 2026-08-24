@@ -36,6 +36,7 @@ const MALIYET_ALT = [
   { yol: '/maliyet', ad: 'Malzemeler' },
   { yol: '/maliyet/receteler', ad: 'Reçeteler' },
   { yol: '/maliyet/yerler', ad: 'Hizmet Yerleri' },
+  { yol: '/maliyet/giderler', ad: 'Genel Giderler' },
   { yol: '/maliyet/kar-zarar', ad: 'Kâr / Zarar' },
 ]
 
