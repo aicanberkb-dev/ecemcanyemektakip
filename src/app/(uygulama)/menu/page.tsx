@@ -4,6 +4,8 @@ import { AY_ADLARI } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 
+import type { OkulsuzGun } from '../okulsuz-actions'
+
 import { MenuEkrani, type HavuzKaydi, type MenuGunu } from './MenuEkrani'
 import { MenuKopyalaFormu } from './MenuKopyalaFormu'
 
@@ -54,7 +56,7 @@ export default async function MenuPage({
   const bas = `${yil}-${String(ay).padStart(2, '0')}-01`
   const bit = `${yil}-${String(ay).padStart(2, '0')}-${new Date(yil, ay, 0).getDate()}`
 
-  const [{ data: menuVeri }, { data: havuzVeri }] = await Promise.all([
+  const [{ data: menuVeri }, { data: havuzVeri }, { data: okulsuzVeri }] = await Promise.all([
     supabase
       .from('menu_gunleri')
       .select('tarih, corba, ana_yemek, yardimci, ek')
@@ -63,10 +65,18 @@ export default async function MenuPage({
       .lte('tarih', bit)
       .order('tarih'),
     supabase.rpc('yemek_havuzu', { p_liste_id: secili.id }),
+    // Resmi tatil ve gezi günleri: burada işaretlenen gün tüm yerlerde kapalı
+    supabase
+      .from('okulsuz_gunler')
+      .select('id, tarih, hizmet_noktasi_id, sebep')
+      .is('hizmet_noktasi_id', null)
+      .gte('tarih', bas)
+      .lte('tarih', bit),
   ])
 
   const menu = (menuVeri ?? []) as MenuGunu[]
   const havuz = (havuzVeri ?? []) as HavuzKaydi[]
+  const okulsuz = (okulsuzVeri ?? []) as OkulsuzGun[]
 
   // Kopyalama kaynağı olarak aynı havuz grubundaki listeler anlamlı
   const kopyaKaynaklari = tumListeler.filter((l) => l.havuz_grubu === secili.havuz_grubu)
@@ -172,6 +182,7 @@ export default async function MenuPage({
         ay={ay}
         menu={menu}
         havuz={havuz}
+        okulsuz={okulsuz}
       />
     </div>
   )

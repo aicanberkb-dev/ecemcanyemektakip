@@ -1,5 +1,6 @@
 'use client'
 
+import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, useTransition } from 'react'
 
 import { GENEL } from '@/lib/okul-sabitler'
@@ -20,6 +21,8 @@ type Props = {
  * maliyet gibi okula bağlı olmayan yönetim ekranları oradan açılır.
  */
 export function OkulSecici({ okullar, aktifId }: Props) {
+  const router = useRouter()
+  const yol = usePathname()
   const [acik, setAcik] = useState(false)
   const [bekliyor, basla] = useTransition()
   const sarmalRef = useRef<HTMLDivElement>(null)
@@ -49,7 +52,11 @@ export function OkulSecici({ okullar, aktifId }: Props) {
     setAcik(false)
     if (id === aktifId) return
     basla(async () => {
-      await okulDegistir(id)
+      await okulDegistir(id, yol)
+      // Sunucu bileşenleri yeni okulla yeniden çizilsin: üst menü, alt menü
+      // ve listeler geçişin hemen ardından güncel olsun. Bu olmadan sayfa
+      // elle yenilenene kadar önceki modun alt sekmeleri ekranda kalıyordu.
+      router.refresh()
     })
   }
 

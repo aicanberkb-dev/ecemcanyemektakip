@@ -39,6 +39,7 @@ const TABLOLAR = [
   'personel_ucretleri',
   'maas_odemeleri',
   'donemsel_giderler',
+  'okulsuz_gunler',
   'senetler',
   'audit_log',
 ] as const

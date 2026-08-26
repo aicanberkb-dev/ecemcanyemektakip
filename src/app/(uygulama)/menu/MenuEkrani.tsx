@@ -1,9 +1,16 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 
 import { aramaEslesir } from '@/lib/arama'
 import { AY_ADLARI } from '@/lib/format'
+
+import {
+  okulYokIsaretle,
+  okulYokKaldir,
+  type OkulsuzGun,
+} from '../okulsuz-actions'
 
 import { menuKaydet, type MenuDurumu, type MenuGunGirdisi } from './actions'
 
@@ -60,6 +67,7 @@ export function MenuEkrani({
   ay,
   menu,
   havuz,
+  okulsuz,
 }: {
   listeId: string
   satirSayisi: number
@@ -67,7 +75,10 @@ export function MenuEkrani({
   ay: number
   menu: MenuGunu[]
   havuz: HavuzKaydi[]
+  /** Bu ayın "okul yok" günleri — resmi tatil, gezi */
+  okulsuz: OkulsuzGun[]
 }) {
+  const router = useRouter()
   const ALANLAR = alanlar(satirSayisi)
   const gunSayisi = new Date(yil, ay, 0).getDate()
 
@@ -168,6 +179,34 @@ export function MenuEkrani({
 
   function kaydet() {
     basla(async () => setDurum(await menuKaydet(listeId, gunler)))
+  }
+
+  /** tarih → okulsuz kaydı */
+  const okulsuzHarita = useMemo(() => {
+    const m = new Map<string, OkulsuzGun>()
+    for (const o of okulsuz) m.set(o.tarih, o)
+    return m
+  }, [okulsuz])
+
+  /**
+   * Bir günü kapatır. Menü satırı da temizlenir: okul yoksa o gün yemek de
+   * çıkmaz, menüde durması kâr/zarar ekranında yanıltıcı olurdu.
+   */
+  function okulYok(tarih: string) {
+    const sebep = window.prompt('Neden okul yok? (resmi tatil, gezi…)', 'Resmi tatil')
+    if (sebep === null) return
+    satirTemizle(tarih)
+    basla(async () => {
+      setDurum(await okulYokIsaretle(tarih, null, sebep))
+      router.refresh()
+    })
+  }
+
+  function okulVar(id: string) {
+    basla(async () => {
+      setDurum(await okulYokKaldir(id))
+      router.refresh()
+    })
   }
 
   const doluGun = gunler.filter((g) => g.corba || g.ana_yemek || g.yardimci || g.ek).length
@@ -291,6 +330,36 @@ export function MenuEkrani({
                 const d = new Date(g.tarih)
                 const gunAdi = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'][d.getDay()]
                 const doluMu = ALANLAR.some((a) => (g[a.anahtar] as string)?.trim())
+                const kapali = okulsuzHarita.get(g.tarih)
+
+                if (kapali) {
+                  return (
+                    <tr key={g.tarih} className="bg-slate-50">
+                      <td className="whitespace-nowrap">
+                        <span className="font-semibold tabular-nums text-solgun">
+                          {d.getDate()}
+                        </span>
+                        <span className="ml-1 text-xs text-solgun">{gunAdi}</span>
+                      </td>
+                      <td colSpan={ALANLAR.length} className="text-sm text-solgun">
+                        <span className="rozet bg-slate-200 text-slate-700">okul yok</span>
+                        {kapali.sebep && <span className="ml-2">{kapali.sebep}</span>}
+                      </td>
+                      <td className="text-right">
+                        <button
+                          type="button"
+                          onClick={() => okulVar(kapali.id)}
+                          disabled={kaydediliyor}
+                          className="rounded px-2 py-1 text-xs text-vurgu hover:bg-blue-50"
+                          title="Bu günü yeniden aç"
+                        >
+                          Geri al
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                }
+
                 return (
                   <tr key={g.tarih}>
                     <td className="whitespace-nowrap">
@@ -346,7 +415,7 @@ export function MenuEkrani({
                         </td>
                       )
                     })}
-                    <td className="text-right">
+                    <td className="whitespace-nowrap text-right">
                       {doluMu && (
                         <button
                           type="button"
@@ -357,6 +426,15 @@ export function MenuEkrani({
                           Satırı sil
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => okulYok(g.tarih)}
+                        disabled={kaydediliyor}
+                        className="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                        title="Resmi tatil / gezi — bu gün tüm hizmet yerlerinde kapalı sayılır"
+                      >
+                        Okul yok
+                      </button>
                     </td>
                   </tr>
                 )
@@ -366,10 +444,18 @@ export function MenuEkrani({
         </div>
 
         <p className="text-xs text-solgun">
-          Yalnızca hafta içi günler listelenir. <strong>Satırı sil</strong> o günü tamamen
-          boşaltır; tek tek kutuları temizlemek için kutucukları işaretleyip{' '}
-          <strong>Seçili kutuları temizle</strong> deyin. Değişiklikler{' '}
+          Yalnızca hafta içi günler listelenir; hafta sonu her zaman kapalıdır.{' '}
+          <strong>Satırı sil</strong> o günü tamamen boşaltır; tek tek kutuları
+          temizlemek için kutucukları işaretleyip{' '}
+          <strong>Seçili kutuları temizle</strong> deyin. Bu değişiklikler{' '}
           <strong>Menüyü Kaydet</strong> ile yazılır — silme dahil.
+        </p>
+        <p className="text-xs text-solgun">
+          <strong>Okul yok</strong> resmi tatil ve gezi günleri içindir; kaydet demeye
+          gerek kalmadan hemen işlenir. İşaretli gün <strong>tüm hizmet yerlerinde</strong>{' '}
+          kapalı sayılır: kâr/zarar tablosunda görünmez ve genel giderin bölündüğü iş
+          günü sayısından düşer. Tek bir yerde gezi varsa işareti{' '}
+          <strong>Maliyet → Kâr/Zarar</strong> ekranından o yere koyun.
         </p>
       </div>
     </div>

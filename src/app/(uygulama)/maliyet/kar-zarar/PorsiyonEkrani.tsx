@@ -6,6 +6,12 @@ import { useMemo, useState, useTransition } from 'react'
 
 import { AY_ADLARI, bugunISO, para } from '@/lib/format'
 
+import {
+  okulYokIsaretle,
+  okulYokKaldir,
+  type OkulsuzGun,
+} from '../../okulsuz-actions'
+
 import { gunlukHizmetKaydet, type MaliyetDurumu } from '../actions'
 
 export type GunlukKisi = { tarih: string; kisi_sayisi: number | null }
@@ -72,6 +78,7 @@ export function PorsiyonEkrani({
   gunlukGenelGider,
   aylikGenelGider,
   giderHizmetGunu,
+  okulsuz,
 }: {
   noktaId: string
   noktaAdi: string
@@ -87,10 +94,12 @@ export function PorsiyonEkrani({
   okulGunleri: OkulGunu[]
   /** Dış hizmet yerlerinin tarihli satış fiyatları, en yeni önce */
   fiyatlar: SatisFiyati[]
-  /** Aylık genel giderin hizmet gününe bölünmüş hâli — her hizmet gününe eklenir */
+  /** Aylık genel giderin iş gününe bölünmüş hâli — her iş gününe eklenir */
   gunlukGenelGider: number
   aylikGenelGider: number
   giderHizmetGunu: number
+  /** Bu ayın kapalı günleri: resmi tatil (yer boş) ya da bu yere özel gezi */
+  okulsuz: OkulsuzGun[]
 }) {
   const router = useRouter()
   const [durum, setDurum] = useState<MaliyetDurumu>({})
@@ -118,18 +127,41 @@ export function PorsiyonEkrani({
     return m
   }, [okulGunleri])
 
-  /** Ayın günleri: hafta içi + kaydı olan hafta sonları */
+  /** tarih → kapalı gün kaydı */
+  const okulsuzHarita = useMemo(() => {
+    const m = new Map<string, OkulsuzGun>()
+    for (const o of okulsuz) m.set(o.tarih, o)
+    return m
+  }, [okulsuz])
+
+  /**
+   * Ayın iş günleri: hafta içi, okulsuz işaretlenmemiş.
+   *
+   * Hafta sonu her zaman kapalıdır — cumartesi-pazara yanlışlıkla girilmiş bir
+   * yemek kaydı tabloya gün açmaz, aşağıda uyarı olarak gösterilir.
+   */
   const gunler = useMemo(() => {
     const gunSayisi = new Date(yil, ay, 0).getDate()
     const liste: string[] = []
     for (let g = 1; g <= gunSayisi; g++) {
       const h = new Date(yil, ay - 1, g).getDay()
+      if (h === 0 || h === 6) continue
       const tarih = `${yil}-${String(ay).padStart(2, '0')}-${String(g).padStart(2, '0')}`
-      if ((h === 0 || h === 6) && !okulHaritasi.has(tarih) && !menuHaritasi.has(tarih)) continue
+      if (okulsuzHarita.has(tarih)) continue
       liste.push(tarih)
     }
     return liste
-  }, [yil, ay, okulHaritasi, menuHaritasi])
+  }, [yil, ay, okulsuzHarita])
+
+  /** Hafta sonuna girilmiş yemek kayıtları — hesaba katılmadı, görünsün. */
+  const haftaSonuKayitlari = useMemo(
+    () =>
+      okulGunleri.filter((o) => {
+        const h = new Date(o.tarih).getDay()
+        return h === 0 || h === 6
+      }),
+    [okulGunleri],
+  )
 
   // Porsiyon girdileri: "tarih|yemek" → değer
   const [porsiyon, setPorsiyon] = useState<Record<string, string>>(() => {
@@ -278,11 +310,32 @@ export function PorsiyonEkrani({
   /**
    * O güne düşen genel gider payı.
    *
-   * Aylık gider hizmet gününe bölünmüş hâliyle sabit; yalnızca gerçekten
-   * hizmet verilen günlere eklenir, boş günü maliyetle yüklemenin anlamı yok.
+   * Tablodaki her satır zaten bir iş günü, dolayısıyla payı hepsi alır: o gün
+   * kimse yemese de kira işliyor, maaş işliyor. Yalnızca gelecek günlere
+   * yazılmaz — gider gün geldikçe yapıştırılır.
    */
   function gunGenelGideri(tarih: string): number {
-    return gunPorsiyonu(tarih) > 0 || etkinYiyen(tarih) > 0 ? gunlukGenelGider : 0
+    return tarih <= bugun ? gunlukGenelGider : 0
+  }
+
+  /** Bir günü kapatır: resmi tatil ya da bu yere özel gezi. */
+  function okulYok(tarih: string) {
+    const sebep = window.prompt(
+      `${noktaAdi} — ${tarih} neden kapalı? (gezi, resmi tatil…)`,
+      'Gezi',
+    )
+    if (sebep === null) return
+    basla(async () => {
+      setDurum(await okulYokIsaretle(tarih, noktaId, sebep))
+      router.refresh()
+    })
+  }
+
+  function okulVar(id: string) {
+    basla(async () => {
+      setDurum(await okulYokKaldir(id))
+      router.refresh()
+    })
   }
 
   const toplam = gunler.reduce(
@@ -370,8 +423,9 @@ export function PorsiyonEkrani({
       {gunlukGenelGider > 0 ? (
         <p className="mt-3 rounded-md bg-violet-50 px-3 py-2 text-sm text-violet-900">
           Genel gider: aylık <strong>{para(aylikGenelGider)}</strong> ÷{' '}
-          <strong>{giderHizmetGunu} hizmet günü</strong> ={' '}
-          <strong>{para(gunlukGenelGider)}</strong> her güne ekleniyor.{' '}
+          <strong>{giderHizmetGunu} iş günü</strong> ={' '}
+          <strong>{para(gunlukGenelGider)}</strong> her iş gününe yapıştırılıyor.
+          Bölen ayın tamamı; yapıştırma bugüne kadar, geleceğe dönük gider yazılmaz.{' '}
           <Link href="/maliyet/giderler" className="underline">
             Giderleri düzenle
           </Link>
@@ -384,6 +438,50 @@ export function PorsiyonEkrani({
             Genel Giderler
           </Link>{' '}
           sekmesini kullanın.
+        </p>
+      )}
+
+      {okulsuz.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm">
+          <span className="text-solgun">Okul yok:</span>
+          {okulsuz.map((o) => {
+            const d = new Date(o.tarih)
+            return (
+              <span
+                key={o.id}
+                className="inline-flex items-center gap-1 rounded border border-cizgi
+                           bg-white px-2 py-0.5 text-xs"
+                title={o.hizmet_noktasi_id ? `${noktaAdi} için kapalı` : 'Tüm yerlerde kapalı'}
+              >
+                <strong className="tabular-nums">
+                  {d.getDate()} {AY_ADLARI[d.getMonth()].slice(0, 3)}
+                </strong>
+                {o.sebep && <span className="text-solgun">{o.sebep}</span>}
+                {!o.hizmet_noktasi_id && (
+                  <span className="text-violet-700">tüm yerler</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => okulVar(o.id)}
+                  disabled={kaydediliyor}
+                  className="text-red-600 hover:underline"
+                  title="Bu günü yeniden aç"
+                >
+                  ×
+                </button>
+              </span>
+            )
+          })}
+        </div>
+      )}
+
+      {haftaSonuKayitlari.length > 0 && (
+        <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <strong>{haftaSonuKayitlari.length} hafta sonu gününde</strong> yemek kaydı var
+          (toplam{' '}
+          {para(haftaSonuKayitlari.reduce((t, o) => t + Number(o.ciro), 0))}). Hafta sonu
+          her zaman kapalı sayıldığı için bu kayıtlar tabloya girmedi — yanlış güne
+          işlenmiş olabilirler.
         </p>
       )}
 
@@ -458,6 +556,16 @@ export function PorsiyonEkrani({
                     {bugunMu && (
                       <span className="rozet ml-1 bg-blue-100 text-blue-800">bugün</span>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => okulYok(tarih)}
+                      disabled={kaydediliyor}
+                      className="block text-[10px] text-slate-500 hover:text-red-600
+                                 hover:underline"
+                      title="Bu gün okul yok — tatil ya da gezi. Gün tablodan çıkar ve genel giderin bölündüğü iş gününden düşer."
+                    >
+                      okul yok
+                    </button>
                   </td>
 
                   {SLOTLAR.map((s) => {

@@ -2,16 +2,21 @@
 
 import { revalidatePath } from 'next/cache'
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 
-import { GENEL, OKUL_CEREZI } from '@/lib/okul'
+import { GENEL, genelYolMu, OKUL_CEREZI } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 
 /**
  * Aktif okulu değiştirir. Seçim çerezde tutulur; sayfalar arası ve
  * oturumlar arası korunur. `genel` özel bir değer: okul yerine yönetim
  * ekranlarını açar.
+ *
+ * Geçiş sonrası sayfa da değişir. Aksi hâlde GENEL'den okula geçince URL
+ * yönetim ekranında kalıyor, üst menü okul bağlantılarına dönerken alt menü
+ * hâlâ maliyet sekmelerini gösteriyordu; ancak elle yenileyince düzeliyordu.
  */
-export async function okulDegistir(okulId: string) {
+export async function okulDegistir(okulId: string, mevcutYol: string) {
   if (okulId !== GENEL) {
     // Var olmayan bir okul id'si çereze yazılmasın
     const supabase = await supabaseServer()
@@ -32,4 +37,9 @@ export async function okulDegistir(okulId: string) {
   })
 
   revalidatePath('/', 'layout')
+
+  // Yeni modun kapsamadığı bir sayfadaysak modun ana ekranına git.
+  const genelSayfa = genelYolMu(mevcutYol)
+  if (okulId === GENEL && !genelSayfa) redirect('/menu')
+  if (okulId !== GENEL && genelSayfa) redirect('/pos')
 }

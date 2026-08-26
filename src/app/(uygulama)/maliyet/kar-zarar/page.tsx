@@ -4,6 +4,8 @@ import { YazdirButonu } from '@/components/Yazdir'
 import { AY_ADLARI, para, tarih as tarihBicim } from '@/lib/format'
 import { supabaseServer } from '@/lib/supabase/server'
 
+import type { OkulsuzGun } from '../../okulsuz-actions'
+
 import {
   PorsiyonEkrani,
   type GunKalemleri,
@@ -19,6 +21,8 @@ type KarZarar = {
   hizmet_noktasi: string
   kaynak: 'okul' | 'manuel'
   gun_sayisi: number
+  /** Ayın açık iş günü sayısı — genel giderin bölündüğü sayı */
+  is_gunu: number
   toplam_kisi: number
   misafir: number
   cikan_porsiyon: number
@@ -83,6 +87,7 @@ export default async function KarZararPage({
     { data: cikanVeri },
     { data: fiyatVeri },
     { data: giderVeri },
+    { data: okulsuzVeri },
   ] = await Promise.all([
       secili
         ? supabase
@@ -126,8 +131,19 @@ export default async function KarZararPage({
             p_ay: ay,
           })
         : Promise.resolve({ data: null }),
+      // Kapalı günler: bu yere özel geziler + tüm yerleri kapatan resmi tatiller
+      secili
+        ? supabase
+            .from('okulsuz_gunler')
+            .select('id, tarih, hizmet_noktasi_id, sebep')
+            .or(`hizmet_noktasi_id.is.null,hizmet_noktasi_id.eq.${secili.id}`)
+            .gte('tarih', bas)
+            .lte('tarih', bit)
+            .order('tarih')
+        : Promise.resolve({ data: null }),
     ])
 
+  const okulsuz = (okulsuzVeri ?? []) as OkulsuzGun[]
   const kisiler = (kisiVeri ?? []) as GunlukKisi[]
   const kalemler = (kalemVeri ?? []) as GunKalemleri[]
   const okulGunleri = (okulVeri ?? []) as OkulGunu[]
@@ -221,7 +237,8 @@ export default async function KarZararPage({
           <thead>
             <tr>
               <th>Hizmet Yeri</th>
-              <th className="text-right">Gün</th>
+              <th className="text-right">İş Günü</th>
+              <th className="text-right">Hizmet Günü</th>
               <th className="text-right">Çıkan Porsiyon</th>
               <th className="text-right">Yiyen (misafir)</th>
               <th className="text-right">Ciro</th>
@@ -247,7 +264,20 @@ export default async function KarZararPage({
                     {r.kaynak === 'okul' ? 'otomatik' : 'elle'}
                   </span>
                 </td>
-                <td className="text-right tabular-nums">{r.gun_sayisi}</td>
+                <td className="text-right tabular-nums text-violet-700" title="Hafta içi, okulun açık olduğu gün sayısı — genel gider buna bölünür">
+                  {r.is_gunu}
+                </td>
+                <td
+                  className="text-right tabular-nums"
+                  title="Gerçekten yemek çıkan / yiyen olan gün sayısı"
+                >
+                  {r.gun_sayisi}
+                  {r.is_gunu > r.gun_sayisi && (
+                    <span className="ml-1 text-xs text-solgun">
+                      ({r.is_gunu - r.gun_sayisi} boş)
+                    </span>
+                  )}
+                </td>
                 <td className="text-right font-semibold tabular-nums">
                   {r.cikan_porsiyon}
                   {r.cikansiz_gun > 0 && (
@@ -283,7 +313,7 @@ export default async function KarZararPage({
             ))}
             {rapor.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-solgun">
+                <td colSpan={11} className="py-8 text-center text-solgun">
                   Bu ayda hesaplanacak veri yok.
                 </td>
               </tr>
@@ -293,6 +323,7 @@ export default async function KarZararPage({
             <tfoot>
               <tr>
                 <td className="font-semibold">Toplam</td>
+                <td />
                 <td />
                 <td className="text-right font-semibold tabular-nums">{toplam.cikan}</td>
                 <td className="text-right font-semibold tabular-nums">
@@ -368,6 +399,7 @@ export default async function KarZararPage({
               gunlukGenelGider={Number(giderOzeti?.gunluk_gider ?? 0)}
               aylikGenelGider={Number(giderOzeti?.toplam ?? 0)}
               giderHizmetGunu={giderOzeti?.hizmet_gunu ?? 0}
+              okulsuz={okulsuz}
             />
           </div>
         )
