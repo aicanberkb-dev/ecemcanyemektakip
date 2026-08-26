@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { para } from '@/lib/format'
+import { TaksitRozeti, type TaksitBilgisi } from '@/components/TaksitRozeti'
+import { bugunISO, para } from '@/lib/format'
 import { supabaseBrowser } from '@/lib/supabase/client'
 import type { GunSonu, PosSonuc, SerbestOgunTipi } from '@/lib/types'
 
@@ -12,11 +13,14 @@ export function PosEkrani({
   okulId,
   okulAdi,
   ucretliVarsayilan,
+  taksitler,
 }: {
   okulId: string
   okulAdi: string
   /** Bugünkü tarifeden gelen ücretli öğün fiyatı; ekranda değiştirilebilir */
   ucretliVarsayilan: number
+  /** Aylıkçıların taksit durumu, öğrenci id'siyle */
+  taksitler: Record<string, TaksitBilgisi>
 }) {
   const supabase = useMemo(() => supabaseBrowser(), [])
   const aramaRef = useRef<HTMLInputElement>(null)
@@ -244,9 +248,20 @@ export function PosEkrani({
 
   const yemekKilitli = !secili || secili.bugun_yedi || kaydediliyor
 
+  // Yemekhane hep "bugün"e kaydeder; hafta sonu okul olmadığı için o gün
+  // girilen kayıt neredeyse her zaman hatadır. Engellenmiyor, uyarılıyor.
+  const haftaSonu = [0, 6].includes(new Date(`${bugunISO()}T00:00:00`).getDay())
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
       <div className="space-y-4">
+        {haftaSonu && (
+          <p className="rounded-md bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+            Bugün hafta sonu — okul yok. Kayıt girebilirsiniz ama bu gün maliyet ve
+            kâr/zarar hesabına girmez.
+          </p>
+        )}
+
         {/* Arama */}
         <div className="kart relative p-4">
           <div className="mb-2 flex items-baseline justify-between gap-3">
@@ -289,13 +304,17 @@ export function PosEkrani({
                     {o.bugun_yedi && (
                       <span className="rozet bg-slate-100 text-slate-600">bugün yedi</span>
                     )}
-                    <span
-                      className={`font-semibold tabular-nums ${
-                        o.kalan < 0 ? 'text-red-600' : 'text-emerald-600'
-                      }`}
-                    >
-                      {para(o.kalan)}
-                    </span>
+                    {o.abone_tipi === 'aylik' ? (
+                      <TaksitRozeti taksit={taksitler[o.student_id]} tutarGoster={false} />
+                    ) : (
+                      <span
+                        className={`font-semibold tabular-nums ${
+                          o.kalan < 0 ? 'text-red-600' : 'text-emerald-600'
+                        }`}
+                      >
+                        {para(o.kalan)}
+                      </span>
+                    )}
                   </button>
                 </li>
               ))}
@@ -313,13 +332,38 @@ export function PosEkrani({
                 {secili.sinif ? ` · ${secili.sinif}` : ''} ·{' '}
                 {secili.abone_tipi === 'aylik' ? 'Aylıkçı' : 'Günlükçü'}
               </p>
-              <p
-                className={`mt-4 text-6xl font-bold tabular-nums ${
-                  secili.kalan < 0 ? 'text-red-600' : 'text-emerald-600'
-                }`}
-              >
-                {para(secili.kalan)}
-              </p>
+
+              {/* Aylıkçıda bakiye ödeme durumunu göstermez; ölçü taksit planı.
+                  Büyük rakam yerine taksit durumu öne çıkar. */}
+              {secili.abone_tipi === 'aylik' ? (
+                <>
+                  <div className="mt-4">
+                    <TaksitRozeti taksit={taksitler[secili.student_id]} />
+                  </div>
+                  {(() => {
+                    const t = taksitler[secili.student_id]
+                    if (!t || t.yillik_toplam === 0) return null
+                    return (
+                      <p className="mt-2 text-sm text-solgun tabular-nums">
+                        Vadesi gelen {para(t.vadesi_gelen)} · ödenen {para(t.odenen)}
+                        {t.eksik > 0 && (
+                          <span className="ml-1 font-semibold text-red-600">
+                            · eksik {para(t.eksik)}
+                          </span>
+                        )}
+                      </p>
+                    )
+                  })()}
+                </>
+              ) : (
+                <p
+                  className={`mt-4 text-6xl font-bold tabular-nums ${
+                    secili.kalan < 0 ? 'text-red-600' : 'text-emerald-600'
+                  }`}
+                >
+                  {para(secili.kalan)}
+                </p>
+              )}
               {secili.bugun_yedi ? (
                 <p className="mt-3 rounded-md bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-800">
                   Bugün zaten yemek kaydı var.

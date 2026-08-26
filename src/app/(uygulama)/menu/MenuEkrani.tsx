@@ -189,13 +189,15 @@ export function MenuEkrani({
   }, [okulsuz])
 
   /**
-   * Bir günü kapatır. Menü satırı da temizlenir: okul yoksa o gün yemek de
-   * çıkmaz, menüde durması kâr/zarar ekranında yanıltıcı olurdu.
+   * Bir günü kapatır.
+   *
+   * Menü satırı silinmez: yazdığınız yemek dursun ki tatil geri alınırsa
+   * yeniden yazmayın. Kapalı gün afişte ve maliyet tablosunda menü yerine
+   * "okul yok" ve buraya yazdığınız açıklamayla görünür.
    */
   function okulYok(tarih: string) {
     const sebep = window.prompt('Neden okul yok? (resmi tatil, gezi…)', 'Resmi tatil')
     if (sebep === null) return
-    satirTemizle(tarih)
     basla(async () => {
       setDurum(await okulYokIsaretle(tarih, null, sebep))
       router.refresh()
@@ -344,6 +346,13 @@ export function MenuEkrani({
                       <td colSpan={ALANLAR.length} className="text-sm text-solgun">
                         <span className="rozet bg-slate-200 text-slate-700">okul yok</span>
                         {kapali.sebep && <span className="ml-2">{kapali.sebep}</span>}
+                        {doluMu && (
+                          <span className="ml-3 text-xs line-through">
+                            {ALANLAR.map((a) => (g[a.anahtar] as string) ?? '')
+                              .filter((x) => x.trim())
+                              .join(' · ')}
+                          </span>
+                        )}
                       </td>
                       <td className="text-right">
                         <button

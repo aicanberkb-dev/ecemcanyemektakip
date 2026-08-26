@@ -1,12 +1,11 @@
 import Link from 'next/link'
 
 import { aktifOkul } from '@/lib/okul'
-import { sezonSec } from '@/lib/sezon'
-import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
+import { taksitHaritasi } from '@/lib/taksit-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
-import type { StudentBalance, TaksitDurumu } from '@/lib/types'
+import type { StudentBalance } from '@/lib/types'
 
-import { OgrenciListesi, type OgrenciSatiri, type TaksitBilgisi } from './OgrenciListesi'
+import { OgrenciListesi, type OgrenciSatiri } from './OgrenciListesi'
 
 export const metadata = { title: 'Öğrenciler — Yemek Takip' }
 
@@ -15,35 +14,13 @@ export default async function StudentsPage() {
   const okul = await aktifOkul()
   if (!okul) return null
 
-  // Aylıkçının ölçüsü bakiye değil taksit planı; o yüzden sezonun taksit
-  // durumu da burada çekilip listeye katılıyor.
-  const sezonListesi = await sezonlariGetir(okul.id)
-  const sezon = sezonSec(sezonListesi)
+  // Aylıkçının ölçüsü bakiye değil taksit planı; durum ortak yardımcıdan gelir.
+  const taksitler = await taksitHaritasi(okul.id)
 
-  // Okulun tüm öğrencileri tek seferde gelir; arama ve süzgeçler listede,
-  // yazdıkça çalışır. Okul başına öğrenci sayısı bunun için fazlasıyla küçük.
-  const [{ data, error }, { data: sinifSatirlari }, taksitSonuc] = await Promise.all([
+  const [{ data, error }, { data: sinifSatirlari }] = await Promise.all([
     supabase.from('student_balances').select('*').eq('okul_id', okul.id).order('ad_soyad'),
     supabase.from('students').select('sinif').eq('okul_id', okul.id).not('sinif', 'is', null),
-    sezon
-      ? supabase.rpc('taksit_durumu', { p_sezon_id: sezon.id })
-      : Promise.resolve({ data: null }),
   ])
-
-  const taksitler = new Map<string, TaksitBilgisi>(
-    ((taksitSonuc.data ?? []) as TaksitDurumu[]).map((t) => [
-      t.student_id,
-      {
-        yillik_toplam: Number(t.yillik_toplam),
-        vadesi_gelen: Number(t.vadesi_gelen),
-        odenen: Number(t.odenen),
-        eksik: Number(t.eksik),
-        odeme_alinmali: t.odeme_alinmali,
-        son_vade: t.son_vade,
-        ozel_plan: t.ozel_plan,
-      },
-    ]),
-  )
 
   const ogrenciler: OgrenciSatiri[] = ((data ?? []) as StudentBalance[]).map((o) => ({
     student_id: o.student_id,
@@ -94,7 +71,7 @@ export default async function StudentsPage() {
       <OgrenciListesi
         ogrenciler={ogrenciler}
         siniflar={siniflar}
-        sezonVarMi={sezon !== null}
+        sezonVarMi={taksitler.size > 0}
       />
     </div>
   )

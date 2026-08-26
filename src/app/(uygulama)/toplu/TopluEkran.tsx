@@ -98,7 +98,8 @@ export function TopluEkran({
     if (secili.size === 0 || kaydediliyor) return
     if (
       !confirm(
-        `${secili.size} öğrenci için ${tarihBicim(gun)} tarihine yemek kaydı girilecek.\n` +
+        (haftaSonuMu(gun) ? `DİKKAT: ${tarihBicim(gun)} hafta sonu, okul yok.\n\n` : '') +
+          `${secili.size} öğrenci için ${tarihBicim(gun)} tarihine yemek kaydı girilecek.\n` +
           `Toplam ${para(toplamTutar)} düşülecek. Onaylıyor musunuz?`,
       )
     )
@@ -525,11 +526,12 @@ function isGunuKaydir(iso: string, yon: 1 | -1): string {
 }
 
 /**
- * Toplu girişin tarih seçicisi — yalnızca iş günleri.
+ * Toplu girişin tarih seçicisi.
  *
- * Hafta sonu okul yok, o günlere yemek kaydı girilmemeli. Tarayıcının tarih
- * kutusunda tek tek günleri kapatmak mümkün olmadığı için hafta sonu seçimi
- * engelleniyor; ok tuşları da hafta sonlarını atlayarak ilerliyor.
+ * Hafta sonu okul yok; o güne kayıt girmek neredeyse her zaman hatadır. Yine
+ * de engellenmiyor, uyarılıyor — test sırasında hafta sonuna veri girmek
+ * gerekebiliyor. Ok tuşları hafta sonunu atlar, yani normal kullanımda
+ * oraya hiç düşülmez.
  */
 function TarihSecici({ gun }: { gun: string }) {
   const router = useRouter()
@@ -560,7 +562,7 @@ function TarihSecici({ gun }: { gun: string }) {
           type="date"
           value={secim}
           onChange={(e) => setSecim(e.target.value)}
-          className={`girdi ${gecersiz ? 'border-red-400' : ''}`}
+          className={`girdi ${gecersiz ? 'border-amber-400' : ''}`}
         />
         <button
           type="button"
@@ -572,7 +574,7 @@ function TarihSecici({ gun }: { gun: string }) {
         </button>
         <button
           type="button"
-          disabled={gecersiz || secim === gun}
+          disabled={secim === gun}
           onClick={() => git(secim)}
           className="btn-ikincil disabled:opacity-40"
         >
@@ -580,8 +582,9 @@ function TarihSecici({ gun }: { gun: string }) {
         </button>
       </div>
       {gecersiz && (
-        <p className="mt-1 text-xs font-medium text-red-600">
-          Hafta sonu okul yok — bir iş günü seçin.
+        <p className="mt-1 text-xs font-medium text-amber-700">
+          Hafta sonu — okul yok. Kayıt girebilirsiniz ama bu gün maliyet ve kâr/zarar
+          hesabına girmez.
         </p>
       )}
     </div>

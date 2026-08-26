@@ -23,6 +23,11 @@ export type Senet = {
   senet_no: string | null
   odeme_tarihi: string | null
   aciklama: string | null
+  /**
+   * Son ödeme günü — senet tarihinden 2 iş günü sonrası.
+   * Veritabanında türetilir (bkz. son_odeme_gunu), elle girilmez.
+   */
+  son_odeme: string
 }
 
 /** Bugünden kaç gün sonra/önce olduğunu verir. */
@@ -58,7 +63,7 @@ export function SenetEkrani({ senetler }: { senetler: Senet[] }) {
   )
 
   const bekleyen = senetler.filter((s) => !s.odeme_tarihi)
-  const geciken = bekleyen.filter((s) => s.vade_tarihi < bugun)
+  const geciken = bekleyen.filter((s) => s.son_odeme < bugun)
   const buAy = bekleyen.filter((s) => s.vade_tarihi.slice(0, 7) === bugun.slice(0, 7))
   const topla = (liste: Senet[]) => liste.reduce((t, s) => t + Number(s.tutar), 0)
 
@@ -66,7 +71,7 @@ export function SenetEkrani({ senetler }: { senetler: Senet[] }) {
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-3">
         <Ozet
-          baslik="Vadesi geçen"
+          baslik="Son ödeme günü geçen"
           adet={geciken.length}
           tutar={topla(geciken)}
           renk={geciken.length > 0 ? 'bg-red-50 text-red-800' : 'bg-slate-50 text-slate-600'}
@@ -153,6 +158,7 @@ export function SenetEkrani({ senetler }: { senetler: Senet[] }) {
           <thead>
             <tr>
               <th>Vade</th>
+              <th>Son Ödeme</th>
               <th>Kime</th>
               <th className="text-right">Tutar</th>
               <th>Banka</th>
@@ -167,7 +173,7 @@ export function SenetEkrani({ senetler }: { senetler: Senet[] }) {
             ))}
             {gosterilen.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-solgun">
+                <td colSpan={8} className="py-8 text-center text-solgun">
                   {arama || gizleOdenen ? 'Filtreye uyan senet yok.' : 'Henüz senet yok.'}
                 </td>
               </tr>
@@ -209,14 +215,16 @@ function SenetSatiri({ senet, bugun }: { senet: Senet; bugun: string }) {
   if (durum.basari && duzenle) setDuzenle(false)
 
   const odendi = !!senet.odeme_tarihi
-  const fark = gunFarki(senet.vade_tarihi, bugun)
+  // Gecikme son ödeme gününe göre ölçülür; vade günü değil, ödemenin
+  // yapılması gereken son gün önemli.
+  const fark = gunFarki(senet.son_odeme, bugun)
   const gecti = !odendi && fark < 0
   const yakin = !odendi && fark >= 0 && fark <= 7
 
   if (duzenle) {
     return (
       <tr className="bg-blue-50/40">
-        <td colSpan={7} className="px-3 py-3">
+        <td colSpan={8} className="px-3 py-3">
           <form action={gonder} className="flex flex-wrap items-end gap-3">
             <div>
               <label className="etiket text-xs">Vade</label>
@@ -275,8 +283,12 @@ function SenetSatiri({ senet, bugun }: { senet: Senet; bugun: string }) {
         odendi ? 'bg-emerald-50/60' : gecti ? 'bg-red-50' : yakin ? 'bg-amber-50' : undefined
       }
     >
-      <td className="whitespace-nowrap font-medium">
-        {tarihBicim(senet.vade_tarihi)}
+      <td className="whitespace-nowrap font-medium">{tarihBicim(senet.vade_tarihi)}</td>
+      <td
+        className="whitespace-nowrap font-medium"
+        title="Senet tarihinden 2 iş günü sonrası; hafta sonu atlanır"
+      >
+        {tarihBicim(senet.son_odeme)}
         {gecti && (
           <span className="rozet ml-2 bg-red-100 text-red-800">{-fark} gün geçti</span>
         )}

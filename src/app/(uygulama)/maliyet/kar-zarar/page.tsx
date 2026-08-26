@@ -1,6 +1,8 @@
 import Link from 'next/link'
 
+import { DonemSecici } from '@/components/DonemSecici'
 import { YazdirButonu } from '@/components/Yazdir'
+import { donemCoz, donemParametreleri } from '@/lib/donem'
 import { AY_ADLARI, para, tarih as tarihBicim } from '@/lib/format'
 import { supabaseServer } from '@/lib/supabase/server'
 
@@ -12,6 +14,7 @@ import {
   type GunlukCikan,
   type GunlukKisi,
   type OkulGunu,
+  type AyGideri,
   type SatisFiyati,
 } from './PorsiyonEkrani'
 
@@ -45,23 +48,25 @@ type Nokta = {
   varsayilan_cikan_porsiyon: number
 }
 
-function ayAralik(yil: number, ay: number) {
-  return {
-    bas: `${yil}-${String(ay).padStart(2, '0')}-01`,
-    bit: `${yil}-${String(ay).padStart(2, '0')}-${new Date(yil, ay, 0).getDate()}`,
-  }
-}
-
 export default async function KarZararPage({
   searchParams,
 }: {
-  searchParams: Promise<{ yil?: string; ay?: string; nokta?: string }>
+  searchParams: Promise<{ yil?: string; ay?: string; bas?: string; bit?: string; nokta?: string }>
 }) {
   const q = await searchParams
-  const simdi = new Date()
-  const yil = Number(q.yil) || simdi.getFullYear()
-  const ay = Number(q.ay) || simdi.getMonth() + 1
-  const { bas, bit } = ayAralik(yil, ay)
+  const donem = donemCoz(q)
+  const { bas, bit, yil, ay } = donem
+
+  // Aralık iki ayı kapsayabilir; genel gider aylık tanımlandığı için her ayın
+  // günlük payı ayrı hesaplanır.
+  const aylar: { yil: number; ay: number }[] = []
+  for (
+    let d = new Date(Number(bas.slice(0, 4)), Number(bas.slice(5, 7)) - 1, 1);
+    d <= new Date(Number(bit.slice(0, 4)), Number(bit.slice(5, 7)) - 1, 1);
+    d.setMonth(d.getMonth() + 1)
+  ) {
+    aylar.push({ yil: d.getFullYear(), ay: d.getMonth() + 1 })
+  }
 
   const supabase = await supabaseServer()
 
@@ -125,11 +130,22 @@ export default async function KarZararPage({
         : Promise.resolve({ data: null }),
       // Günlük genel gider payı: gün satırlarında malzemenin üstüne eklenir
       secili
-        ? supabase.rpc('aylik_gider_ozeti', {
-            p_nokta_id: secili.id,
-            p_yil: yil,
-            p_ay: ay,
-          })
+        ? Promise.all(
+            aylar.map(async (a) => {
+              const { data } = await supabase.rpc('aylik_gider_ozeti', {
+                p_nokta_id: secili.id,
+                p_yil: a.yil,
+                p_ay: a.ay,
+              })
+              const o = (data ?? [])[0]
+              return {
+                anahtar: `${a.yil}-${String(a.ay).padStart(2, '0')}`,
+                toplam: Number(o?.toplam ?? 0),
+                hizmetGunu: Number(o?.hizmet_gunu ?? 0),
+                gunlukGider: Number(o?.gunluk_gider ?? 0),
+              }
+            }),
+          ).then((data) => ({ data }))
         : Promise.resolve({ data: null }),
       // Kapalı günler: bu yere özel geziler + tüm yerleri kapatan resmi tatiller
       secili
@@ -149,11 +165,7 @@ export default async function KarZararPage({
   const okulGunleri = (okulVeri ?? []) as OkulGunu[]
   const cikanlar = (cikanVeri ?? []) as GunlukCikan[]
   const fiyatlar = (fiyatVeri ?? []) as SatisFiyati[]
-  const giderOzeti = ((giderVeri ?? [])[0] ?? null) as {
-    toplam: number | string
-    hizmet_gunu: number
-    gunluk_gider: number | string
-  } | null
+  const giderler = (giderVeri ?? []) as AyGideri[]
 
   const toplam = rapor.reduce(
     (t, r) => ({
@@ -195,43 +207,17 @@ export default async function KarZararPage({
         </p>
       )}
 
-      <div className="kart yazdirma-gizle flex flex-wrap items-end gap-3 p-4">
-        <form className="flex flex-wrap items-end gap-2">
-          {secili && <input type="hidden" name="nokta" value={secili.id} />}
-          <div>
-            <label className="etiket" htmlFor="ay">
-              Ay
-            </label>
-            <select id="ay" name="ay" defaultValue={String(ay)} className="girdi">
-              {AY_ADLARI.map((adi, i) => (
-                <option key={adi} value={i + 1}>
-                  {adi}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="etiket" htmlFor="yil">
-              Yıl
-            </label>
-            <input
-              id="yil"
-              type="number"
-              name="yil"
-              defaultValue={yil}
-              min={2000}
-              max={2100}
-              className="girdi w-28"
-            />
-          </div>
-          <button className="btn-birincil">Göster</button>
-        </form>
-        <YazdirButonu />
-      </div>
+      <DonemSecici
+        donem={donem}
+        temizleYolu={`/maliyet/kar-zarar${secili ? `?nokta=${secili.id}` : ''}`}
+        ekstra={{ nokta: secili?.id }}
+        sag={<YazdirButonu />}
+      />
 
       <div className="kart overflow-x-auto">
         <h2 className="border-b border-cizgi px-4 py-3 font-semibold">
-          {AY_ADLARI[ay - 1]} {yil} — {tarihBicim(bas)} / {tarihBicim(bit)}
+          {donem.ozel ? 'Seçili aralık' : `${AY_ADLARI[ay - 1]} ${yil}`} —{' '}
+          {tarihBicim(bas)} / {tarihBicim(bit)}
         </h2>
         <table className="tablo">
           <thead>
@@ -369,7 +355,7 @@ export default async function KarZararPage({
               {noktalar.map((n) => (
                 <Link
                   key={n.id}
-                  href={`/maliyet/kar-zarar?nokta=${n.id}&yil=${yil}&ay=${ay}`}
+                  href={`/maliyet/kar-zarar?nokta=${n.id}&${donemParametreleri(donem)}`}
                   className={`rounded-md border px-3 py-1.5 text-sm ${
                     n.id === secili.id
                       ? 'border-vurgu bg-vurgu font-semibold text-white'
@@ -389,16 +375,14 @@ export default async function KarZararPage({
               varsayilanKisi={secili.varsayilan_kisi_sayisi}
               varsayilanCikan={secili.varsayilan_cikan_porsiyon}
               listesizMi={!secili.liste_id}
-              yil={yil}
-              ay={ay}
+              bas={bas}
+              bit={bit}
               kisiler={kisiler}
               kalemler={kalemler}
               cikanlar={cikanlar}
               okulGunleri={okulGunleri}
               fiyatlar={fiyatlar}
-              gunlukGenelGider={Number(giderOzeti?.gunluk_gider ?? 0)}
-              aylikGenelGider={Number(giderOzeti?.toplam ?? 0)}
-              giderHizmetGunu={giderOzeti?.hizmet_gunu ?? 0}
+              giderler={giderler}
               okulsuz={okulsuz}
             />
           </div>

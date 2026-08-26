@@ -49,16 +49,54 @@ export default async function MenuCiktiPage({
   const bas = `${yil}-${String(ay).padStart(2, '0')}-01`
   const bit = `${yil}-${String(ay).padStart(2, '0')}-${new Date(yil, ay, 0).getDate()}`
 
-  const { data } = await supabase
-    .from('menu_gunleri')
-    .select('tarih, corba, ana_yemek, yardimci, ek')
-    .eq('liste_id', liste.id)
-    .gte('tarih', bas)
-    .lte('tarih', bit)
-    .order('tarih')
+  const [{ data }, { data: okulsuzVeri }] = await Promise.all([
+    supabase
+      .from('menu_gunleri')
+      .select('tarih, corba, ana_yemek, yardimci, ek')
+      .eq('liste_id', liste.id)
+      .gte('tarih', bas)
+      .lte('tarih', bit)
+      .order('tarih'),
+    // Resmi tatil ve okulun olmadigi gunler: afiste menu yerine aciklama yazar
+    supabase
+      .from('okulsuz_gunler')
+      .select('tarih, sebep')
+      .is('hizmet_noktasi_id', null)
+      .gte('tarih', bas)
+      .lte('tarih', bit),
+  ])
+
+  const kapaliHarita = new Map<string, string | null>(
+    ((okulsuzVeri ?? []) as { tarih: string; sebep: string | null }[]).map((o) => [
+      o.tarih,
+      o.sebep,
+    ]),
+  )
 
   const gunler = (data ?? []) as Gun[]
-  const dolu = gunler.filter((g) => g.corba || g.ana_yemek || g.yardimci || g.ek)
+
+  /**
+   * Afiste gorunecek gunler.
+   *
+   * Kapali gun menusu olsa da olmasa da listeye girer: veli afiste 12'sini
+   * gorup 13'unu goremezse gunun unutuldugunu sanar. Kapali gunde menu degil
+   * "okul yok" ve nedeni yazar.
+   */
+  const dolu: Gun[] = []
+  for (const g of gunler) {
+    if (kapaliHarita.has(g.tarih) || g.corba || g.ana_yemek || g.yardimci || g.ek) {
+      dolu.push(g)
+    }
+  }
+  for (const [tarih] of kapaliHarita) {
+    if (tarih < bas || tarih > bit) continue
+    const h = new Date(`${tarih}T00:00:00`).getDay()
+    if (h === 0 || h === 6) continue
+    if (!dolu.some((g) => g.tarih === tarih)) {
+      dolu.push({ tarih, corba: null, ana_yemek: null, yardimci: null, ek: null })
+    }
+  }
+  dolu.sort((a, b) => a.tarih.localeCompare(b.tarih))
 
   // Haftalara böl: pazartesiden pazartesiye
   const haftalar: Gun[][] = []
@@ -129,6 +167,36 @@ export default async function MenuCiktiPage({
                   const kalemler = [g.corba, g.ana_yemek, g.yardimci, g.ek].filter(
                     (x): x is string => !!x && x.trim() !== '',
                   )
+                  const kapali = kapaliHarita.has(g.tarih)
+
+                  // Kapalı günde menü basılmaz; velinin görmesi gereken şey o
+                  // gün okul olmadığı ve nedeni.
+                  if (kapali) {
+                    return (
+                      <div
+                        key={g.tarih}
+                        className="overflow-hidden rounded-lg border border-slate-300 bg-slate-50"
+                      >
+                        <div className="bg-slate-200 px-2 py-1 text-center">
+                          <div className="text-lg leading-none font-black text-slate-700 tabular-nums">
+                            {d.getDate()}
+                          </div>
+                          <div className="text-[9px] font-bold tracking-wide text-slate-600">
+                            {GUN_ADI[d.getDay()]}
+                          </div>
+                        </div>
+                        <div className="px-2 py-3 text-center">
+                          <p className="text-[11px] font-bold text-slate-700">OKUL YOK</p>
+                          {kapaliHarita.get(g.tarih) && (
+                            <p className="mt-0.5 text-[10px] leading-tight text-slate-600">
+                              {kapaliHarita.get(g.tarih)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  }
+
                   return (
                     <div
                       key={g.tarih}

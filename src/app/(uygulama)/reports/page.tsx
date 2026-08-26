@@ -1,10 +1,12 @@
 import Link from 'next/link'
 
 import { AboneRozeti, Bakiye, OgrenciTipiRozeti } from '@/components/Rozetler'
+import { TaksitRozeti } from '@/components/TaksitRozeti'
 import { TarihAraligi } from '@/components/TarihAraligi'
 import { ayBasiISO, bugunISO, para } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
+import { taksitHaritasi } from '@/lib/taksit-sunucu'
 import type { GelenGidenSatiri } from '@/lib/types'
 
 export const metadata = { title: 'Gelen–Giden Raporu — Yemek Takip' }
@@ -22,9 +24,11 @@ export default async function ReportsPage({
   const okul = await aktifOkul()
   if (!okul) return null
 
-  const [{ data, error }, { data: sinifSatirlari }] = await Promise.all([
+  const [{ data, error }, { data: sinifSatirlari }, taksitler] = await Promise.all([
     supabase.rpc('gelen_giden_raporu', { p_okul_id: okul.id, p_bas: bas, p_bit: bit }),
     supabase.from('students').select('sinif').eq('okul_id', okul.id).not('sinif', 'is', null),
+    // Aylıkçının bakiyesi ödeme durumunu göstermez; ölçü taksit planı
+    taksitHaritasi(okul.id),
   ])
 
   let satirlar = (data ?? []) as GelenGidenSatiri[]
@@ -112,6 +116,7 @@ export default async function ReportsPage({
               <th className="text-right">Harcama</th>
               <th className="text-right">Öğün</th>
               <th className="text-right">Güncel Kalan</th>
+              <th>Taksit Durumu</th>
             </tr>
           </thead>
           <tbody>
@@ -138,13 +143,26 @@ export default async function ReportsPage({
                 <td className="text-right tabular-nums">{para(s.donem_harcama)}</td>
                 <td className="text-right tabular-nums">{s.donem_ogun}</td>
                 <td className="text-right">
-                  <Bakiye tutar={Number(s.guncel_kalan)} />
+                  {s.abone_tipi === 'aylik' ? (
+                    <span className="text-solgun" title="Aylıkçıdan öğün ücreti düşülmez; bakiye ödeme durumunu göstermez">
+                      —
+                    </span>
+                  ) : (
+                    <Bakiye tutar={Number(s.guncel_kalan)} />
+                  )}
+                </td>
+                <td className="whitespace-nowrap">
+                  {s.abone_tipi === 'aylik' ? (
+                    <TaksitRozeti taksit={taksitler.get(s.student_id)} />
+                  ) : (
+                    <span className="text-solgun">—</span>
+                  )}
                 </td>
               </tr>
             ))}
             {satirlar.length === 0 && (
               <tr>
-                <td colSpan={9} className="py-8 text-center text-solgun">
+                <td colSpan={10} className="py-8 text-center text-solgun">
                   Bu aralıkta kayıt yok.
                 </td>
               </tr>
@@ -163,6 +181,7 @@ export default async function ReportsPage({
                 <td className="px-3 py-2 text-right">
                   <Bakiye tutar={toplam.kalan} kalin />
                 </td>
+                <td />
               </tr>
             </tfoot>
           )}

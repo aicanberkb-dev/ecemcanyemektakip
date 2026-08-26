@@ -5,20 +5,12 @@ import { useMemo, useState } from 'react'
 
 import { AramaKutusu } from '@/components/AramaKutusu'
 import { Bakiye, DurumRozeti, OgrenciTipiRozeti } from '@/components/Rozetler'
+import { TaksitRozeti, type TaksitBilgisi } from '@/components/TaksitRozeti'
 import { aramaEslesir } from '@/lib/arama'
-import { para, tarih as tarihBicim } from '@/lib/format'
+import { para } from '@/lib/format'
 import type { AboneTipi, OgrenciTipi } from '@/lib/types'
 
-/** Aylıkçının taksit durumu — taksit_durumu görünümünden gelir. */
-export type TaksitBilgisi = {
-  yillik_toplam: number
-  vadesi_gelen: number
-  odenen: number
-  eksik: number
-  odeme_alinmali: boolean
-  son_vade: string | null
-  ozel_plan: boolean
-}
+export type { TaksitBilgisi }
 
 export type OgrenciSatiri = {
   student_id: string
@@ -372,27 +364,7 @@ function AylikciBolumu({
                   {eksik > 0 ? para(eksik) : '—'}
                 </td>
                 <td className="whitespace-nowrap">
-                  {!planVar ? (
-                    <span
-                      className="rozet bg-amber-100 text-amber-800"
-                      title="Bu öğrenci için taksit planı tanımlı olmadığından ödeme durumu ölçülemiyor"
-                    >
-                      taksit planı yok
-                    </span>
-                  ) : eksik > 0 ? (
-                    <span className="rozet bg-red-100 text-red-800">
-                      taksit ödenmedi
-                      {t.son_vade && (
-                        <span className="ml-1 font-normal">
-                          · vade {tarihBicim(t.son_vade)}
-                        </span>
-                      )}
-                    </span>
-                  ) : (
-                    <span className="rozet bg-emerald-100 text-emerald-800">
-                      taksitler ödendi
-                    </span>
-                  )}
+                  <TaksitRozeti taksit={t} tutarGoster={false} />
                 </td>
                 <td>
                   <DurumRozeti aktif={o.aktif} />

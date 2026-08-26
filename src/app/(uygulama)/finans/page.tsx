@@ -15,8 +15,10 @@ export default async function SenetlerPage() {
       <div>
         <h1 className="baslik">Tekel Senetleri</h1>
         <p className="text-sm text-solgun">
-          Ödenecek senetler — vade, kime, tutar, banka. Vadesi geçenler kırmızı, bu hafta
-          gelenler sarı işaretlenir.
+          Ödenecek senetler — vade, kime, tutar, banka. <strong>Son ödeme günü</strong>
+          senet tarihinden 2 iş günü sonrasıdır ve hafta sonunu atlar: pazartesi senedi
+          çarşamba, cuma senedi salı ödenir; hafta sonuna denk gelen senet çarşamba.
+          Günü geçenler kırmızı, bu hafta gelenler sarı işaretlenir.
         </p>
       </div>
 
