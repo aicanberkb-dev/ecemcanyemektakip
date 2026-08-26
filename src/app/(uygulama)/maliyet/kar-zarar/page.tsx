@@ -82,6 +82,7 @@ export default async function KarZararPage({
     { data: okulVeri },
     { data: cikanVeri },
     { data: fiyatVeri },
+    { data: giderVeri },
   ] = await Promise.all([
       secili
         ? supabase
@@ -117,6 +118,14 @@ export default async function KarZararPage({
             .eq('hizmet_noktasi_id', secili.id)
             .order('gecerli_baslangic', { ascending: false })
         : Promise.resolve({ data: null }),
+      // Günlük genel gider payı: gün satırlarında malzemenin üstüne eklenir
+      secili
+        ? supabase.rpc('aylik_gider_ozeti', {
+            p_nokta_id: secili.id,
+            p_yil: yil,
+            p_ay: ay,
+          })
+        : Promise.resolve({ data: null }),
     ])
 
   const kisiler = (kisiVeri ?? []) as GunlukKisi[]
@@ -124,6 +133,11 @@ export default async function KarZararPage({
   const okulGunleri = (okulVeri ?? []) as OkulGunu[]
   const cikanlar = (cikanVeri ?? []) as GunlukCikan[]
   const fiyatlar = (fiyatVeri ?? []) as SatisFiyati[]
+  const giderOzeti = ((giderVeri ?? [])[0] ?? null) as {
+    toplam: number | string
+    hizmet_gunu: number
+    gunluk_gider: number | string
+  } | null
 
   const toplam = rapor.reduce(
     (t, r) => ({
@@ -351,6 +365,9 @@ export default async function KarZararPage({
               cikanlar={cikanlar}
               okulGunleri={okulGunleri}
               fiyatlar={fiyatlar}
+              gunlukGenelGider={Number(giderOzeti?.gunluk_gider ?? 0)}
+              aylikGenelGider={Number(giderOzeti?.toplam ?? 0)}
+              giderHizmetGunu={giderOzeti?.hizmet_gunu ?? 0}
             />
           </div>
         )

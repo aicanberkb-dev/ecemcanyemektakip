@@ -1,23 +1,49 @@
 import Link from 'next/link'
 
-import { aktifOkulId } from '@/lib/okul'
+import { aktifOkul } from '@/lib/okul'
+import { sezonSec } from '@/lib/sezon'
+import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
-import type { StudentBalance } from '@/lib/types'
+import type { StudentBalance, TaksitDurumu } from '@/lib/types'
 
-import { OgrenciListesi, type OgrenciSatiri } from './OgrenciListesi'
+import { OgrenciListesi, type OgrenciSatiri, type TaksitBilgisi } from './OgrenciListesi'
 
 export const metadata = { title: 'Öğrenciler — Yemek Takip' }
 
 export default async function StudentsPage() {
   const supabase = await supabaseServer()
-  const okulId = await aktifOkulId()
+  const okul = await aktifOkul()
+  if (!okul) return null
+
+  // Aylıkçının ölçüsü bakiye değil taksit planı; o yüzden sezonun taksit
+  // durumu da burada çekilip listeye katılıyor.
+  const sezonListesi = await sezonlariGetir(okul.id)
+  const sezon = sezonSec(sezonListesi)
 
   // Okulun tüm öğrencileri tek seferde gelir; arama ve süzgeçler listede,
   // yazdıkça çalışır. Okul başına öğrenci sayısı bunun için fazlasıyla küçük.
-  const [{ data, error }, { data: sinifSatirlari }] = await Promise.all([
-    supabase.from('student_balances').select('*').eq('okul_id', okulId).order('ad_soyad'),
-    supabase.from('students').select('sinif').eq('okul_id', okulId).not('sinif', 'is', null),
+  const [{ data, error }, { data: sinifSatirlari }, taksitSonuc] = await Promise.all([
+    supabase.from('student_balances').select('*').eq('okul_id', okul.id).order('ad_soyad'),
+    supabase.from('students').select('sinif').eq('okul_id', okul.id).not('sinif', 'is', null),
+    sezon
+      ? supabase.rpc('taksit_durumu', { p_sezon_id: sezon.id })
+      : Promise.resolve({ data: null }),
   ])
+
+  const taksitler = new Map<string, TaksitBilgisi>(
+    ((taksitSonuc.data ?? []) as TaksitDurumu[]).map((t) => [
+      t.student_id,
+      {
+        yillik_toplam: Number(t.yillik_toplam),
+        vadesi_gelen: Number(t.vadesi_gelen),
+        odenen: Number(t.odenen),
+        eksik: Number(t.eksik),
+        odeme_alinmali: t.odeme_alinmali,
+        son_vade: t.son_vade,
+        ozel_plan: t.ozel_plan,
+      },
+    ]),
+  )
 
   const ogrenciler: OgrenciSatiri[] = ((data ?? []) as StudentBalance[]).map((o) => ({
     student_id: o.student_id,
@@ -40,6 +66,7 @@ export default async function StudentsPage() {
     alinan_para: Number(o.alinan_para),
     harcanan: Number(o.harcanan),
     kalan: Number(o.kalan),
+    taksit: taksitler.get(o.student_id) ?? null,
   }))
 
   const siniflar = [
@@ -64,7 +91,11 @@ export default async function StudentsPage() {
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error.message}</p>
       )}
 
-      <OgrenciListesi ogrenciler={ogrenciler} siniflar={siniflar} />
+      <OgrenciListesi
+        ogrenciler={ogrenciler}
+        siniflar={siniflar}
+        sezonVarMi={sezon !== null}
+      />
     </div>
   )
 }

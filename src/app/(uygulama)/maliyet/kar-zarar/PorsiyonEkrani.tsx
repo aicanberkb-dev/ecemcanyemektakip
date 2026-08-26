@@ -69,6 +69,9 @@ export function PorsiyonEkrani({
   cikanlar,
   okulGunleri,
   fiyatlar,
+  gunlukGenelGider,
+  aylikGenelGider,
+  giderHizmetGunu,
 }: {
   noktaId: string
   noktaAdi: string
@@ -84,6 +87,10 @@ export function PorsiyonEkrani({
   okulGunleri: OkulGunu[]
   /** Dış hizmet yerlerinin tarihli satış fiyatları, en yeni önce */
   fiyatlar: SatisFiyati[]
+  /** Aylık genel giderin hizmet gününe bölünmüş hâli — her hizmet gününe eklenir */
+  gunlukGenelGider: number
+  aylikGenelGider: number
+  giderHizmetGunu: number
 }) {
   const router = useRouter()
   const [durum, setDurum] = useState<MaliyetDurumu>({})
@@ -268,16 +275,27 @@ export function PorsiyonEkrani({
     })
   }
 
+  /**
+   * O güne düşen genel gider payı.
+   *
+   * Aylık gider hizmet gününe bölünmüş hâliyle sabit; yalnızca gerçekten
+   * hizmet verilen günlere eklenir, boş günü maliyetle yüklemenin anlamı yok.
+   */
+  function gunGenelGideri(tarih: string): number {
+    return gunPorsiyonu(tarih) > 0 || etkinYiyen(tarih) > 0 ? gunlukGenelGider : 0
+  }
+
   const toplam = gunler.reduce(
     (t, tarih) => ({
       porsiyon: t.porsiyon + gunPorsiyonu(tarih),
       yiyen: t.yiyen + etkinYiyen(tarih),
       maliyet: t.maliyet + gunMaliyeti(tarih),
+      gider: t.gider + gunGenelGideri(tarih),
       ciro: t.ciro + gunCirosu(tarih),
       fire: t.fire + gunFiresi(tarih).tutar,
       firePorsiyon: t.firePorsiyon + gunFiresi(tarih).porsiyon,
     }),
-    { porsiyon: 0, yiyen: 0, maliyet: 0, ciro: 0, fire: 0, firePorsiyon: 0 },
+    { porsiyon: 0, yiyen: 0, maliyet: 0, gider: 0, ciro: 0, fire: 0, firePorsiyon: 0 },
   )
 
   const menusuzGun = gunler.filter(
@@ -349,6 +367,26 @@ export function PorsiyonEkrani({
       )}
       {durum.hata && <p className="hata mt-2">{durum.hata}</p>}
 
+      {gunlukGenelGider > 0 ? (
+        <p className="mt-3 rounded-md bg-violet-50 px-3 py-2 text-sm text-violet-900">
+          Genel gider: aylık <strong>{para(aylikGenelGider)}</strong> ÷{' '}
+          <strong>{giderHizmetGunu} hizmet günü</strong> ={' '}
+          <strong>{para(gunlukGenelGider)}</strong> her güne ekleniyor.{' '}
+          <Link href="/maliyet/giderler" className="underline">
+            Giderleri düzenle
+          </Link>
+        </p>
+      ) : (
+        <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-solgun">
+          Bu yere genel gider girilmemiş; tabloda yalnızca malzeme maliyeti var. Maaş,
+          kira ve mazotu eklemek için{' '}
+          <Link href="/maliyet/giderler" className="text-vurgu underline">
+            Genel Giderler
+          </Link>{' '}
+          sekmesini kullanın.
+        </p>
+      )}
+
       {cikansizGun > 0 && (
         <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
           <strong>{cikansizGun}</strong> günün porsiyonu bilinmiyor; o günlerde maliyet yiyen
@@ -398,7 +436,9 @@ export function PorsiyonEkrani({
               <th className="w-28 text-right">Yiyen</th>
               <th className="text-right">Fire</th>
               <th className="text-right">Ciro</th>
-              <th className="text-right">Maliyet</th>
+              <th className="text-right">Malzeme</th>
+              <th className="text-right">Genel Gider</th>
+              <th className="text-right">Günün Maliyeti</th>
               <th className="text-right">Kâr / Zarar</th>
             </tr>
           </thead>
@@ -505,7 +545,9 @@ export function PorsiyonEkrani({
 
                   {(() => {
                     const ciro = gunCirosu(tarih)
-                    const maliyet = gunMaliyeti(tarih)
+                    const malzeme = gunMaliyeti(tarih)
+                    const gider = gunGenelGideri(tarih)
+                    const maliyet = malzeme + gider
                     const fire = gunFiresi(tarih)
                     const kar = ciro - maliyet
                     const veriVar = ciro > 0 || maliyet > 0
@@ -534,7 +576,17 @@ export function PorsiyonEkrani({
                           {ciro > 0 ? para(ciro) : <span className="text-solgun">—</span>}
                         </td>
                         <td className="text-right tabular-nums">
-                          {gun ? para(maliyet) : <span className="text-solgun">—</span>}
+                          {gun ? para(malzeme) : <span className="text-solgun">—</span>}
+                        </td>
+                        <td
+                          className={`text-right tabular-nums ${
+                            gider > 0 ? 'text-violet-700' : 'text-solgun'
+                          }`}
+                        >
+                          {gider > 0 ? para(gider) : '—'}
+                        </td>
+                        <td className="text-right font-semibold tabular-nums">
+                          {veriVar ? para(maliyet) : <span className="text-solgun">—</span>}
                         </td>
                         <td
                           className={`text-right font-semibold tabular-nums ${
@@ -556,7 +608,9 @@ export function PorsiyonEkrani({
               <td colSpan={4} className="text-xs text-solgun">
                 {toplam.porsiyon} porsiyon çıktı
                 {toplam.yiyen > 0 &&
-                  ` · kişi başı gerçek maliyet ${para(toplam.maliyet / toplam.yiyen)}`}
+                  ` · kişi başı gerçek maliyet ${para(
+                    (toplam.maliyet + toplam.gider) / toplam.yiyen,
+                  )}`}
               </td>
               <td className="text-right font-semibold tabular-nums">{toplam.yiyen}</td>
               <td
@@ -571,12 +625,20 @@ export function PorsiyonEkrani({
               </td>
               <td className="text-right font-semibold tabular-nums">{para(toplam.ciro)}</td>
               <td className="text-right font-semibold tabular-nums">{para(toplam.maliyet)}</td>
+              <td className="text-right font-semibold tabular-nums text-violet-700">
+                {para(toplam.gider)}
+              </td>
+              <td className="text-right font-bold tabular-nums">
+                {para(toplam.maliyet + toplam.gider)}
+              </td>
               <td
                 className={`text-right font-bold tabular-nums ${
-                  toplam.ciro - toplam.maliyet < 0 ? 'text-red-600' : 'text-emerald-700'
+                  toplam.ciro - toplam.maliyet - toplam.gider < 0
+                    ? 'text-red-600'
+                    : 'text-emerald-700'
                 }`}
               >
-                {para(toplam.ciro - toplam.maliyet)}
+                {para(toplam.ciro - toplam.maliyet - toplam.gider)}
               </td>
             </tr>
           </tfoot>
