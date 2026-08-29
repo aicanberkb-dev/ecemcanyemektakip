@@ -1,8 +1,9 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useActionState, useState } from 'react'
+import { Fragment, useActionState, useState } from 'react'
 
+import { CALISMA_YERLERI, calismaYeriSirasi } from '@/lib/calisma-yerleri'
 import { AY_ADLARI, bugunISO, para, tarih as tarihBicim } from '@/lib/format'
 
 import {
@@ -214,7 +215,13 @@ export function MaasEkrani({
           </div>
           <div className="min-w-36 flex-1">
             <label className="etiket text-xs">Çalıştığı yer</label>
-            <input name="calistigi_yer" placeholder="ör. GÖKSU KANTİN" className="girdi !py-1.5" />
+            <select name="calistigi_yer" defaultValue="ELMALI" className="girdi !py-1.5">
+              {CALISMA_YERLERI.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="min-w-36 flex-1">
             <label className="etiket text-xs">Sigorta yeri</label>
@@ -251,16 +258,44 @@ export function MaasEkrani({
             </tr>
           </thead>
           <tbody>
-            {satirlar.map((s) => (
-              <PersonelSatiri
-                key={s.personel.id}
-                {...s}
-                yil={yil}
-                ay={ay}
-                bugun={bugun}
-                ucretGecmisi={ucretler.filter((u) => u.personel_id === s.personel.id)}
-              />
-            ))}
+            {CALISMA_YERLERI.map((yer, i) => {
+              // Listede olmayan eski serbest metin değerler de DİĞER altında
+              const grubun = satirlar.filter(
+                (s) => calismaYeriSirasi(s.personel.calistigi_yer) === i,
+              )
+              if (grubun.length === 0) return null
+              const grupToplam = grubun.reduce((t, s) => t + s.beklenen, 0)
+
+              return (
+                <Fragment key={yer}>
+                  <tr className="bg-slate-100">
+                    <td
+                      colSpan={4}
+                      className="py-1.5 text-xs font-bold tracking-wide text-slate-700"
+                    >
+                      {yer}
+                      <span className="ml-2 font-normal text-solgun">
+                        {grubun.length} kişi
+                      </span>
+                    </td>
+                    <td className="py-1.5 text-right text-xs font-bold tabular-nums text-slate-700">
+                      {para(grupToplam)}
+                    </td>
+                    <td colSpan={2} />
+                  </tr>
+                  {grubun.map((s) => (
+                    <PersonelSatiri
+                      key={s.personel.id}
+                      {...s}
+                      yil={yil}
+                      ay={ay}
+                      bugun={bugun}
+                      ucretGecmisi={ucretler.filter((u) => u.personel_id === s.personel.id)}
+                    />
+                  ))}
+                </Fragment>
+              )
+            })}
             {satirlar.length === 0 && (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-solgun">
@@ -493,11 +528,27 @@ function PersonelSatiri({
             </div>
             <div className="min-w-36 flex-1">
               <label className="etiket text-xs">Çalıştığı yer</label>
-              <input
+              <select
                 name="calistigi_yer"
-                defaultValue={personel.calistigi_yer ?? ''}
+                defaultValue={personel.calistigi_yer ?? 'DİĞER'}
                 className="girdi !py-1.5"
-              />
+              >
+                {/* Listede olmayan eski bir değer varsa kaybolmasın: kendi
+                    seçeneği olarak durur, kullanıcı isterse değiştirir. */}
+                {personel.calistigi_yer &&
+                  !CALISMA_YERLERI.includes(
+                    personel.calistigi_yer as (typeof CALISMA_YERLERI)[number],
+                  ) && (
+                    <option value={personel.calistigi_yer}>
+                      {personel.calistigi_yer} (listede yok)
+                    </option>
+                  )}
+                {CALISMA_YERLERI.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="min-w-36 flex-1">
               <label className="etiket text-xs">Sigorta yeri</label>
