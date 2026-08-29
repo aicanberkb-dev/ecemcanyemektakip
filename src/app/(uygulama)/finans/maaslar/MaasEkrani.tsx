@@ -4,10 +4,12 @@ import { useRouter } from 'next/navigation'
 import { Fragment, useActionState, useState } from 'react'
 
 import { CALISMA_YERLERI, calismaYeriSirasi } from '@/lib/calisma-yerleri'
+import { ayinSonGunu, SGK_KALEMLERI, sgkKalemiMi } from '@/lib/sgk-kalemleri'
 import { AY_ADLARI, bugunISO, para, tarih as tarihBicim } from '@/lib/format'
 
 import {
   giderKaydet,
+  giderOdemeDegistir,
   giderSil,
   maasGeriAl,
   maasOde,
@@ -15,6 +17,8 @@ import {
   personelCikar,
   personelEkle,
   personelGuncelle,
+  sgkAyaGizle,
+  sgkKaydet,
   ucretSil,
   type FinansDurumu,
 } from '../actions'
@@ -87,6 +91,7 @@ export function MaasEkrani({
   odemeler,
   giderler,
   gizliler,
+  sgkGizli,
 }: {
   yil: number
   ay: number
@@ -96,6 +101,8 @@ export function MaasEkrani({
   giderler: Gider[]
   /** Bu ay listeden elle çıkarılan personelin id'leri */
   gizliler: string[]
+  /** Bu ay şablondan çıkarılan SGK kalemleri */
+  sgkGizli: string[]
 }) {
   const bugun = bugunISO()
   const [acik, setAcik] = useState(false)
@@ -137,6 +144,16 @@ export function MaasEkrani({
   const toplamOdenen = satirlar.reduce((t, s) => t + Number(s.odeme?.tutar ?? 0), 0)
   const gecikenSayisi = satirlar.filter((s) => s.gecikti).length
   const giderToplam = giderler.reduce((t, g) => t + Number(g.tutar), 0)
+
+  // SGK sabit şablon, geri kalanı o aya özel ekstra gider
+  const sgkVadesi = ayinSonGunu(yil, ay)
+  const sgkSatirlari = giderler.filter((g) => sgkKalemiMi(g.tur))
+  const ekstraGiderler = giderler.filter((g) => !sgkKalemiMi(g.tur))
+  const sgkToplam = sgkSatirlari.reduce((t, g) => t + Number(g.tutar), 0)
+  const sgkOdenen = sgkSatirlari
+    .filter((g) => g.odeme_tarihi)
+    .reduce((t, g) => t + Number(g.tutar), 0)
+  const ekstraToplam = ekstraGiderler.reduce((t, g) => t + Number(g.tutar), 0)
 
   return (
     <div className="space-y-4">
@@ -240,15 +257,8 @@ export function MaasEkrani({
             />
             {pDurum.alanlar?.maas && <p className="hata">{pDurum.alanlar.maas}</p>}
           </div>
-          <div>
-            <label className="etiket text-xs">Geçerli olduğu tarih</label>
-            <input
-              type="date"
-              name="maas_baslangic"
-              defaultValue={`${yil}-${String(ay).padStart(2, '0')}-01`}
-              className="girdi !py-1.5"
-            />
-          </div>
+          <input type="hidden" name="donem_yil" value={yil} />
+          <input type="hidden" name="donem_ay" value={ay} />
           <button className="btn-birincil !py-1.5" disabled={pBekliyor}>
             Ekle
           </button>
@@ -257,8 +267,9 @@ export function MaasEkrani({
           </button>
           {pDurum.hata && <p className="hata w-full">{pDurum.hata}</p>}
           <p className="w-full text-xs text-solgun">
-            Maaş, girdiğiniz tarihten itibaren geçerli olur. Sonraki zamları satırdaki{' '}
-            <strong>Zam</strong> ile ekleyin — geçmiş aylar eski ücretiyle kalır.
+            Maaş {AY_ADLARI[ay - 1]} {yil} ayından itibaren geçerli olur. Zam yapınca
+            satırdaki <strong>Düzelt</strong> ile yeni rakamı girin; geçmiş aylar eski
+            ücretiyle kalır.
           </p>
         </form>
       )}
@@ -358,12 +369,68 @@ export function MaasEkrani({
         </div>
       )}
 
-      {/* SSK, vergi gibi maaş dışı giderler */}
+      {/* SGK — her ay aynı kalemler, maaş gibi şablon */}
+      <div className="kart overflow-x-auto">
+        <h2 className="flex flex-wrap items-baseline justify-between gap-2 border-b border-cizgi px-4 py-3">
+          <span className="font-semibold">
+            SGK — {AY_ADLARI[ay - 1]} {yil}
+          </span>
+          <span className="text-sm font-normal text-solgun">
+            Vade ayın son günü: {tarihBicim(sgkVadesi)}
+          </span>
+        </h2>
+        <table className="tablo">
+          <thead>
+            <tr>
+              <th>Kalem</th>
+              <th className="text-right">Tutar</th>
+              <th>Durum</th>
+              <th className="text-right">İşlem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SGK_KALEMLERI.filter((k) => !sgkGizli.includes(k)).map((kalem) => (
+              <SgkSatiri
+                key={kalem}
+                kalem={kalem}
+                gider={giderler.find((g) => g.tur === kalem)}
+                yil={yil}
+                ay={ay}
+                vade={sgkVadesi}
+                bugun={bugun}
+              />
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="bg-slate-50 font-semibold">
+              <td className="px-3 py-2">Toplam</td>
+              <td className="px-3 py-2 text-right tabular-nums">{para(sgkToplam)}</td>
+              <td className="px-3 py-2 text-xs font-normal text-solgun">
+                ödenen {para(sgkOdenen)}
+              </td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+        {sgkGizli.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-cizgi px-4 py-3">
+            <span className="text-sm text-solgun">Bu aydan çıkarılanlar:</span>
+            {sgkGizli.map((k) => (
+              <SgkGeriGetir key={k} kalem={k} yil={yil} ay={ay} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Şablon dışı, o aya özel giderler */}
       <div className="kart p-4">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="font-semibold">
-            SSK, Vergi ve Diğer Giderler — {AY_ADLARI[ay - 1]} {yil}
+            Ekstra Giderler — {AY_ADLARI[ay - 1]} {yil}
           </h2>
+          <span className="text-sm text-solgun">
+            Vergi, tamir, ceza gibi o aya özel kalemler
+          </span>
           {!giderAcik && (
             <button
               type="button"
@@ -381,7 +448,7 @@ export function MaasEkrani({
             <input type="hidden" name="donem_ay" value={ay} />
             <div>
               <label className="etiket text-xs">Tür</label>
-              <input name="tur" placeholder="SSK / VERGİ" className="girdi !py-1.5 w-32" />
+              <input name="tur" placeholder="ör. VERGİ" className="girdi !py-1.5 w-32" />
               {gDurum.alanlar?.tur && <p className="hata">{gDurum.alanlar.tur}</p>}
             </div>
             <div>
@@ -410,7 +477,7 @@ export function MaasEkrani({
           </form>
         )}
 
-        {giderler.length > 0 ? (
+        {ekstraGiderler.length > 0 ? (
           <table className="tablo mt-3">
             <thead>
               <tr>
@@ -422,13 +489,20 @@ export function MaasEkrani({
               </tr>
             </thead>
             <tbody>
-              {giderler.map((g) => (
+              {ekstraGiderler.map((g) => (
                 <GiderSatiri key={g.id} gider={g} />
               ))}
             </tbody>
+            <tfoot>
+              <tr className="bg-slate-50 font-semibold">
+                <td className="px-3 py-2">Toplam</td>
+                <td className="px-3 py-2 text-right tabular-nums">{para(ekstraToplam)}</td>
+                <td colSpan={3} />
+              </tr>
+            </tfoot>
           </table>
         ) : (
-          <p className="mt-2 text-sm text-solgun">Bu ay için gider girilmemiş.</p>
+          <p className="mt-2 text-sm text-solgun">Bu ay için ekstra gider girilmemiş.</p>
         )}
       </div>
     </div>
@@ -522,6 +596,9 @@ function PersonelSatiri({
   const donemSonu = `${yil}-${String(ay).padStart(2, '0')}-${new Date(yil, ay, 0).getDate()}`
   const guncelUcret = ucretGecmisi.find((u) => u.gecerli_baslangic <= donemSonu)
   const [tutar, setTutar] = useState(String(beklenen).replace('.', ','))
+  // Ödeme tarihi elle değiştirilebilsin: maaş çoğu zaman vade gününde değil,
+  // birkaç gün önce ya da sonra veriliyor.
+  const [odemeTarihi, setOdemeTarihi] = useState(odeme?.odeme_tarihi ?? bugun)
   const [calisiyor, setCalisiyor] = useState(false)
 
   const guncelle = personelGuncelle.bind(null, personel.id)
@@ -545,6 +622,9 @@ function PersonelSatiri({
       <tr className="bg-blue-50/40">
         <td colSpan={7} className="px-3 py-3">
           <form action={gonder} className="flex flex-wrap items-end gap-3">
+            {/* Maaş, ekranda açık olan aydan itibaren geçerli olur */}
+            <input type="hidden" name="donem_yil" value={yil} />
+            <input type="hidden" name="donem_ay" value={ay} />
             <div className="min-w-36 flex-1">
               <label className="etiket text-xs">Ad</label>
               <input name="ad" defaultValue={personel.ad} className="girdi !py-1.5" />
@@ -602,18 +682,6 @@ function PersonelSatiri({
               />
               {durum.alanlar?.maas && <p className="hata">{durum.alanlar.maas}</p>}
             </div>
-            <div>
-              <label className="etiket text-xs">Geçerli olduğu tarih</label>
-              <input
-                type="date"
-                name="maas_baslangic"
-                defaultValue={
-                  guncelUcret?.gecerli_baslangic ??
-                  `${yil}-${String(ay).padStart(2, '0')}-01`
-                }
-                className="girdi !py-1.5"
-              />
-            </div>
             <button className="btn-birincil !py-1.5" disabled={bekliyor}>
               Kaydet
             </button>
@@ -623,9 +691,9 @@ function PersonelSatiri({
             {durum.hata && <p className="hata w-full">{durum.hata}</p>}
 
             <p className="w-full text-xs text-solgun">
-              Rakamı düzeltmek için tarihi değiştirmeyin — yürürlükteki maaş güncellenir.
-              <strong> Zam</strong> yapıyorsanız tarihi zammın başladığı güne çekin; yeni
-              satır açılır, geçmiş aylar eski ücretiyle kalır.
+              Girdiğiniz maaş <strong>{AY_ADLARI[ay - 1]} {yil}</strong> ayından itibaren
+              geçerli olur; önceki aylar kendi ücretiyle kalır. Zammı hangi aydan
+              başlatmak istiyorsanız üstteki ay seçiminden o aya geçip buradan girin.
             </p>
 
             {ucretGecmisi.length > 0 && (
@@ -719,6 +787,16 @@ function PersonelSatiri({
           )}
         </td>
         <td className="text-right whitespace-nowrap">
+          {!odeme && (
+            <input
+              type="date"
+              value={odemeTarihi}
+              onChange={(e) => setOdemeTarihi(e.target.value)}
+              title="Ödemenin yapıldığı tarih — varsayılan bugün"
+              className="mr-2 rounded border border-cizgi px-1 py-0.5 text-xs outline-none
+                         focus:border-vurgu"
+            />
+          )}
           <button
             type="button"
             disabled={calisiyor}
@@ -732,7 +810,7 @@ function PersonelSatiri({
                   alert('Geçerli bir tutar girin.')
                   return
                 }
-                calistir(() => maasOde(personel.id, yil, ay, t, bugun))
+                calistir(() => maasOde(personel.id, yil, ay, t, odemeTarihi))
               }
             }}
             className={`text-xs hover:underline ${
@@ -784,6 +862,161 @@ function PersonelSatiri({
       </tr>
 
     </>
+  )
+}
+
+/**
+ * Bir SGK kalemi — maaş satırıyla aynı mantık.
+ *
+ * Kalem her ay listede; kaydı yoksa bile satır duruyor ki hangi yerin
+ * SGK'sının girilmediği görünsün. Tutar yazılıp kutudan çıkılınca kayıt
+ * oluşur, sıfırlanınca silinir.
+ */
+function SgkSatiri({
+  kalem,
+  gider,
+  yil,
+  ay,
+  vade,
+  bugun,
+}: {
+  kalem: string
+  gider: Gider | undefined
+  yil: number
+  ay: number
+  vade: string
+  bugun: string
+}) {
+  const router = useRouter()
+  const [tutar, setTutar] = useState(gider ? String(gider.tutar).replace('.', ',') : '')
+  const [odemeTarihi, setOdemeTarihi] = useState(gider?.odeme_tarihi ?? bugun)
+  const [calisiyor, setCalisiyor] = useState(false)
+
+  const odendi = !!gider?.odeme_tarihi
+  const gecikti = !odendi && !!gider && vade < bugun
+
+  async function calistir(is: () => Promise<FinansDurumu>) {
+    setCalisiyor(true)
+    try {
+      const s = await is()
+      if (s.hata) alert(s.hata)
+      else router.refresh()
+    } finally {
+      setCalisiyor(false)
+    }
+  }
+
+  return (
+    <tr className={odendi ? 'bg-emerald-50/60' : gecikti ? 'bg-red-50' : undefined}>
+      <td className="font-medium">{kalem}</td>
+      <td className="text-right">
+        <input
+          value={tutar}
+          onChange={(e) => setTutar(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur()
+          }}
+          // Değer kutudan okunuyor: hızlı yazıp hemen çıkıldığında state
+          // henüz güncellenmemiş olabiliyor.
+          onBlur={(e) => {
+            const metin = e.currentTarget.value
+            const t = metin.trim() === '' ? 0 : sayiOku(metin)
+            if (Number.isNaN(t)) return
+            if (Math.abs(t - Number(gider?.tutar ?? 0)) < 0.005) return
+            calistir(() => sgkKaydet(yil, ay, kalem, t))
+          }}
+          inputMode="decimal"
+          placeholder="tutar gir"
+          disabled={calisiyor}
+          className={`w-32 rounded border px-2 py-1 text-right text-sm font-semibold
+                      tabular-nums outline-none focus:border-vurgu focus:ring-2
+                      focus:ring-blue-100 ${
+                        gider ? 'border-cizgi' : 'border-dashed border-slate-300'
+                      }`}
+        />
+      </td>
+      <td className="whitespace-nowrap">
+        {odendi ? (
+          <span className="rozet bg-emerald-100 text-emerald-800">
+            ödendi · {tarihBicim(gider!.odeme_tarihi)}
+          </span>
+        ) : gider ? (
+          <span className={`text-xs ${gecikti ? 'font-medium text-red-700' : 'text-solgun'}`}>
+            vade {tarihBicim(vade)}
+            {gecikti && ' · geçti'}
+          </span>
+        ) : (
+          <span className="text-xs text-solgun">tutar girilmedi</span>
+        )}
+      </td>
+      <td className="text-right whitespace-nowrap">
+        {gider && (
+          <>
+            {!odendi && (
+              <input
+                type="date"
+                value={odemeTarihi}
+                onChange={(e) => setOdemeTarihi(e.target.value)}
+                title="Ödemenin yapıldığı tarih"
+                className="mr-2 rounded border border-cizgi px-1 py-0.5 text-xs outline-none
+                           focus:border-vurgu"
+              />
+            )}
+            <button
+              type="button"
+              disabled={calisiyor}
+              onClick={() =>
+                calistir(() => giderOdemeDegistir(gider.id, odendi ? null : odemeTarihi))
+              }
+              className={`text-xs hover:underline ${
+                odendi ? 'text-solgun' : 'font-semibold text-emerald-700'
+              }`}
+            >
+              {odendi ? 'Geri al' : 'Ödendi'}
+            </button>
+          </>
+        )}
+        {!gider && (
+          <button
+            type="button"
+            disabled={calisiyor}
+            onClick={() => calistir(() => sgkAyaGizle(kalem, yil, ay, true))}
+            className="text-xs text-slate-500 hover:text-red-600 hover:underline"
+            title="Bu ay bu kalemin SGK'sı yok — yalnızca bu aydan çıkarılır, sonraki ay yine listede"
+          >
+            Bu ay yok
+          </button>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+/** Şablondan çıkarılmış SGK kalemini o aya geri ekler. */
+function SgkGeriGetir({ kalem, yil, ay }: { kalem: string; yil: number; ay: number }) {
+  const router = useRouter()
+  const [calisiyor, setCalisiyor] = useState(false)
+
+  return (
+    <button
+      type="button"
+      disabled={calisiyor}
+      onClick={async () => {
+        setCalisiyor(true)
+        try {
+          const s = await sgkAyaGizle(kalem, yil, ay, false)
+          if (s.hata) alert(s.hata)
+          else router.refresh()
+        } finally {
+          setCalisiyor(false)
+        }
+      }}
+      className="rounded border border-dashed border-slate-300 px-2 py-1 text-xs
+                 text-slate-600 hover:border-vurgu hover:text-vurgu"
+      title="Bu aya geri ekle"
+    >
+      {kalem} <span className="font-semibold">+</span>
+    </button>
   )
 }
 

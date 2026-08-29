@@ -28,6 +28,7 @@ export default async function MaaslarPage({
     { data: odemeVeri },
     { data: giderVeri },
     { data: gizliVeri },
+    { data: sgkGizliVeri },
   ] = await Promise.all([
       supabase.from('personeller').select('*').order('sira'),
       supabase
@@ -51,6 +52,12 @@ export default async function MaaslarPage({
         .select('personel_id')
         .eq('donem_yil', yil)
         .eq('donem_ay', ay),
+      // Bu ay şablondan çıkarılan SGK kalemleri
+      supabase
+        .from('sgk_gizli')
+        .select('tur')
+        .eq('donem_yil', yil)
+        .eq('donem_ay', ay),
   ])
 
   return (
@@ -71,6 +78,7 @@ export default async function MaaslarPage({
         odemeler={(odemeVeri ?? []) as MaasOdemesi[]}
         giderler={(giderVeri ?? []) as Gider[]}
         gizliler={((gizliVeri ?? []) as { personel_id: string }[]).map((g) => g.personel_id)}
+        sgkGizli={((sgkGizliVeri ?? []) as { tur: string }[]).map((g) => g.tur)}
       />
     </div>
   )

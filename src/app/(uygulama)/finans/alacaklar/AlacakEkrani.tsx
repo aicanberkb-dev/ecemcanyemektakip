@@ -505,6 +505,8 @@ function FaturaSatiri({
   const [adet, setAdet] = useState(fatura.adet === null ? '' : String(fatura.adet))
   const [yeniTutar, setYeniTutar] = useState('')
   const [yeniTarih, setYeniTarih] = useState(bugunISO())
+  // Tahsilatın hangi gün alındığı elle girilebilsin
+  const [kapatmaTarihi, setKapatmaTarihi] = useState(fatura.kapatildi ?? bugunISO())
   const [calisiyor, setCalisiyor] = useState(false)
 
   const faturaTutari = Number(fatura.tutar)
@@ -638,10 +640,19 @@ function FaturaSatiri({
         </div>
       </td>
       <td className="text-right whitespace-nowrap">
+        {!elleKapali && (
+          <input
+            type="date"
+            value={kapatmaTarihi}
+            onChange={(e) => setKapatmaTarihi(e.target.value)}
+            title="Tahsilatın alındığı tarih — varsayılan bugün"
+            className="mr-2 rounded border border-cizgi px-1 py-0.5 text-xs outline-none focus:border-vurgu"
+          />
+        )}
         <button
           type="button"
           disabled={calisiyor}
-          onClick={() => calistir(() => faturaKapat(fatura.id, elleKapali ? null : bugunISO()))}
+          onClick={() => calistir(() => faturaKapat(fatura.id, elleKapali ? null : kapatmaTarihi))}
           className={`text-xs hover:underline ${
             elleKapali ? 'text-solgun' : 'font-medium text-emerald-700'
           }`}

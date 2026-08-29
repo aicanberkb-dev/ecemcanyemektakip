@@ -476,6 +476,24 @@ const personelSemasi = z.object({
 })
 
 /**
+ * Maaş, ekranda hangi ay açıksa o ayın 1'inden itibaren geçerli olur.
+ *
+ * Önce ayrı bir "geçerlilik tarihi" kutusu vardı ama karışıklık yaratıyordu:
+ * kullanıcı ağustosa bakarken maaşı değiştirdiğinde ağustostan itibaren
+ * geçerli olmasını bekliyor. Artık kural bu; geçmiş aylar kendi ücretiyle
+ * kalır, sonraki aylar yeni rakamı devralır.
+ */
+const maasliPersonelSemasi = personelSemasi.extend({
+  maas: trSayi({ min: 0 }),
+  donem_yil: trSayi({ min: 2000, max: 2100 }),
+  donem_ay: trSayi({ min: 1, max: 12 }),
+})
+
+function ayinIlkGunu(yil: number, ay: number): string {
+  return `${Math.round(yil)}-${String(Math.round(ay)).padStart(2, '0')}-01`
+}
+
+/**
  * Yeni personel — maaşıyla birlikte.
  *
  * Maaş ayrı bir tabloda tutuluyor (zam geçmişi bozulmasın diye), ama kayıt
@@ -487,14 +505,11 @@ export async function personelEkle(
   _onceki: FinansDurumu,
   formData: FormData,
 ): Promise<FinansDurumu> {
-  const sema = personelSemasi.extend({
-    maas: trSayi({ min: 0 }),
-    maas_baslangic: z.string().min(10, 'Geçerlilik tarihi gerekli.'),
-  })
-  const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
+  const sonuc = maasliPersonelSemasi.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
-  const { maas, maas_baslangic, ...personel } = sonuc.data
+  const { maas, donem_yil, donem_ay, ...personel } = sonuc.data
+  const maas_baslangic = ayinIlkGunu(donem_yil, donem_ay)
 
   const supabase = await supabaseServer()
   const { data: enBuyuk } = await supabase
@@ -561,14 +576,11 @@ export async function personelGuncelle(
   _onceki: FinansDurumu,
   formData: FormData,
 ): Promise<FinansDurumu> {
-  const sema = personelSemasi.extend({
-    maas: trSayi({ min: 0 }),
-    maas_baslangic: z.string().min(10, 'Geçerlilik tarihi gerekli.'),
-  })
-  const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
+  const sonuc = maasliPersonelSemasi.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
-  const { maas, maas_baslangic, ...personel } = sonuc.data
+  const { maas, donem_yil, donem_ay, ...personel } = sonuc.data
+  const maas_baslangic = ayinIlkGunu(donem_yil, donem_ay)
 
   const supabase = await supabaseServer()
   const { error } = await supabase
@@ -605,7 +617,7 @@ export async function personelGuncelle(
     if (e) return { hata: `Bilgiler kaydedildi ama maaş güncellenemedi: ${e.message}` }
 
     tazele()
-    return { basari: 'Kaydedildi, maaş düzeltildi.' }
+    return { basari: 'Kaydedildi. Bu ay ve sonrası yeni maaşla hesaplanır.' }
   }
 
   const { error: e } = await supabase
@@ -614,7 +626,7 @@ export async function personelGuncelle(
   if (e) return { hata: `Bilgiler kaydedildi ama maaş eklenemedi: ${e.message}` }
 
   tazele()
-  return { basari: 'Kaydedildi, yeni maaş bu tarihten itibaren geçerli.' }
+  return { basari: 'Kaydedildi. Bu ay ve sonrası yeni maaşla hesaplanır, geçmiş aylar değişmedi.' }
 }
 
 export async function personelCikar(id: string, aktif: boolean): Promise<FinansDurumu> {
@@ -742,6 +754,114 @@ export async function giderKaydet(
 
   tazele()
   return { basari: 'Gider kaydedildi.' }
+}
+
+/**
+ * SGK şablon kalemi — tutarı yaz, satır oluşsun.
+ *
+ * Kalemler her ay aynı (SGK ELMALI, GÖKSU, AKBABA, KONAK), o yüzden ekran
+ * dördünü de açıyor ve burada upsert ediliyor. Tutar sıfırlanırsa satır
+ * silinir: ekranda temizlemek "bu ay yok" demek olsun.
+ */
+export async function sgkKaydet(
+  yil: number,
+  ay: number,
+  tur: string,
+  tutar: number,
+): Promise<FinansDurumu> {
+  if (!Number.isFinite(tutar) || tutar < 0) return { hata: 'Geçerli bir tutar girin.' }
+
+  const supabase = await supabaseServer()
+
+  if (tutar === 0) {
+    const { error } = await supabase
+      .from('donemsel_giderler')
+      .delete()
+      .eq('tur', tur)
+      .eq('donem_yil', yil)
+      .eq('donem_ay', ay)
+      .is('hizmet_noktasi_id', null)
+    if (error) return { hata: error.message }
+
+    tazele()
+    return { basari: `${tur} bu aydan kaldırıldı.` }
+  }
+
+  const { error } = await supabase.from('donemsel_giderler').upsert(
+    {
+      tur,
+      kategori: 'sgk',
+      donem_yil: Math.round(yil),
+      donem_ay: Math.round(ay),
+      tutar,
+    },
+    { onConflict: 'tur,donem_yil,donem_ay' },
+  )
+  if (error) return { hata: error.message }
+
+  tazele()
+  return { basari: `${tur} kaydedildi.` }
+}
+
+/**
+ * SGK kalemini o ayın şablonundan çıkarır ya da geri getirir.
+ *
+ * Bir yerin o ay SGK'sı olmayabiliyor; satırın boş boş durması listeyi
+ * kalabalıklaştırıyor. Yalnızca o dönemi etkiler. Tutarı girilmiş kalem
+ * çıkarılmaz — girilmiş rakamı listeden kaldırmak onu kaybetmek olur.
+ */
+export async function sgkAyaGizle(
+  tur: string,
+  yil: number,
+  ay: number,
+  gizle: boolean,
+): Promise<FinansDurumu> {
+  const supabase = await supabaseServer()
+
+  if (gizle) {
+    const { data: mevcut } = await supabase
+      .from('donemsel_giderler')
+      .select('id')
+      .eq('tur', tur)
+      .eq('donem_yil', yil)
+      .eq('donem_ay', ay)
+      .is('hizmet_noktasi_id', null)
+      .maybeSingle()
+
+    if (mevcut) return { hata: 'Bu ay tutarı girilmiş; önce tutarı sıfırlayın.' }
+
+    const { error } = await supabase
+      .from('sgk_gizli')
+      .insert({ tur, donem_yil: yil, donem_ay: ay })
+    if (error && error.code !== '23505') return { hata: error.message }
+  } else {
+    const { error } = await supabase
+      .from('sgk_gizli')
+      .delete()
+      .eq('tur', tur)
+      .eq('donem_yil', yil)
+      .eq('donem_ay', ay)
+    if (error) return { hata: error.message }
+  }
+
+  tazele()
+  return { basari: gizle ? 'Kalem bu aydan çıkarıldı.' : 'Kalem geri eklendi.' }
+}
+
+/** Gideri ödendi işaretler ya da geri alır. */
+export async function giderOdemeDegistir(
+  id: string,
+  odemeTarihi: string | null,
+): Promise<FinansDurumu> {
+  const supabase = await supabaseServer()
+  const { error } = await supabase
+    .from('donemsel_giderler')
+    .update({ odeme_tarihi: odemeTarihi })
+    .eq('id', id)
+  if (error) return { hata: error.message }
+
+  tazele()
+  return { basari: odemeTarihi ? 'Ödendi olarak işaretlendi.' : 'Ödeme geri alındı.' }
 }
 
 export async function giderSil(id: string): Promise<FinansDurumu> {

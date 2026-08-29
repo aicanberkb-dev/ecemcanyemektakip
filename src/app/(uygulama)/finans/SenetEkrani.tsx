@@ -286,6 +286,9 @@ function SenetSatiri({ senet, bugun }: { senet: Senet; bugun: string }) {
   const router = useRouter()
   const [duzenle, setDuzenle] = useState(false)
   const [calisiyor, setCalisiyor] = useState(false)
+  // Ödeme tarihi elle girilebilsin: senet çoğu zaman vade gününde değil,
+  // birkaç gün önce ya da sonra ödeniyor.
+  const [odemeTarihi, setOdemeTarihi] = useState(senet.odeme_tarihi ?? bugun)
   const eylem = senetGuncelle.bind(null, senet.id)
   const [durum, gonder, bekliyor] = useActionState(eylem, {} as FinansDurumu)
 
@@ -395,13 +398,22 @@ function SenetSatiri({ senet, bugun }: { senet: Senet; bugun: string }) {
         )}
       </td>
       <td className="text-right whitespace-nowrap">
+        {!odendi && (
+          <input
+            type="date"
+            value={odemeTarihi}
+            onChange={(e) => setOdemeTarihi(e.target.value)}
+            title="Ödemenin yapıldığı tarih — varsayılan bugün"
+            className="mr-2 rounded border border-cizgi px-1 py-0.5 text-xs outline-none focus:border-vurgu"
+          />
+        )}
         <button
           type="button"
           disabled={calisiyor}
           onClick={async () => {
             setCalisiyor(true)
             try {
-              const s = await senetOdemeDegistir(senet.id, odendi ? null : bugun)
+              const s = await senetOdemeDegistir(senet.id, odendi ? null : odemeTarihi)
               if (s.hata) alert(s.hata)
               else router.refresh()
             } finally {

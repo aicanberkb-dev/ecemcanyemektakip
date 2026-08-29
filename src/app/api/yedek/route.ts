@@ -43,6 +43,7 @@ const TABLOLAR = [
   'senetler',
   'fatura_gizli',
   'personel_gizli',
+  'sgk_gizli',
   'audit_log',
 ] as const
 
