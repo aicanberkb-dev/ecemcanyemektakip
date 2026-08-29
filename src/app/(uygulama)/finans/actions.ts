@@ -541,27 +541,80 @@ export async function personelEkle(
   }
 }
 
+/**
+ * Personel bilgileri ve maaşı — tek formda.
+ *
+ * Maaş ayrı bir "Zam" düğmesinin arkasındaydı; maaşı değiştirmek isteyen
+ * kullanıcı önce Düzelt'e bakıyor, orada bulamıyordu. Artık ikisi aynı
+ * yerde ve tarihe göre karar veriliyor:
+ *
+ * - Girilen tarihte zaten bir ücret satırı varsa o satır güncellenir
+ *   (yanlış girilmiş rakamın düzeltilmesi).
+ * - Yeni bir tarih girilmişse yeni satır açılır (zam); geçmiş aylar eski
+ *   ücretiyle kalır.
+ *
+ * Tarih varsayılan olarak yürürlükteki ücretin tarihidir, yani hiçbir şey
+ * değiştirmeden kaydetmek geçmişi bozmaz.
+ */
 export async function personelGuncelle(
   id: string,
   _onceki: FinansDurumu,
   formData: FormData,
 ): Promise<FinansDurumu> {
-  const sonuc = personelSemasi.safeParse(Object.fromEntries(formData.entries()))
+  const sema = personelSemasi.extend({
+    maas: trSayi({ min: 0 }),
+    maas_baslangic: z.string().min(10, 'Geçerlilik tarihi gerekli.'),
+  })
+  const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const { maas, maas_baslangic, ...personel } = sonuc.data
 
   const supabase = await supabaseServer()
   const { error } = await supabase
     .from('personeller')
     .update({
-      ...sonuc.data,
-      ad: sonuc.data.ad.toLocaleUpperCase('tr'),
-      maas_gunu: Math.round(sonuc.data.maas_gunu),
+      ...personel,
+      ad: personel.ad.toLocaleUpperCase('tr'),
+      maas_gunu: Math.round(personel.maas_gunu),
     })
     .eq('id', id)
   if (error) return { hata: error.message }
 
+  if (maas <= 0) {
+    tazele()
+    return { basari: 'Kaydedildi.' }
+  }
+
+  const { data: ayniTarih } = await supabase
+    .from('personel_ucretleri')
+    .select('id, tutar')
+    .eq('personel_id', id)
+    .eq('gecerli_baslangic', maas_baslangic)
+    .maybeSingle()
+
+  if (ayniTarih) {
+    if (Math.abs(Number(ayniTarih.tutar) - maas) < 0.005) {
+      tazele()
+      return { basari: 'Kaydedildi.' }
+    }
+    const { error: e } = await supabase
+      .from('personel_ucretleri')
+      .update({ tutar: maas })
+      .eq('id', ayniTarih.id)
+    if (e) return { hata: `Bilgiler kaydedildi ama maaş güncellenemedi: ${e.message}` }
+
+    tazele()
+    return { basari: 'Kaydedildi, maaş düzeltildi.' }
+  }
+
+  const { error: e } = await supabase
+    .from('personel_ucretleri')
+    .insert({ personel_id: id, gecerli_baslangic: maas_baslangic, tutar: maas })
+  if (e) return { hata: `Bilgiler kaydedildi ama maaş eklenemedi: ${e.message}` }
+
   tazele()
-  return { basari: 'Kaydedildi.' }
+  return { basari: 'Kaydedildi, yeni maaş bu tarihten itibaren geçerli.' }
 }
 
 export async function personelCikar(id: string, aktif: boolean): Promise<FinansDurumu> {

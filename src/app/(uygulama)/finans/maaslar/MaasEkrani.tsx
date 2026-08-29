@@ -15,7 +15,6 @@ import {
   personelCikar,
   personelEkle,
   personelGuncelle,
-  ucretEkle,
   ucretSil,
   type FinansDurumu,
 } from '../actions'
@@ -517,17 +516,18 @@ function PersonelSatiri({
 }) {
   const router = useRouter()
   const [duzenle, setDuzenle] = useState(false)
-  const [ucretAcik, setUcretAcik] = useState(false)
+  // Düzelt formunda görünecek ücret: seçili döneme kadar başlayan en yeni
+  // satır — yani tablodaki "Ücret" ile aynı rakam. İleri tarihli bir zam
+  // varsa onu göstermek, ağustosa bakarken eylül rakamını düzenlettirirdi.
+  const donemSonu = `${yil}-${String(ay).padStart(2, '0')}-${new Date(yil, ay, 0).getDate()}`
+  const guncelUcret = ucretGecmisi.find((u) => u.gecerli_baslangic <= donemSonu)
   const [tutar, setTutar] = useState(String(beklenen).replace('.', ','))
   const [calisiyor, setCalisiyor] = useState(false)
 
   const guncelle = personelGuncelle.bind(null, personel.id)
   const [durum, gonder, bekliyor] = useActionState(guncelle, {} as FinansDurumu)
-  const ucretGonderici = ucretEkle.bind(null, personel.id)
-  const [uDurum, uGonder, uBekliyor] = useActionState(ucretGonderici, {} as FinansDurumu)
 
   if (durum.basari && duzenle) setDuzenle(false)
-  if (uDurum.basari && ucretAcik) setUcretAcik(false)
 
   async function calistir(is: () => Promise<FinansDurumu>) {
     setCalisiyor(true)
@@ -590,6 +590,30 @@ function PersonelSatiri({
                 className="girdi !py-1.5 w-24"
               />
             </div>
+            <div>
+              <label className="etiket text-xs">Aylık maaş (₺)</label>
+              <input
+                name="maas"
+                inputMode="decimal"
+                defaultValue={
+                  guncelUcret ? String(guncelUcret.tutar).replace('.', ',') : ''
+                }
+                className="girdi !py-1.5 w-32"
+              />
+              {durum.alanlar?.maas && <p className="hata">{durum.alanlar.maas}</p>}
+            </div>
+            <div>
+              <label className="etiket text-xs">Geçerli olduğu tarih</label>
+              <input
+                type="date"
+                name="maas_baslangic"
+                defaultValue={
+                  guncelUcret?.gecerli_baslangic ??
+                  `${yil}-${String(ay).padStart(2, '0')}-01`
+                }
+                className="girdi !py-1.5"
+              />
+            </div>
             <button className="btn-birincil !py-1.5" disabled={bekliyor}>
               Kaydet
             </button>
@@ -597,6 +621,37 @@ function PersonelSatiri({
               Vazgeç
             </button>
             {durum.hata && <p className="hata w-full">{durum.hata}</p>}
+
+            <p className="w-full text-xs text-solgun">
+              Rakamı düzeltmek için tarihi değiştirmeyin — yürürlükteki maaş güncellenir.
+              <strong> Zam</strong> yapıyorsanız tarihi zammın başladığı güne çekin; yeni
+              satır açılır, geçmiş aylar eski ücretiyle kalır.
+            </p>
+
+            {ucretGecmisi.length > 0 && (
+              <div className="flex w-full flex-wrap gap-2">
+                {ucretGecmisi.map((u) => (
+                  <span
+                    key={u.id}
+                    className="flex items-center gap-2 rounded border border-cizgi bg-white
+                               px-2 py-1 text-xs"
+                  >
+                    {tarihBicim(u.gecerli_baslangic)} · <strong>{para(u.tutar)}</strong>
+                    {u.aciklama && <span className="text-solgun">{u.aciklama}</span>}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!confirm('Bu ücret satırı silinecek. Emin misiniz?')) return
+                        calistir(() => ucretSil(u.id))
+                      }}
+                      className="text-red-600 hover:underline"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </form>
         </td>
       </tr>
@@ -651,7 +706,7 @@ function PersonelSatiri({
             // maaş toplamı da genel gider de eksik çıkıyordu.
             <button
               type="button"
-              onClick={() => setUcretAcik(true)}
+              onClick={() => setDuzenle(true)}
               className="rozet bg-amber-100 text-amber-800 hover:underline"
               title="Bu personelin maaşı hiç girilmemiş — toplamlara ve genel gidere 0 ₺ olarak giriyor"
             >
@@ -689,16 +744,9 @@ function PersonelSatiri({
           <span className="mx-2 text-cizgi">|</span>
           <button
             type="button"
-            onClick={() => setUcretAcik((a) => !a)}
-            className="text-xs text-vurgu hover:underline"
-          >
-            Zam
-          </button>
-          <span className="mx-2 text-cizgi">|</span>
-          <button
-            type="button"
             onClick={() => setDuzenle(true)}
             className="text-xs text-vurgu hover:underline"
+            title="Bilgileri ve maaşı düzenle"
           >
             Düzelt
           </button>
@@ -735,62 +783,6 @@ function PersonelSatiri({
         </td>
       </tr>
 
-      {ucretAcik && (
-        <tr className="bg-slate-50">
-          <td colSpan={7} className="px-3 py-3">
-            <p className="mb-2 text-xs text-solgun">
-              Zam yeni bir satır olarak eklenir; geçmiş aylar eski ücretiyle kalır.
-            </p>
-            <form action={uGonder} className="flex flex-wrap items-end gap-3">
-              <div>
-                <label className="etiket text-xs">Geçerlilik başlangıcı</label>
-                <input
-                  type="date"
-                  name="gecerli_baslangic"
-                  defaultValue={`${yil}-${String(ay).padStart(2, '0')}-01`}
-                  className="girdi !py-1.5"
-                />
-              </div>
-              <div>
-                <label className="etiket text-xs">Yeni ücret (₺)</label>
-                <input name="tutar" inputMode="decimal" className="girdi !py-1.5 w-36" />
-              </div>
-              <div className="min-w-36 flex-1">
-                <label className="etiket text-xs">Açıklama</label>
-                <input name="aciklama" placeholder="ör. Ocak zammı" className="girdi !py-1.5" />
-              </div>
-              <button className="btn-birincil !py-1.5" disabled={uBekliyor}>
-                Kaydet
-              </button>
-              {uDurum.hata && <p className="hata w-full">{uDurum.hata}</p>}
-            </form>
-
-            {ucretGecmisi.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {ucretGecmisi.map((u) => (
-                  <span
-                    key={u.id}
-                    className="flex items-center gap-2 rounded border border-cizgi bg-white px-2 py-1 text-xs"
-                  >
-                    {tarihBicim(u.gecerli_baslangic)} · <strong>{para(u.tutar)}</strong>
-                    {u.aciklama && <span className="text-solgun">{u.aciklama}</span>}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!confirm('Bu ücret satırı silinecek. Emin misiniz?')) return
-                        calistir(() => ucretSil(u.id))
-                      }}
-                      className="text-red-600 hover:underline"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </td>
-        </tr>
-      )}
     </>
   )
 }
