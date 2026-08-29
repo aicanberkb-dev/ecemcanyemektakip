@@ -787,16 +787,29 @@ export async function sgkKaydet(
     return { basari: `${tur} bu aydan kaldırıldı.` }
   }
 
-  const { error } = await supabase.from('donemsel_giderler').upsert(
-    {
-      tur,
-      kategori: 'sgk',
-      donem_yil: Math.round(yil),
-      donem_ay: Math.round(ay),
-      tutar,
-    },
-    { onConflict: 'tur,donem_yil,donem_ay' },
-  )
+  // Upsert kullanılamıyor: benzersiz indeks kısmi (yalnızca yer bazlı olmayan
+  // satırları kapsıyor), PostgREST ise ON CONFLICT'e o koşulu ekleyemediği
+  // için Postgres indeksi eşleştiremiyor ve 42P10 veriyor. Bu yüzden önce
+  // bakıp sonra yazıyoruz.
+  const { data: mevcut } = await supabase
+    .from('donemsel_giderler')
+    .select('id')
+    .eq('tur', tur)
+    .eq('donem_yil', yil)
+    .eq('donem_ay', ay)
+    .is('hizmet_noktasi_id', null)
+    .maybeSingle()
+
+  const { error } = mevcut
+    ? await supabase.from('donemsel_giderler').update({ tutar }).eq('id', mevcut.id)
+    : await supabase.from('donemsel_giderler').insert({
+        tur,
+        kategori: 'sgk',
+        donem_yil: Math.round(yil),
+        donem_ay: Math.round(ay),
+        tutar,
+      })
+
   if (error) return { hata: error.message }
 
   tazele()
