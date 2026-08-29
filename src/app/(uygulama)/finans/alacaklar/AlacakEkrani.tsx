@@ -8,8 +8,8 @@ import { AY_ADLARI, bugunISO, para, tarih as tarihBicim } from '@/lib/format'
 import {
   cariEkle,
   cariSil,
-  faturaEkle,
   faturaGuncelle,
+  faturaSablonuKaydet,
   faturaSil,
   tahsilatEkle,
   tahsilatSil,
@@ -74,15 +74,9 @@ export function AlacakEkrani({
   tahsilatlar: Tahsilat[]
 }) {
   const [cariAcik, setCariAcik] = useState(false)
-  const [faturaAcik, setFaturaAcik] = useState(false)
   const [cDurum, cGonder, cBekliyor] = useActionState(cariEkle, {} as FinansDurumu)
-  const [fDurum, fGonder, fBekliyor] = useActionState(faturaEkle, {} as FinansDurumu)
 
   if (cDurum.basari && cariAcik) setCariAcik(false)
-  if (fDurum.basari && faturaAcik) setFaturaAcik(false)
-
-  const faturaliCariler = new Set(faturalar.map((f) => f.cari_id))
-  const faturasizCariler = cariler.filter((c) => !faturaliCariler.has(c.id))
 
   const toplam = faturalar.reduce((t, f) => t + Number(f.tutar), 0)
   const tahsilToplam = tahsilatlar.reduce((t, x) => t + Number(x.tutar), 0)
@@ -132,15 +126,6 @@ export function AlacakEkrani({
         </form>
 
         <div className="ml-auto flex gap-2">
-          {!faturaAcik && (
-            <button
-              type="button"
-              onClick={() => setFaturaAcik(true)}
-              className="btn-ikincil !py-1.5"
-            >
-              + Fatura Ekle
-            </button>
-          )}
           {!cariAcik && (
             <button
               type="button"
@@ -170,47 +155,6 @@ export function AlacakEkrani({
         </form>
       )}
 
-      {faturaAcik && (
-        <form action={fGonder} className="kart flex flex-wrap items-end gap-3 p-4">
-          <input type="hidden" name="donem_yil" value={yil} />
-          <input type="hidden" name="donem_ay" value={ay} />
-          <div className="min-w-48 flex-1">
-            <label className="etiket text-xs">Cari</label>
-            <select name="cari_id" className="girdi !py-1.5">
-              {(faturasizCariler.length > 0 ? faturasizCariler : cariler).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.ad}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="etiket text-xs">Adet</label>
-            <input name="adet" inputMode="numeric" defaultValue="0" className="girdi !py-1.5 w-24" />
-          </div>
-          <div>
-            <label className="etiket text-xs">Tutar (₺)</label>
-            <input name="tutar" inputMode="decimal" className="girdi !py-1.5 w-36" />
-            {fDurum.alanlar?.tutar && <p className="hata">{fDurum.alanlar.tutar}</p>}
-          </div>
-          <div>
-            <label className="etiket text-xs">Fatura no</label>
-            <input name="fatura_no" className="girdi !py-1.5 w-36" />
-          </div>
-          <button className="btn-birincil !py-1.5" disabled={fBekliyor}>
-            {AY_ADLARI[ay - 1]} {yil} için ekle
-          </button>
-          <button
-            type="button"
-            onClick={() => setFaturaAcik(false)}
-            className="btn-ikincil !py-1.5"
-          >
-            Vazgeç
-          </button>
-          {fDurum.hata && <p className="hata w-full">{fDurum.hata}</p>}
-        </form>
-      )}
-
       <div className="kart overflow-x-auto">
         <h2 className="border-b border-cizgi px-4 py-3 font-semibold">
           {AY_ADLARI[ay - 1]} {yil}
@@ -228,18 +172,23 @@ export function AlacakEkrani({
             </tr>
           </thead>
           <tbody>
-            {faturalar.map((f) => (
-              <FaturaSatiri
-                key={f.id}
-                fatura={f}
-                cari={cariler.find((c) => c.id === f.cari_id)}
-                tahsilatlar={tahsilatlar.filter((t) => t.fatura_id === f.id)}
-              />
-            ))}
-            {faturalar.length === 0 && (
+            {cariler.map((c) => {
+              const f = faturalar.find((x) => x.cari_id === c.id)
+              return f ? (
+                <FaturaSatiri
+                  key={c.id}
+                  fatura={f}
+                  cari={c}
+                  tahsilatlar={tahsilatlar.filter((t) => t.fatura_id === f.id)}
+                />
+              ) : (
+                <BosSatir key={c.id} cari={c} yil={yil} ay={ay} />
+              )
+            })}
+            {cariler.length === 0 && (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-solgun">
-                  Bu ay için fatura girilmemiş.
+                  Cari tanımlı değil — önce cari ekleyin.
                 </td>
               </tr>
             )}
@@ -316,6 +265,80 @@ function CariRozeti({ cari }: { cari: Cari }) {
         ×
       </button>
     </span>
+  )
+}
+
+/**
+ * Bu ay henüz faturası olmayan cari.
+ *
+ * Şablonun aslı bu: her ay aynı cariler listelenir, kullanıcı yalnızca adet
+ * ve tutarı yazar. Tutar girilip kutudan çıkılınca fatura oluşur ve satır
+ * normal fatura satırına dönüşür — ayrı bir "fatura ekle" formu yok.
+ */
+function BosSatir({ cari, yil, ay }: { cari: Cari; yil: number; ay: number }) {
+  const router = useRouter()
+  const [adet, setAdet] = useState('')
+  const [tutar, setTutar] = useState('')
+  const [calisiyor, setCalisiyor] = useState(false)
+
+  async function olustur(tutarMetni: string, adetMetni: string) {
+    const t = sayiOku(tutarMetni)
+    if (tutarMetni.trim() === '' || Number.isNaN(t) || t <= 0) return
+
+    setCalisiyor(true)
+    try {
+      const s = await faturaSablonuKaydet(yil, ay, [
+        {
+          cari_id: cari.id,
+          adet: adetMetni.trim() === '' ? null : Number(adetMetni),
+          tutar: t,
+        },
+      ])
+      if (s.hata) alert(s.hata)
+      else router.refresh()
+    } finally {
+      setCalisiyor(false)
+    }
+  }
+
+  return (
+    <tr className="text-solgun">
+      <td className="font-medium text-metin">{cari.ad}</td>
+      <td className="text-right">
+        <input
+          value={adet}
+          onChange={(e) => setAdet(e.target.value.replace(/[^0-9]/g, ''))}
+          inputMode="numeric"
+          placeholder="—"
+          disabled={calisiyor}
+          className="w-16 rounded border border-dashed border-slate-300 px-2 py-1 text-right
+                     text-sm tabular-nums outline-none focus:border-vurgu
+                     focus:ring-2 focus:ring-blue-100"
+        />
+      </td>
+      <td className="text-right">
+        <input
+          value={tutar}
+          onChange={(e) => setTutar(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur()
+          }}
+          // Değer kutudan okunuyor: hızlı yazıp hemen çıkıldığında state
+          // henüz güncellenmemiş olabiliyor.
+          onBlur={(e) => olustur(e.currentTarget.value, adet)}
+          inputMode="decimal"
+          placeholder="tutar gir"
+          disabled={calisiyor}
+          className="w-32 rounded border border-dashed border-slate-300 px-2 py-1 text-right
+                     text-sm font-semibold tabular-nums outline-none focus:border-vurgu
+                     focus:ring-2 focus:ring-blue-100"
+        />
+      </td>
+      <td className="text-right tabular-nums">—</td>
+      <td className="text-right tabular-nums">—</td>
+      <td className="text-xs">Tutar girilince fatura oluşur</td>
+      <td />
+    </tr>
   )
 }
 

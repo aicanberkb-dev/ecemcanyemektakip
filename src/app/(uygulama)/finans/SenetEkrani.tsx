@@ -49,9 +49,18 @@ export function SenetEkrani({ senetler }: { senetler: Senet[] }) {
   const [arama, setArama] = useState('')
   const [acik, setAcik] = useState(false)
   const [gizleOdenen, setGizleOdenen] = useState(false)
+  const [kime, setKime] = useState('')
+  const [banka, setBanka] = useState('')
+  /** Banka elle yazıldıysa firma seçimi onu ezmesin */
+  const [bankaElle, setBankaElle] = useState(false)
   const [durum, gonder, bekliyor] = useActionState(senetEkle, {} as FinansDurumu)
 
-  if (durum.basari && acik) setAcik(false)
+  if (durum.basari && acik) {
+    setAcik(false)
+    setKime('')
+    setBanka('')
+    setBankaElle(false)
+  }
 
   const gosterilen = useMemo(
     () =>
@@ -60,6 +69,33 @@ export function SenetEkrani({ senetler }: { senetler: Senet[] }) {
         return aramaEslesir(`${s.kime} ${s.banka ?? ''} ${s.senet_no ?? ''}`, arama)
       }),
     [senetler, arama, gizleOdenen],
+  )
+
+  /**
+   * Firma → en son kullanılan banka.
+   *
+   * Aynı firmanın senedi hep aynı bankadan geliyor; her seferinde ikisini de
+   * yazmanın anlamı yok. Liste vadeye göre sıralı geldiği için döngüde son
+   * yazan kazanır, yani en güncel eşleşme kalır. Kural sabit değil, öneri:
+   * banka kutusu her zaman elle değiştirilebilir.
+   */
+  const firmaBankasi = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const s of senetler) if (s.banka?.trim()) m.set(s.kime, s.banka.trim())
+    return m
+  }, [senetler])
+
+  const firmalar = useMemo(
+    () => [...new Set(senetler.map((s) => s.kime))].sort((a, b) => a.localeCompare(b, 'tr')),
+    [senetler],
+  )
+
+  const bankalar = useMemo(
+    () =>
+      [...new Set(senetler.map((s) => s.banka?.trim()).filter((x): x is string => !!x))].sort(
+        (a, b) => a.localeCompare(b, 'tr'),
+      ),
+    [senetler],
   )
 
   const bekleyen = senetler.filter((s) => !s.odeme_tarihi)
@@ -127,7 +163,28 @@ export function SenetEkrani({ senetler }: { senetler: Senet[] }) {
           </div>
           <div className="min-w-48 flex-1">
             <label className="etiket text-xs">Kime</label>
-            <input name="kime" placeholder="ör. MAHSEN-TUBORG" className="girdi !py-1.5" />
+            <input
+              name="kime"
+              list="senet-firmalari"
+              value={kime}
+              onChange={(e) => {
+                const v = e.target.value
+                setKime(v)
+                // Bilinen firma seçildiğinde bankası da gelsin. Elle
+                // değiştirilmiş bir bankanın üzerine yazmıyoruz.
+                const b = firmaBankasi.get(v)
+                if (b && !bankaElle) setBanka(b)
+              }}
+              placeholder="ör. MAHSEN-TUBORG"
+              className="girdi !py-1.5"
+            />
+            <datalist id="senet-firmalari">
+              {firmalar.map((f) => (
+                <option key={f} value={f}>
+                  {firmaBankasi.get(f) ?? ''}
+                </option>
+              ))}
+            </datalist>
             {durum.alanlar?.kime && <p className="hata">{durum.alanlar.kime}</p>}
           </div>
           <div>
@@ -137,7 +194,27 @@ export function SenetEkrani({ senetler }: { senetler: Senet[] }) {
           </div>
           <div>
             <label className="etiket text-xs">Banka</label>
-            <input name="banka" placeholder="ör. GARANTİ" className="girdi !py-1.5 w-32" />
+            <input
+              name="banka"
+              list="senet-bankalari"
+              value={banka}
+              onChange={(e) => {
+                setBanka(e.target.value)
+                setBankaElle(true)
+              }}
+              placeholder="ör. GARANTİ"
+              className="girdi !py-1.5 w-32"
+            />
+            <datalist id="senet-bankalari">
+              {bankalar.map((b) => (
+                <option key={b} value={b} />
+              ))}
+            </datalist>
+            {firmaBankasi.get(kime) && !bankaElle && (
+              <p className="mt-0.5 text-[10px] text-solgun">
+                {kime} için son kullanılan banka
+              </p>
+            )}
           </div>
           <div>
             <label className="etiket text-xs">Senet no</label>
@@ -237,7 +314,12 @@ function SenetSatiri({ senet, bugun }: { senet: Senet; bugun: string }) {
             </div>
             <div className="min-w-40 flex-1">
               <label className="etiket text-xs">Kime</label>
-              <input name="kime" defaultValue={senet.kime} className="girdi !py-1.5" />
+              <input
+                name="kime"
+                list="senet-firmalari"
+                defaultValue={senet.kime}
+                className="girdi !py-1.5"
+              />
             </div>
             <div>
               <label className="etiket text-xs">Tutar</label>
@@ -252,6 +334,7 @@ function SenetSatiri({ senet, bugun }: { senet: Senet; bugun: string }) {
               <label className="etiket text-xs">Banka</label>
               <input
                 name="banka"
+                list="senet-bankalari"
                 defaultValue={senet.banka ?? ''}
                 className="girdi !py-1.5 w-32"
               />

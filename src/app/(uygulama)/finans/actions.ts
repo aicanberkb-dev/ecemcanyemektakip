@@ -191,6 +191,80 @@ export async function faturaGuncelle(
   return { basari: 'Fatura güncellendi.' }
 }
 
+export type FaturaSatiri = {
+  cari_id: string
+  /** Boş bırakılan satır fatura üretmez; varsa silinir */
+  adet: number | null
+  tutar: number | null
+}
+
+/**
+ * Bir ayın tüm carilerini tek seferde kaydeder.
+ *
+ * Alacaklar her ay aynı cariler için tekrarlanıyor; tek tek "fatura ekle"
+ * demek ayda beş forma dönüşüyordu. Ekran artık aktif carilerin hepsini
+ * satır olarak açıyor, burada toplu yazılıyor.
+ *
+ * Tutarı boşaltılan satırın faturası silinir — ekranda temizlemek silme
+ * anlamına gelsin, ayrı bir "sil" adımı aramayalım. Tahsilatı olan fatura
+ * ise silinmez: para girmiş bir faturayı sessizce yok etmek veri kaybı olur.
+ */
+export async function faturaSablonuKaydet(
+  yil: number,
+  ay: number,
+  satirlar: FaturaSatiri[],
+): Promise<FinansDurumu> {
+  const supabase = await supabaseServer()
+
+  const yazilacak = satirlar.filter((s) => s.tutar !== null && s.tutar > 0)
+  const silinecek = satirlar.filter((s) => s.tutar === null || s.tutar <= 0)
+
+  if (yazilacak.length > 0) {
+    const { error } = await supabase.from('faturalar').upsert(
+      yazilacak.map((s) => ({
+        cari_id: s.cari_id,
+        donem_yil: Math.round(yil),
+        donem_ay: Math.round(ay),
+        adet: s.adet !== null && s.adet > 0 ? Math.round(s.adet) : null,
+        tutar: s.tutar,
+      })),
+      { onConflict: 'cari_id,donem_yil,donem_ay' },
+    )
+    if (error) return { hata: error.message }
+  }
+
+  let korunan = 0
+  if (silinecek.length > 0) {
+    // Tahsilatı olan faturayı silme; kullanıcıya kaç tanesinin kaldığını söyle
+    const { data: mevcut } = await supabase
+      .from('faturalar')
+      .select('id, cari_id, fatura_tahsilatlari(id)')
+      .eq('donem_yil', yil)
+      .eq('donem_ay', ay)
+      .in(
+        'cari_id',
+        silinecek.map((s) => s.cari_id),
+      )
+
+    const guvenli = ((mevcut ?? []) as { id: string; fatura_tahsilatlari: unknown[] }[])
+      .filter((f) => f.fatura_tahsilatlari.length === 0)
+      .map((f) => f.id)
+    korunan = (mevcut ?? []).length - guvenli.length
+
+    if (guvenli.length > 0) {
+      const { error } = await supabase.from('faturalar').delete().in('id', guvenli)
+      if (error) return { hata: error.message }
+    }
+  }
+
+  tazele()
+  return {
+    basari:
+      `${yazilacak.length} cari kaydedildi.` +
+      (korunan > 0 ? ` ${korunan} fatura tahsilatı olduğu için silinmedi.` : ''),
+  }
+}
+
 export async function faturaSil(id: string): Promise<FinansDurumu> {
   const supabase = await supabaseServer()
   const { error } = await supabase.from('faturalar').delete().eq('id', id)
