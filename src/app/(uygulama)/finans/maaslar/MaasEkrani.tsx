@@ -490,7 +490,7 @@ export function MaasEkrani({
             </thead>
             <tbody>
               {ekstraGiderler.map((g) => (
-                <GiderSatiri key={g.id} gider={g} />
+                <GiderSatiri key={g.id} gider={g} bugun={bugun} />
               ))}
             </tbody>
             <tfoot>
@@ -888,6 +888,7 @@ function SgkSatiri({
   bugun: string
 }) {
   const router = useRouter()
+  const [duzenle, setDuzenle] = useState(false)
   const [tutar, setTutar] = useState(gider ? String(gider.tutar).replace('.', ',') : '')
   const [odemeTarihi, setOdemeTarihi] = useState(gider?.odeme_tarihi ?? bugun)
   const [calisiyor, setCalisiyor] = useState(false)
@@ -900,40 +901,87 @@ function SgkSatiri({
     try {
       const s = await is()
       if (s.hata) alert(s.hata)
-      else router.refresh()
+      else {
+        setDuzenle(false)
+        router.refresh()
+      }
     } finally {
       setCalisiyor(false)
     }
   }
 
+  function kaydet() {
+    const t = tutar.trim() === '' ? 0 : sayiOku(tutar)
+    if (Number.isNaN(t) || t < 0) {
+      alert('Geçerli bir tutar girin.')
+      return
+    }
+    calistir(() => sgkKaydet(yil, ay, kalem, t))
+  }
+
+  if (duzenle) {
+    return (
+      <tr className="bg-blue-50/40">
+        <td className="font-medium">{kalem}</td>
+        <td colSpan={3} className="py-2">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="etiket text-xs">Tutar (₺)</label>
+              <input
+                autoFocus
+                value={tutar}
+                onChange={(e) => setTutar(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') kaydet()
+                  if (e.key === 'Escape') setDuzenle(false)
+                }}
+                inputMode="decimal"
+                placeholder="ör. 45.000"
+                className="girdi !py-1.5 w-36"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={kaydet}
+              disabled={calisiyor}
+              className="btn-birincil !py-1.5"
+            >
+              Kaydet
+            </button>
+            <button
+              type="button"
+              onClick={() => setDuzenle(false)}
+              className="btn-ikincil !py-1.5"
+            >
+              Vazgeç
+            </button>
+            {gider && (
+              <button
+                type="button"
+                disabled={calisiyor}
+                onClick={() => {
+                  if (!confirm(`${kalem} kaydı silinecek. Emin misiniz?`)) return
+                  calistir(() => sgkKaydet(yil, ay, kalem, 0))
+                }}
+                className="text-xs text-red-600 hover:underline"
+              >
+                Sil
+              </button>
+            )}
+            <span className="text-xs text-solgun">
+              Boş bırakıp kaydetmek de satırı siler.
+            </span>
+          </div>
+        </td>
+      </tr>
+    )
+  }
+
   return (
     <tr className={odendi ? 'bg-emerald-50/60' : gecikti ? 'bg-red-50' : undefined}>
       <td className="font-medium">{kalem}</td>
-      <td className="text-right">
-        <input
-          value={tutar}
-          onChange={(e) => setTutar(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') e.currentTarget.blur()
-          }}
-          // Değer kutudan okunuyor: hızlı yazıp hemen çıkıldığında state
-          // henüz güncellenmemiş olabiliyor.
-          onBlur={(e) => {
-            const metin = e.currentTarget.value
-            const t = metin.trim() === '' ? 0 : sayiOku(metin)
-            if (Number.isNaN(t)) return
-            if (Math.abs(t - Number(gider?.tutar ?? 0)) < 0.005) return
-            calistir(() => sgkKaydet(yil, ay, kalem, t))
-          }}
-          inputMode="decimal"
-          placeholder="tutar gir"
-          disabled={calisiyor}
-          className={`w-32 rounded border px-2 py-1 text-right text-sm font-semibold
-                      tabular-nums outline-none focus:border-vurgu focus:ring-2
-                      focus:ring-blue-100 ${
-                        gider ? 'border-cizgi' : 'border-dashed border-slate-300'
-                      }`}
-        />
+      <td className="text-right font-semibold tabular-nums">
+        {gider ? para(gider.tutar) : <span className="text-solgun">—</span>}
       </td>
       <td className="whitespace-nowrap">
         {odendi ? (
@@ -941,7 +989,7 @@ function SgkSatiri({
             ödendi · {tarihBicim(gider!.odeme_tarihi)}
           </span>
         ) : gider ? (
-          <span className={`text-xs ${gecikti ? 'font-medium text-red-700' : 'text-solgun'}`}>
+          <span className={gecikti ? 'text-xs font-medium text-red-700' : 'text-xs text-solgun'}>
             vade {tarihBicim(vade)}
             {gecikti && ' · geçti'}
           </span>
@@ -950,16 +998,15 @@ function SgkSatiri({
         )}
       </td>
       <td className="text-right whitespace-nowrap">
-        {gider && (
+        {gider ? (
           <>
             {!odendi && (
               <input
                 type="date"
                 value={odemeTarihi}
                 onChange={(e) => setOdemeTarihi(e.target.value)}
-                title="Ödemenin yapıldığı tarih"
-                className="mr-2 rounded border border-cizgi px-1 py-0.5 text-xs outline-none
-                           focus:border-vurgu"
+                title="Ödemenin yapıldığı tarih — varsayılan bugün"
+                className="mr-2 rounded border border-cizgi px-1 py-0.5 text-xs outline-none focus:border-vurgu"
               />
             )}
             <button
@@ -968,24 +1015,41 @@ function SgkSatiri({
               onClick={() =>
                 calistir(() => giderOdemeDegistir(gider.id, odendi ? null : odemeTarihi))
               }
-              className={`text-xs hover:underline ${
-                odendi ? 'text-solgun' : 'font-semibold text-emerald-700'
-              }`}
+              className={odendi
+                ? 'text-xs text-solgun hover:underline'
+                : 'text-xs font-semibold text-emerald-700 hover:underline'}
             >
               {odendi ? 'Geri al' : 'Ödendi'}
             </button>
+            <span className="mx-2 text-cizgi">|</span>
+            <button
+              type="button"
+              onClick={() => setDuzenle(true)}
+              className="text-xs text-vurgu hover:underline"
+            >
+              Düzelt
+            </button>
           </>
-        )}
-        {!gider && (
-          <button
-            type="button"
-            disabled={calisiyor}
-            onClick={() => calistir(() => sgkAyaGizle(kalem, yil, ay, true))}
-            className="text-xs text-slate-500 hover:text-red-600 hover:underline"
-            title="Bu ay bu kalemin SGK'sı yok — yalnızca bu aydan çıkarılır, sonraki ay yine listede"
-          >
-            Bu ay yok
-          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => setDuzenle(true)}
+              className="btn-ikincil !px-3 !py-1 text-xs"
+            >
+              Tutar Gir
+            </button>
+            <span className="mx-2 text-cizgi">|</span>
+            <button
+              type="button"
+              disabled={calisiyor}
+              onClick={() => calistir(() => sgkAyaGizle(kalem, yil, ay, true))}
+              className="text-xs text-slate-500 hover:text-red-600 hover:underline"
+              title="Bu ay bu kalemin SGK'sı yok — yalnızca bu aydan çıkarılır, sonraki ay yine listede"
+            >
+              Bu ay yok
+            </button>
+          </>
         )}
       </td>
     </tr>
@@ -1020,14 +1084,29 @@ function SgkGeriGetir({ kalem, yil, ay }: { kalem: string; yil: number; ay: numb
   )
 }
 
-function GiderSatiri({ gider }: { gider: Gider }) {
+function GiderSatiri({ gider, bugun }: { gider: Gider; bugun: string }) {
   const router = useRouter()
+  const [odemeTarihi, setOdemeTarihi] = useState(gider.odeme_tarihi ?? bugun)
+  const [calisiyor, setCalisiyor] = useState(false)
+  const odendi = !!gider.odeme_tarihi
+
+  async function calistir(is: () => Promise<FinansDurumu>) {
+    setCalisiyor(true)
+    try {
+      const s = await is()
+      if (s.hata) alert(s.hata)
+      else router.refresh()
+    } finally {
+      setCalisiyor(false)
+    }
+  }
+
   return (
-    <tr className={gider.odeme_tarihi ? 'bg-emerald-50/60' : undefined}>
+    <tr className={odendi ? 'bg-emerald-50/60' : undefined}>
       <td className="font-medium">{gider.tur}</td>
       <td className="text-right font-semibold tabular-nums">{para(gider.tutar)}</td>
       <td>
-        {gider.odeme_tarihi ? (
+        {odendi ? (
           <span className="rozet bg-emerald-100 text-emerald-800">
             {tarihBicim(gider.odeme_tarihi)}
           </span>
@@ -1036,14 +1115,38 @@ function GiderSatiri({ gider }: { gider: Gider }) {
         )}
       </td>
       <td className="text-solgun">{gider.aciklama ?? '—'}</td>
-      <td className="text-right">
+      <td className="text-right whitespace-nowrap">
+        {!odendi && (
+          <input
+            type="date"
+            value={odemeTarihi}
+            onChange={(e) => setOdemeTarihi(e.target.value)}
+            title="Ödemenin yapıldığı tarih — varsayılan bugün"
+            className="mr-2 rounded border border-cizgi px-1 py-0.5 text-xs outline-none
+                       focus:border-vurgu"
+          />
+        )}
         <button
           type="button"
-          onClick={async () => {
+          disabled={calisiyor}
+          onClick={() =>
+            calistir(() => giderOdemeDegistir(gider.id, odendi ? null : odemeTarihi))
+          }
+          className={
+            odendi
+              ? 'text-xs text-solgun hover:underline'
+              : 'text-xs font-semibold text-emerald-700 hover:underline'
+          }
+        >
+          {odendi ? 'Geri al' : 'Ödendi'}
+        </button>
+        <span className="mx-2 text-cizgi">|</span>
+        <button
+          type="button"
+          disabled={calisiyor}
+          onClick={() => {
             if (!confirm(`${gider.tur} gideri silinecek. Emin misiniz?`)) return
-            const s = await giderSil(gider.id)
-            if (s.hata) alert(s.hata)
-            else router.refresh()
+            calistir(() => giderSil(gider.id))
           }}
           className="text-xs text-red-600 hover:underline"
         >
