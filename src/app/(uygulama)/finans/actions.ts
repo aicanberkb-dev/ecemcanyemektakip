@@ -475,12 +475,26 @@ const personelSemasi = z.object({
   maas_gunu: trSayi({ min: 1, max: 31 }),
 })
 
+/**
+ * Yeni personel — maaşıyla birlikte.
+ *
+ * Maaş ayrı bir tabloda tutuluyor (zam geçmişi bozulmasın diye), ama kayıt
+ * sırasında sorulmayınca personel 0 ₺ ücretle listeye düşüyor ve maaş
+ * ekranında sanki ücreti tanımsızmış gibi görünüyordu. Artık ilk ücret
+ * kaydı burada açılıyor; geçerlilik tarihi personelin işe başladığı ay.
+ */
 export async function personelEkle(
   _onceki: FinansDurumu,
   formData: FormData,
 ): Promise<FinansDurumu> {
-  const sonuc = personelSemasi.safeParse(Object.fromEntries(formData.entries()))
+  const sema = personelSemasi.extend({
+    maas: trSayi({ min: 0 }),
+    maas_baslangic: z.string().min(10, 'Geçerlilik tarihi gerekli.'),
+  })
+  const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const { maas, maas_baslangic, ...personel } = sonuc.data
 
   const supabase = await supabaseServer()
   const { data: enBuyuk } = await supabase
@@ -490,18 +504,41 @@ export async function personelEkle(
     .limit(1)
     .maybeSingle()
 
-  const { error } = await supabase.from('personeller').insert({
-    ...sonuc.data,
-    ad: sonuc.data.ad.toLocaleUpperCase('tr'),
-    maas_gunu: Math.round(sonuc.data.maas_gunu),
-    sira: (enBuyuk?.sira ?? 0) + 1,
-  })
+  const { data: yeni, error } = await supabase
+    .from('personeller')
+    .insert({
+      ...personel,
+      ad: personel.ad.toLocaleUpperCase('tr'),
+      maas_gunu: Math.round(personel.maas_gunu),
+      sira: (enBuyuk?.sira ?? 0) + 1,
+    })
+    .select('id')
+    .single()
+
   if (error) {
     return { hata: error.code === '23505' ? 'Bu isimde personel var.' : error.message }
   }
 
+  if (maas > 0) {
+    const { error: ucretHatasi } = await supabase.from('personel_ucretleri').insert({
+      personel_id: yeni.id,
+      gecerli_baslangic: maas_baslangic,
+      tutar: maas,
+    })
+    // Personel yazıldı; ücret yazılamadıysa bunu gizleme, ekrandan
+    // "Zam" ile eklenebilsin diye açıkça söyle.
+    if (ucretHatasi) {
+      tazele()
+      return {
+        hata: `Personel eklendi ama maaş kaydedilemedi: ${ucretHatasi.message}. Satırdaki "Zam" ile girin.`,
+      }
+    }
+  }
+
   tazele()
-  return { basari: 'Personel eklendi.' }
+  return {
+    basari: maas > 0 ? 'Personel ve maaşı eklendi.' : 'Personel eklendi (maaş girilmedi).',
+  }
 }
 
 export async function personelGuncelle(

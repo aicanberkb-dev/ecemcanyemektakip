@@ -231,6 +231,25 @@ export function MaasEkrani({
             <label className="etiket text-xs">Maaş günü</label>
             <input name="maas_gunu" inputMode="numeric" defaultValue="15" className="girdi !py-1.5 w-24" />
           </div>
+          <div>
+            <label className="etiket text-xs">Aylık maaş (₺)</label>
+            <input
+              name="maas"
+              inputMode="decimal"
+              placeholder="ör. 28.000"
+              className="girdi !py-1.5 w-32"
+            />
+            {pDurum.alanlar?.maas && <p className="hata">{pDurum.alanlar.maas}</p>}
+          </div>
+          <div>
+            <label className="etiket text-xs">Geçerli olduğu tarih</label>
+            <input
+              type="date"
+              name="maas_baslangic"
+              defaultValue={`${yil}-${String(ay).padStart(2, '0')}-01`}
+              className="girdi !py-1.5"
+            />
+          </div>
           <button className="btn-birincil !py-1.5" disabled={pBekliyor}>
             Ekle
           </button>
@@ -238,6 +257,10 @@ export function MaasEkrani({
             Vazgeç
           </button>
           {pDurum.hata && <p className="hata w-full">{pDurum.hata}</p>}
+          <p className="w-full text-xs text-solgun">
+            Maaş, girdiğiniz tarihten itibaren geçerli olur. Sonraki zamları satırdaki{' '}
+            <strong>Zam</strong> ile ekleyin — geçmiş aylar eski ücretiyle kalır.
+          </p>
         </form>
       )}
 
@@ -623,6 +646,17 @@ function PersonelSatiri({
             <span className="rozet bg-emerald-100 text-emerald-800">
               ödendi · {tarihBicim(odeme.odeme_tarihi)}
             </span>
+          ) : ucretGecmisi.length === 0 ? (
+            // Ücreti hiç tanımlanmamış personel 0 ₺ ile sessizce duruyordu;
+            // maaş toplamı da genel gider de eksik çıkıyordu.
+            <button
+              type="button"
+              onClick={() => setUcretAcik(true)}
+              className="rozet bg-amber-100 text-amber-800 hover:underline"
+              title="Bu personelin maaşı hiç girilmemiş — toplamlara ve genel gidere 0 ₺ olarak giriyor"
+            >
+              maaş girilmemiş
+            </button>
           ) : vade ? (
             <span className="text-xs text-solgun">vade {tarihBicim(vade)}</span>
           ) : (
