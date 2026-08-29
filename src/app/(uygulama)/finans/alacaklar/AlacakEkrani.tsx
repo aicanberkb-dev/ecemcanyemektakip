@@ -7,7 +7,9 @@ import { CARI_GRUPLARI } from '@/lib/cari-gruplari'
 import { AY_ADLARI, bugunISO, para, tarih as tarihBicim } from '@/lib/format'
 
 import {
+  cariAyaGizle,
   cariEkle,
+  cariGrubuDegistir,
   cariSil,
   faturaGuncelle,
   faturaKapat,
@@ -72,12 +74,15 @@ export function AlacakEkrani({
   cariler,
   faturalar,
   tahsilatlar,
+  gizliler,
 }: {
   yil: number
   ay: number
   cariler: Cari[]
   faturalar: Fatura[]
   tahsilatlar: Tahsilat[]
+  /** Bu ay şablondan elle çıkarılan carilerin id'leri */
+  gizliler: string[]
 }) {
   const [cariAcik, setCariAcik] = useState(false)
   const [cDurum, cGonder, cBekliyor] = useActionState(cariEkle, {} as FinansDurumu)
@@ -158,6 +163,17 @@ export function AlacakEkrani({
             <input name="ad" placeholder="ör. BEYKOZ KAYMAKAMLIK" className="girdi !py-1.5" />
             {cDurum.alanlar?.ad && <p className="hata">{cDurum.alanlar.ad}</p>}
           </div>
+          <div>
+            <label className="etiket text-xs">Grup</label>
+            <select name="grup" defaultValue="adliye" className="girdi !py-1.5">
+              {CARI_GRUPLARI.map((g) => (
+                <option key={g.anahtar} value={g.anahtar}>
+                  {g.ad}
+                </option>
+              ))}
+            </select>
+            {cDurum.alanlar?.grup && <p className="hata">{cDurum.alanlar.grup}</p>}
+          </div>
           <button className="btn-birincil !py-1.5" disabled={cBekliyor}>
             Ekle
           </button>
@@ -186,10 +202,12 @@ export function AlacakEkrani({
           </thead>
           <tbody>
             {CARI_GRUPLARI.map((g) => {
-              const grubun = cariler
+              const hepsi = cariler
                 .filter((c) => (c.grup || 'diger') === g.anahtar)
                 .sort((a, b) => a.sira - b.sira)
-              if (grubun.length === 0) return null
+              // Bu ay elle çıkarılanlar listede durmaz; altta geri getirilir
+              const grubun = hepsi.filter((c) => !gizliler.includes(c.id))
+              if (hepsi.length === 0) return null
 
               const grupToplam = grubun.reduce((t, c) => {
                 const f = faturalar.find((x) => x.cari_id === c.id)
@@ -256,19 +274,47 @@ export function AlacakEkrani({
         </table>
       </div>
 
-      {/* Cari listesi — silme buradan */}
+      {gizliler.length > 0 && (
+        <div className="kart flex flex-wrap items-center gap-2 p-4">
+          <span className="text-sm text-solgun">
+            {AY_ADLARI[ay - 1]} şablonundan çıkarılanlar:
+          </span>
+          {cariler
+            .filter((c) => gizliler.includes(c.id))
+            .map((c) => (
+              <GeriGetir key={c.id} cari={c} yil={yil} ay={ay} />
+            ))}
+          <span className="w-full text-xs text-solgun">
+            Yalnızca bu ay için gizlendiler; diğer aylarda listede durmaya devam ederler.
+          </span>
+        </div>
+      )}
+
+      {/* Cari listesi — grup değiştirme ve silme buradan */}
       <details className="kart p-4">
         <summary className="cursor-pointer text-sm font-medium">
           Cariler ({cariler.length})
         </summary>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {cariler.map((c) => (
-            <CariRozeti key={c.id} cari={c} />
-          ))}
+        <div className="mt-3 space-y-3">
+          {CARI_GRUPLARI.map((g) => {
+            const grubun = cariler.filter((c) => (c.grup || 'diger') === g.anahtar)
+            if (grubun.length === 0) return null
+            return (
+              <div key={g.anahtar}>
+                <p className="mb-1 text-xs font-semibold text-solgun">{g.ad}</p>
+                <div className="flex flex-wrap gap-2">
+                  {grubun.map((c) => (
+                    <CariRozeti key={c.id} cari={c} />
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </div>
         <p className="mt-3 text-xs text-solgun">
-          Sistemdeki hizmet yerleriyle aynı adı taşıyan cariler otomatik bağlanır. Cariyi
-          silmek, o cariye ait tüm faturaları ve tahsilatları da siler.
+          Sistemdeki hizmet yerleriyle aynı adı taşıyan cariler otomatik bağlanır. Grubu
+          rozetin üzerindeki kutudan değiştirebilirsiniz. Cariyi silmek, o cariye ait tüm
+          faturaları ve tahsilatları da siler.
         </p>
       </details>
     </div>
@@ -284,6 +330,34 @@ function Ozet({ baslik, tutar, renk }: { baslik: string; tutar: number; renk: st
   )
 }
 
+/** Şablondan çıkarılmış cariyi o aya geri ekler. */
+function GeriGetir({ cari, yil, ay }: { cari: Cari; yil: number; ay: number }) {
+  const router = useRouter()
+  const [calisiyor, setCalisiyor] = useState(false)
+
+  return (
+    <button
+      type="button"
+      disabled={calisiyor}
+      onClick={async () => {
+        setCalisiyor(true)
+        try {
+          const s = await cariAyaGizle(cari.id, yil, ay, false)
+          if (s.hata) alert(s.hata)
+          else router.refresh()
+        } finally {
+          setCalisiyor(false)
+        }
+      }}
+      className="rounded border border-dashed border-slate-300 px-2 py-1 text-xs
+                 text-slate-600 hover:border-vurgu hover:text-vurgu"
+      title="Bu aya geri ekle"
+    >
+      {cari.ad} <span className="font-semibold">+</span>
+    </button>
+  )
+}
+
 function CariRozeti({ cari }: { cari: Cari }) {
   const router = useRouter()
   return (
@@ -292,6 +366,22 @@ function CariRozeti({ cari }: { cari: Cari }) {
       {cari.hizmet_noktasi_id && (
         <span className="rozet bg-blue-100 text-blue-800">sistemde</span>
       )}
+      <select
+        value={cari.grup || 'diger'}
+        onChange={async (e) => {
+          const s = await cariGrubuDegistir(cari.id, e.target.value)
+          if (s.hata) alert(s.hata)
+          else router.refresh()
+        }}
+        className="rounded border border-cizgi bg-white px-1 py-0.5 text-[10px]"
+        title="Grubu değiştir"
+      >
+        {CARI_GRUPLARI.map((g) => (
+          <option key={g.anahtar} value={g.anahtar}>
+            {g.ad}
+          </option>
+        ))}
+      </select>
       <button
         type="button"
         onClick={async () => {
@@ -377,7 +467,26 @@ function BosSatir({ cari, yil, ay }: { cari: Cari; yil: number; ay: number }) {
       <td className="text-right tabular-nums">—</td>
       <td className="text-right tabular-nums">—</td>
       <td className="text-xs">Tutar girilince fatura oluşur</td>
-      <td />
+      <td className="text-right">
+        <button
+          type="button"
+          disabled={calisiyor}
+          onClick={async () => {
+            setCalisiyor(true)
+            try {
+              const s = await cariAyaGizle(cari.id, yil, ay, true)
+              if (s.hata) alert(s.hata)
+              else router.refresh()
+            } finally {
+              setCalisiyor(false)
+            }
+          }}
+          className="text-xs text-slate-500 hover:text-red-600 hover:underline"
+          title="Bu ay bu cariye fatura kesilmeyecek — yalnızca bu aydan çıkarılır, cari silinmez"
+        >
+          Bu ay yok
+        </button>
+      </td>
     </tr>
   )
 }

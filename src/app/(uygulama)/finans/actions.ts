@@ -111,20 +111,29 @@ export async function cariEkle(
   _onceki: FinansDurumu,
   formData: FormData,
 ): Promise<FinansDurumu> {
-  const sema = z.object({ ad: z.string().trim().min(2, 'Cari adı gerekli.') })
+  const sema = z.object({
+    ad: z.string().trim().min(2, 'Cari adı gerekli.'),
+    grup: z.enum(['adliye', 'tasimali', 'ozel_egitim', 'dis_hizmet', 'diger']),
+  })
   const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
   const supabase = await supabaseServer()
+
+  // Sıra grup içinde anlamlı: yeni cari kendi grubunun sonuna eklenir.
+  // Genel bir "en büyük sıra" kullanmak, cariyi başka grubun arasına
+  // düşürüyordu.
   const { data: enBuyuk } = await supabase
     .from('cariler')
     .select('sira')
+    .eq('grup', sonuc.data.grup)
     .order('sira', { ascending: false })
     .limit(1)
     .maybeSingle()
 
   const { error } = await supabase.from('cariler').insert({
     ad: sonuc.data.ad.toLocaleUpperCase('tr'),
+    grup: sonuc.data.grup,
     sira: (enBuyuk?.sira ?? 0) + 1,
   })
   if (error) {
@@ -133,6 +142,80 @@ export async function cariEkle(
 
   tazele()
   return { basari: 'Cari eklendi.' }
+}
+
+/** Var olan bir cariyi başka gruba taşır. */
+export async function cariGrubuDegistir(
+  id: string,
+  grup: string,
+): Promise<FinansDurumu> {
+  const supabase = await supabaseServer()
+
+  const { data: enBuyuk } = await supabase
+    .from('cariler')
+    .select('sira')
+    .eq('grup', grup)
+    .order('sira', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const { error } = await supabase
+    .from('cariler')
+    .update({ grup, sira: (enBuyuk?.sira ?? 0) + 1 })
+    .eq('id', id)
+  if (error) return { hata: error.message }
+
+  tazele()
+  return { basari: 'Cari grubu değiştirildi.' }
+}
+
+/**
+ * Cariyi o ayın şablonundan çıkarır ya da geri getirir.
+ *
+ * Yazın okullar kapalı; şablonda duran boş satırlar listeyi kalabalıklaştırıp
+ * gerçekten girilmesi gereken satırı gizliyordu. Cariyi pasife almak çözüm
+ * değil, eylülde geri gelmesi gerekiyor — bu yüzden gizleme aya özel.
+ * Faturası olan cari gizlenmez: girilmiş bir tutarı listeden kaldırmak onu
+ * kaybetmek olur.
+ */
+export async function cariAyaGizle(
+  cariId: string,
+  yil: number,
+  ay: number,
+  gizle: boolean,
+): Promise<FinansDurumu> {
+  const supabase = await supabaseServer()
+
+  if (gizle) {
+    const { data: fatura } = await supabase
+      .from('faturalar')
+      .select('id')
+      .eq('cari_id', cariId)
+      .eq('donem_yil', yil)
+      .eq('donem_ay', ay)
+      .maybeSingle()
+
+    if (fatura) {
+      return { hata: 'Bu ay faturası girilmiş; önce faturayı silin.' }
+    }
+
+    const { error } = await supabase
+      .from('fatura_gizli')
+      .insert({ cari_id: cariId, donem_yil: yil, donem_ay: ay })
+    // Zaten gizliyse sonuç istenen durum; hata göstermeye gerek yok
+    if (error && error.code !== '23505') return { hata: error.message }
+  } else {
+    const { error } = await supabase
+      .from('fatura_gizli')
+      .delete()
+      .eq('cari_id', cariId)
+      .eq('donem_yil', yil)
+      .eq('donem_ay', ay)
+    if (error) return { hata: error.message }
+  }
+
+  tazele()
+  return { basari: gizle ? 'Cari bu aydan çıkarıldı.' : 'Cari geri eklendi.' }
 }
 
 export async function cariSil(id: string): Promise<FinansDurumu> {

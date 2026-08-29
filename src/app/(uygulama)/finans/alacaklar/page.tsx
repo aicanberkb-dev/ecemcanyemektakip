@@ -16,17 +16,24 @@ export default async function AlacaklarPage({
 
   const supabase = await supabaseServer()
 
-  const [{ data: cariVeri }, { data: faturaVeri }] = await Promise.all([
+  const [{ data: cariVeri }, { data: faturaVeri }, { data: gizliVeri }] = await Promise.all([
     supabase.from('cariler').select('*').eq('aktif', true).order('sira'),
     supabase
       .from('faturalar')
       .select('*')
       .eq('donem_yil', yil)
       .eq('donem_ay', ay),
+    // Bu ay şablondan elle çıkarılan cariler
+    supabase
+      .from('fatura_gizli')
+      .select('cari_id')
+      .eq('donem_yil', yil)
+      .eq('donem_ay', ay),
   ])
 
   const cariler = (cariVeri ?? []) as Cari[]
   const faturalar = (faturaVeri ?? []) as Fatura[]
+  const gizliler = ((gizliVeri ?? []) as { cari_id: string }[]).map((g) => g.cari_id)
 
   // Tahsilatlar yalnızca bu ayın faturaları için
   const { data: tahsilatVeri } = faturalar.length
@@ -58,6 +65,7 @@ export default async function AlacaklarPage({
         cariler={cariler}
         faturalar={faturalar}
         tahsilatlar={tahsilatlar}
+        gizliler={gizliler}
       />
     </div>
   )
