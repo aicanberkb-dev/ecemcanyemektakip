@@ -22,8 +22,13 @@ export default async function MaaslarPage({
 
   const supabase = await supabaseServer()
 
-  const [{ data: personelVeri }, { data: ucretVeri }, { data: odemeVeri }, { data: giderVeri }] =
-    await Promise.all([
+  const [
+    { data: personelVeri },
+    { data: ucretVeri },
+    { data: odemeVeri },
+    { data: giderVeri },
+    { data: gizliVeri },
+  ] = await Promise.all([
       supabase.from('personeller').select('*').order('sira'),
       supabase
         .from('personel_ucretleri')
@@ -40,7 +45,13 @@ export default async function MaaslarPage({
         .eq('donem_yil', yil)
         .eq('donem_ay', ay)
         .order('tur'),
-    ])
+      // Bu ay listeden elle çıkarılan personel (yaz döneminde çıkanlar)
+      supabase
+        .from('personel_gizli')
+        .select('personel_id')
+        .eq('donem_yil', yil)
+        .eq('donem_ay', ay),
+  ])
 
   return (
     <div className="space-y-4">
@@ -59,6 +70,7 @@ export default async function MaaslarPage({
         ucretler={(ucretVeri ?? []) as Ucret[]}
         odemeler={(odemeVeri ?? []) as MaasOdemesi[]}
         giderler={(giderVeri ?? []) as Gider[]}
+        gizliler={((gizliVeri ?? []) as { personel_id: string }[]).map((g) => g.personel_id)}
       />
     </div>
   )

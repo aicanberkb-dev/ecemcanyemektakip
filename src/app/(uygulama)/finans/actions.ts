@@ -26,6 +26,8 @@ function tazele() {
   revalidatePath('/finans/alacaklar')
   revalidatePath('/finans/maaslar')
   revalidatePath('/finans/tahsil-edilmemis')
+  revalidatePath('/maliyet/kar-zarar')
+  revalidatePath('/maliyet/giderler')
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +144,56 @@ export async function cariEkle(
 
   tazele()
   return { basari: 'Cari eklendi.' }
+}
+
+/**
+ * Personeli o ayın maaş listesinden çıkarır ya da geri getirir.
+ *
+ * Yazın personel çıkarılıyor, eylülde geri alınıyor. Personeli tamamen pasife
+ * almak bunu karşılamıyor: dönünce elle aktifleştirmek ve hangi aylar
+ * çalışmadığını hatırlamak gerekiyordu. Çıkarılan ayda maaşı beklenmediği
+ * gibi, o yerin genel giderine de girmez.
+ *
+ * Ödemesi girilmiş ay çıkarılamaz: ödenmiş maaşı listeden kaldırmak kaydı
+ * gizlemek olur.
+ */
+export async function personelAyaGizle(
+  personelId: string,
+  yil: number,
+  ay: number,
+  gizle: boolean,
+): Promise<FinansDurumu> {
+  const supabase = await supabaseServer()
+
+  if (gizle) {
+    const { data: odeme } = await supabase
+      .from('maas_odemeleri')
+      .select('id')
+      .eq('personel_id', personelId)
+      .eq('donem_yil', yil)
+      .eq('donem_ay', ay)
+      .maybeSingle()
+
+    if (odeme) {
+      return { hata: 'Bu ay maaş ödemesi girilmiş; önce ödemeyi geri alın.' }
+    }
+
+    const { error } = await supabase
+      .from('personel_gizli')
+      .insert({ personel_id: personelId, donem_yil: yil, donem_ay: ay })
+    if (error && error.code !== '23505') return { hata: error.message }
+  } else {
+    const { error } = await supabase
+      .from('personel_gizli')
+      .delete()
+      .eq('personel_id', personelId)
+      .eq('donem_yil', yil)
+      .eq('donem_ay', ay)
+    if (error) return { hata: error.message }
+  }
+
+  tazele()
+  return { basari: gizle ? 'Personel bu aydan çıkarıldı.' : 'Personel geri eklendi.' }
 }
 
 /** Var olan bir cariyi başka gruba taşır. */

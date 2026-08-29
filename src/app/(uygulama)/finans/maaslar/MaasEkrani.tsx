@@ -10,6 +10,7 @@ import {
   giderSil,
   maasGeriAl,
   maasOde,
+  personelAyaGizle,
   personelCikar,
   personelEkle,
   personelGuncelle,
@@ -85,6 +86,7 @@ export function MaasEkrani({
   ucretler,
   odemeler,
   giderler,
+  gizliler,
 }: {
   yil: number
   ay: number
@@ -92,6 +94,8 @@ export function MaasEkrani({
   ucretler: Ucret[]
   odemeler: MaasOdemesi[]
   giderler: Gider[]
+  /** Bu ay listeden elle çıkarılan personelin id'leri */
+  gizliler: string[]
 }) {
   const bugun = bugunISO()
   const [acik, setAcik] = useState(false)
@@ -103,7 +107,11 @@ export function MaasEkrani({
   if (pDurum.basari && acik) setAcik(false)
   if (gDurum.basari && giderAcik) setGiderAcik(false)
 
-  const gosterilen = personeller.filter((p) => pasifGoster || p.aktif)
+  // O ay çıkarılan personel listede durmaz; altındaki şeritten geri gelir.
+  const gosterilen = personeller.filter(
+    (p) => (pasifGoster || p.aktif) && !gizliler.includes(p.id),
+  )
+  const ayGizlileri = personeller.filter((p) => gizliler.includes(p.id))
 
   /** O dönemde geçerli ücret: dönem sonuna kadar başlayan en yeni satır. */
   const donemSonu = `${yil}-${String(ay).padStart(2, '0')}-${new Date(yil, ay, 0).getDate()}`
@@ -278,6 +286,21 @@ export function MaasEkrani({
         </table>
       </div>
 
+      {ayGizlileri.length > 0 && (
+        <div className="kart flex flex-wrap items-center gap-2 p-4">
+          <span className="text-sm text-solgun">
+            {AY_ADLARI[ay - 1]} {yil} listesinden çıkarılanlar:
+          </span>
+          {ayGizlileri.map((p) => (
+            <GeriGetir key={p.id} personel={p} yil={yil} ay={ay} />
+          ))}
+          <span className="w-full text-xs text-solgun">
+            Yalnızca bu ay için çıkarıldılar; diğer aylarda listede durmaya devam
+            ederler. Maaşları bu ayın genel giderine de girmez.
+          </span>
+        </div>
+      )}
+
       {/* SSK, vergi gibi maaş dışı giderler */}
       <div className="kart p-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -372,6 +395,42 @@ function Ozet({
       <p className="mt-1 text-2xl font-bold tabular-nums">{para(tutar)}</p>
       {alt && <p className="mt-0.5 text-xs opacity-75">{alt}</p>}
     </div>
+  )
+}
+
+/** O aydan çıkarılmış personeli geri ekler. */
+function GeriGetir({
+  personel,
+  yil,
+  ay,
+}: {
+  personel: Personel
+  yil: number
+  ay: number
+}) {
+  const router = useRouter()
+  const [calisiyor, setCalisiyor] = useState(false)
+
+  return (
+    <button
+      type="button"
+      disabled={calisiyor}
+      onClick={async () => {
+        setCalisiyor(true)
+        try {
+          const s = await personelAyaGizle(personel.id, yil, ay, false)
+          if (s.hata) alert(s.hata)
+          else router.refresh()
+        } finally {
+          setCalisiyor(false)
+        }
+      }}
+      className="rounded border border-dashed border-slate-300 px-2 py-1 text-xs
+                 text-slate-600 hover:border-vurgu hover:text-vurgu"
+      title="Bu aya geri ekle"
+    >
+      {personel.ad} <span className="font-semibold">+</span>
+    </button>
   )
 }
 
@@ -559,6 +618,17 @@ function PersonelSatiri({
             Düzelt
           </button>
           <span className="mx-2 text-cizgi">|</span>
+          {/* Aya özel çıkarma: yazın çalışmayan personel için. Kalıcı
+              çıkarmadan farkı, eylülde kendiliğinden geri gelmesi. */}
+          <button
+            type="button"
+            onClick={() => calistir(() => personelAyaGizle(personel.id, yil, ay, true))}
+            className="text-xs text-slate-500 hover:text-red-600 hover:underline"
+            title={`${AY_ADLARI[ay - 1]} ayında çalışmadı — yalnızca bu aydan çıkarılır, diğer aylarda listede kalır ve maaşı bu ayın genel giderine girmez`}
+          >
+            Bu ay yok
+          </button>
+          <span className="mx-2 text-cizgi">|</span>
           <button
             type="button"
             onClick={() => {
@@ -573,8 +643,9 @@ function PersonelSatiri({
               calistir(() => personelCikar(personel.id, !personel.aktif))
             }}
             className="text-xs text-red-600 hover:underline"
+            title="Kalıcı çıkarma — tüm aylarda listeden düşer"
           >
-            {personel.aktif ? 'Çıkar' : 'Aktifleştir'}
+            {personel.aktif ? 'Kalıcı çıkar' : 'Aktifleştir'}
           </button>
         </td>
       </tr>
