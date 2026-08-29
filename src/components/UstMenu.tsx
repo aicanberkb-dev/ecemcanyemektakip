@@ -29,6 +29,7 @@ const GENEL_BAGLANTILAR = [
 const FINANS_ALT = [
   { yol: '/finans', ad: 'Senetler' },
   { yol: '/finans/alacaklar', ad: 'Alacaklar' },
+  { yol: '/finans/tahsil-edilmemis', ad: 'Tahsil Edilmemiş' },
   { yol: '/finans/maaslar', ad: 'Maaşlar' },
 ]
 

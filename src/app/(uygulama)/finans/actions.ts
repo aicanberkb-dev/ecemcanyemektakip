@@ -25,6 +25,7 @@ function tazele() {
   revalidatePath('/finans')
   revalidatePath('/finans/alacaklar')
   revalidatePath('/finans/maaslar')
+  revalidatePath('/finans/tahsil-edilmemis')
 }
 
 // ---------------------------------------------------------------------------
@@ -263,6 +264,27 @@ export async function faturaSablonuKaydet(
       `${yazilacak.length} cari kaydedildi.` +
       (korunan > 0 ? ` ${korunan} fatura tahsilatı olduğu için silinmedi.` : ''),
   }
+}
+
+/**
+ * Faturayı elle "ödendi" işaretler ya da işareti kaldırır.
+ *
+ * Gelen para kuruşu kuruşuna fatura tutarını tutmayabiliyor: kesinti, banka
+ * masrafı, birden fazla faturanın tek havaleyle ödenmesi. Her seferinde
+ * tahsilat satırını tutturmaya çalışmak yerine fatura kapatılıyor. Gerçek
+ * tahsilat toplamı ekranda kalmaya devam eder — fark saklanmaz, sadece
+ * takipten düşer.
+ */
+export async function faturaKapat(
+  id: string,
+  tarih: string | null,
+): Promise<FinansDurumu> {
+  const supabase = await supabaseServer()
+  const { error } = await supabase.from('faturalar').update({ kapatildi: tarih }).eq('id', id)
+  if (error) return { hata: error.message }
+
+  tazele()
+  return { basari: tarih ? 'Fatura ödendi olarak işaretlendi.' : 'İşaret kaldırıldı.' }
 }
 
 export async function faturaSil(id: string): Promise<FinansDurumu> {

@@ -1,14 +1,16 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useActionState, useState } from 'react'
+import { Fragment, useActionState, useState } from 'react'
 
+import { CARI_GRUPLARI } from '@/lib/cari-gruplari'
 import { AY_ADLARI, bugunISO, para, tarih as tarihBicim } from '@/lib/format'
 
 import {
   cariEkle,
   cariSil,
   faturaGuncelle,
+  faturaKapat,
   faturaSablonuKaydet,
   faturaSil,
   tahsilatEkle,
@@ -22,6 +24,8 @@ export type Cari = {
   hizmet_noktasi_id: string | null
   aktif: boolean
   sira: number
+  /** Sabit grup: adliye, tasimali, ozel_egitim, dis_hizmet, diger */
+  grup: string
 }
 
 export type Fatura = {
@@ -33,6 +37,8 @@ export type Fatura = {
   tutar: number | string
   fatura_no: string | null
   aciklama: string | null
+  /** Elle 'ödendi' işaretlendiği tarih; tahsilat tutmasa da takipten düşer */
+  kapatildi: string | null
 }
 
 export type Tahsilat = {
@@ -80,7 +86,14 @@ export function AlacakEkrani({
 
   const toplam = faturalar.reduce((t, f) => t + Number(f.tutar), 0)
   const tahsilToplam = tahsilatlar.reduce((t, x) => t + Number(x.tutar), 0)
-  const kalan = toplam - tahsilToplam
+  // Elle kapatılan faturanın kalanı takipten düşer
+  const kalan = faturalar.reduce((t, f) => {
+    if (f.kapatildi) return t
+    const alinan = tahsilatlar
+      .filter((x) => x.fatura_id === f.id)
+      .reduce((a, x) => a + Number(x.tutar), 0)
+    return t + (Number(f.tutar) - alinan)
+  }, 0)
 
   return (
     <div className="space-y-4">
@@ -172,17 +185,44 @@ export function AlacakEkrani({
             </tr>
           </thead>
           <tbody>
-            {cariler.map((c) => {
-              const f = faturalar.find((x) => x.cari_id === c.id)
-              return f ? (
-                <FaturaSatiri
-                  key={c.id}
-                  fatura={f}
-                  cari={c}
-                  tahsilatlar={tahsilatlar.filter((t) => t.fatura_id === f.id)}
-                />
-              ) : (
-                <BosSatir key={c.id} cari={c} yil={yil} ay={ay} />
+            {CARI_GRUPLARI.map((g) => {
+              const grubun = cariler
+                .filter((c) => (c.grup || 'diger') === g.anahtar)
+                .sort((a, b) => a.sira - b.sira)
+              if (grubun.length === 0) return null
+
+              const grupToplam = grubun.reduce((t, c) => {
+                const f = faturalar.find((x) => x.cari_id === c.id)
+                return t + (f ? Number(f.tutar) : 0)
+              }, 0)
+
+              return (
+                <Fragment key={g.anahtar}>
+                  <tr className="bg-slate-100">
+                    <td colSpan={5} className="py-1.5 text-xs font-bold tracking-wide text-slate-700">
+                      {g.ad}
+                    </td>
+                    <td
+                      colSpan={2}
+                      className="py-1.5 text-right text-xs font-bold tabular-nums text-slate-700"
+                    >
+                      {grupToplam > 0 ? para(grupToplam) : ''}
+                    </td>
+                  </tr>
+                  {grubun.map((c) => {
+                    const f = faturalar.find((x) => x.cari_id === c.id)
+                    return f ? (
+                      <FaturaSatiri
+                        key={c.id}
+                        fatura={f}
+                        cari={c}
+                        tahsilatlar={tahsilatlar.filter((t) => t.fatura_id === f.id)}
+                      />
+                    ) : (
+                      <BosSatir key={c.id} cari={c} yil={yil} ay={ay} />
+                    )
+                  })}
+                </Fragment>
               )
             })}
             {cariler.length === 0 && (
@@ -360,8 +400,11 @@ function FaturaSatiri({
 
   const faturaTutari = Number(fatura.tutar)
   const tahsil = tahsilatlar.reduce((t, x) => t + Number(x.tutar), 0)
-  const kalan = faturaTutari - tahsil
-  const kapandi = faturaTutari > 0 && kalan <= 0.005
+  const elleKapali = !!fatura.kapatildi
+  // Elle kapatılan faturanın kalanı takipten düşer ama gerçek tahsilat
+  // toplamı ekranda kalır; aradaki fark gizlenmesin.
+  const kalan = elleKapali ? 0 : faturaTutari - tahsil
+  const kapandi = elleKapali || (faturaTutari > 0 && kalan <= 0.005)
 
   async function calistir(is: () => Promise<FinansDurumu>) {
     setCalisiyor(true)
@@ -378,7 +421,21 @@ function FaturaSatiri({
     <tr className={kapandi ? 'bg-emerald-50/70' : undefined}>
       <td className="font-medium">
         {cari?.ad ?? '—'}
-        {kapandi && <span className="rozet ml-2 bg-emerald-100 text-emerald-800">tahsil edildi</span>}
+        {kapandi && (
+          <span
+            className="rozet ml-2 bg-emerald-100 text-emerald-800"
+            title={
+              elleKapali
+                ? `${tarihBicim(fatura.kapatildi)} tarihinde elle ödendi işaretlendi` +
+                  (Math.abs(faturaTutari - tahsil) > 0.005
+                    ? ` · girilen tahsilat ${para(tahsil)}`
+                    : '')
+                : undefined
+            }
+          >
+            {elleKapali ? 'ödendi' : 'tahsil edildi'}
+          </span>
+        )}
       </td>
       <td className="text-right">
         <input
@@ -474,12 +531,27 @@ function FaturaSatiri({
       <td className="text-right whitespace-nowrap">
         <button
           type="button"
+          disabled={calisiyor}
+          onClick={() => calistir(() => faturaKapat(fatura.id, elleKapali ? null : bugunISO()))}
+          className={`text-xs hover:underline ${
+            elleKapali ? 'text-solgun' : 'font-medium text-emerald-700'
+          }`}
+          title={
+            elleKapali
+              ? 'Ödendi işaretini kaldır'
+              : 'Tahsilat tamam — tutar birebir tutmasa da faturayı kapat'
+          }
+        >
+          {elleKapali ? 'Geri al' : 'Ödendi'}
+        </button>
+        <button
+          type="button"
           onClick={() => {
             if (!confirm(`${cari?.ad ?? 'Bu'} faturası ve tahsilatları silinecek. Emin misiniz?`))
               return
             calistir(() => faturaSil(fatura.id))
           }}
-          className="text-xs text-red-600 hover:underline"
+          className="ml-2 text-xs text-red-600 hover:underline"
         >
           Sil
         </button>
