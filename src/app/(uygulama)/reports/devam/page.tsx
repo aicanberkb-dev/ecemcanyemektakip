@@ -23,9 +23,20 @@ export default async function DevamPage({
   const okul = await aktifOkul()
   if (!okul) return null
 
-  const [{ data, error }, { data: sinifSatirlari }] = await Promise.all([
+  const iki = (n: number) => String(n).padStart(2, '0')
+  const ayBas = `${yil}-${iki(ay)}-01`
+  const ayBit = `${yil}-${iki(ay)}-${new Date(yil, ay, 0).getDate()}`
+
+  const [{ data, error }, { data: sinifSatirlari }, { data: tatilVeri }] = await Promise.all([
     supabase.rpc('devam_cizelgesi', { p_okul_id: okul.id, p_yil: yil, p_ay: ay }),
     supabase.from('students').select('sinif').eq('okul_id', okul.id).not('sinif', 'is', null),
+    // Tatil günleri sayımdan muaf: o gün gelmemek devamsızlık değil
+    supabase
+      .from('okulsuz_gunler')
+      .select('tarih, sebep')
+      .is('hizmet_noktasi_id', null)
+      .gte('tarih', ayBas)
+      .lte('tarih', ayBit),
   ])
 
   // Ay ve yıl sunucudan gelir (veriyi onlar belirler); sınıf ve arama
@@ -38,11 +49,14 @@ export default async function DevamPage({
 
   const gunSayisi = new Date(yil, ay, 0).getDate()
   const gunler = Array.from({ length: gunSayisi }, (_, i) => i + 1)
-  const haftaSonuGunler = gunler.filter((gun) => {
+  const tatilGunleri = new Set(
+    ((tatilVeri ?? []) as { tarih: string }[]).map((t) => Number(t.tarih.slice(8, 10))),
+  )
+  const kapaliGunler = gunler.filter((gun) => {
     const g = new Date(yil, ay - 1, gun).getDay()
-    return g === 0 || g === 6
+    return g === 0 || g === 6 || tatilGunleri.has(gun)
   })
-  const haftaIciSayisi = gunSayisi - haftaSonuGunler.length
+  const dersGunuSayisi = gunSayisi - kapaliGunler.length
 
   return (
     <div className="space-y-4">
@@ -54,7 +68,7 @@ export default async function DevamPage({
           <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
         </div>
         <p className="text-sm text-solgun">
-          Ayda {haftaIciSayisi} hafta içi gün · hafta sonları sayıma dahil değil
+          Ayda {dersGunuSayisi} ders günü · hafta sonu ve tatiller sayıma dahil değil          {tatilGunleri.size > 0 && ` (${tatilGunleri.size} tatil günü)`}
         </p>
       </div>
 
@@ -100,7 +114,7 @@ export default async function DevamPage({
         siniflar={siniflar}
         yil={yil}
         gunler={gunler}
-        haftaSonuGunler={haftaSonuGunler}
+        kapaliGunler={kapaliGunler}
       />
     </div>
   )

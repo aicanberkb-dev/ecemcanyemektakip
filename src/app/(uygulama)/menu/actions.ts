@@ -123,15 +123,24 @@ export async function menuKopyala(
   const kaynak = data ?? []
   if (kaynak.length === 0) return { hata: 'Kaynak ayda menü yok.' }
 
+  const iki = (n: number) => String(n).padStart(2, '0')
   const gunSayisi = new Date(hedefYil, hedefAy, 0).getDate()
+
+  // Tatil gününe menü yazma: sömestrin ortasına yemek listesi düşmesin
+  const { data: tatilVeri } = await supabase
+    .from('okulsuz_gunler')
+    .select('tarih')
+    .is('hizmet_noktasi_id', null)
+    .gte('tarih', `${hedefYil}-${iki(hedefAy)}-01`)
+    .lte('tarih', `${hedefYil}-${iki(hedefAy)}-${gunSayisi}`)
+
+  const tatiller = new Set(((tatilVeri ?? []) as { tarih: string }[]).map((t) => t.tarih))
+
   const hedefGunler: string[] = []
   for (let g = 1; g <= gunSayisi; g++) {
     const h = new Date(hedefYil, hedefAy - 1, g).getDay()
-    if (h !== 0 && h !== 6) {
-      hedefGunler.push(
-        `${hedefYil}-${String(hedefAy).padStart(2, '0')}-${String(g).padStart(2, '0')}`,
-      )
-    }
+    const tarih = `${hedefYil}-${iki(hedefAy)}-${iki(g)}`
+    if (h !== 0 && h !== 6 && !tatiller.has(tarih)) hedefGunler.push(tarih)
   }
 
   const satirlar = hedefGunler.slice(0, kaynak.length).map((tarih, i) => ({
@@ -150,5 +159,9 @@ export async function menuKopyala(
   if (yazmaHatasi) return { hata: yazmaHatasi.message }
 
   revalidatePath('/menu')
-  return { basari: `${satirlar.length} gün kopyalandı. Üzerinde düzenleme yapabilirsiniz.` }
+  return {
+    basari:
+      `${satirlar.length} gün kopyalandı. Üzerinde düzenleme yapabilirsiniz.` +
+      (tatiller.size > 0 ? ` ${tatiller.size} tatil günü atlandı.` : ''),
+  }
 }

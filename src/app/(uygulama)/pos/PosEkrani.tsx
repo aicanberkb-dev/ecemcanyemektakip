@@ -14,6 +14,7 @@ export function PosEkrani({
   okulAdi,
   ucretliVarsayilan,
   taksitler,
+  tatilSebebi,
 }: {
   okulId: string
   okulAdi: string
@@ -21,6 +22,8 @@ export function PosEkrani({
   ucretliVarsayilan: number
   /** Aylıkçıların taksit durumu, öğrenci id'siyle */
   taksitler: Record<string, TaksitBilgisi>
+  /** Bugün resmi tatil / ara tatilse sebebi, değilse null */
+  tatilSebebi: string | null
 }) {
   const supabase = useMemo(() => supabaseBrowser(), [])
   const aramaRef = useRef<HTMLInputElement>(null)
@@ -255,6 +258,13 @@ export function PosEkrani({
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
       <div className="space-y-4">
+        {tatilSebebi !== null && (
+          <p className="rounded-md bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+            Bugün okul yok{tatilSebebi ? ` — ${tatilSebebi}` : ''}. Kayıt girebilirsiniz
+            ama bu gün ders günü sayılmıyor.
+          </p>
+        )}
+
         {haftaSonu && (
           <p className="rounded-md bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
             Bugün hafta sonu — okul yok. Kayıt girebilirsiniz ama bu gün maliyet ve

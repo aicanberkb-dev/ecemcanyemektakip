@@ -25,12 +25,15 @@ type Mesaj = { tip: 'ok' | 'hata'; metin: string }
 
 export function TopluEkran({
   gun,
+  tatilSebebi,
   okulId,
   ogrenciler,
   siniflar,
   ucretliVarsayilan,
 }: {
   gun: string
+  /** Seçili gün resmi tatil / ara tatilse sebebi, değilse null */
+  tatilSebebi: string | null
   okulId: string
   ogrenciler: TopluOgrenci[]
   siniflar: string[]
@@ -99,6 +102,9 @@ export function TopluEkran({
     if (
       !confirm(
         (haftaSonuMu(gun) ? `DİKKAT: ${tarihBicim(gun)} hafta sonu, okul yok.\n\n` : '') +
+          (tatilSebebi !== null
+            ? `DİKKAT: ${tarihBicim(gun)} okul yok${tatilSebebi ? ` — ${tatilSebebi}` : ''}.\n\n`
+            : '') +
           `${secili.size} öğrenci için ${tarihBicim(gun)} tarihine yemek kaydı girilecek.\n` +
           `Toplam ${para(toplamTutar)} düşülecek. Onaylıyor musunuz?`,
       )
@@ -239,6 +245,13 @@ export function TopluEkran({
 
   return (
     <div className="space-y-4">
+      {tatilSebebi !== null && (
+        <p className="rounded-md bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+          {tarihBicim(gun)} okul yok{tatilSebebi ? ` — ${tatilSebebi}` : ''}. Kayıt
+          girebilirsiniz ama bu gün ders günü sayılmıyor.
+        </p>
+      )}
+
       {/* Tarih + filtreler */}
       <div className="kart flex flex-wrap items-end gap-3 p-4">
         <TarihSecici gun={gun} />

@@ -29,7 +29,22 @@ export default async function YoklamaPage({
   const okul = await aktifOkul()
   if (!okul) return null
 
+  const iki = (n: number) => String(n).padStart(2, '0')
   const supabase = await supabaseServer()
+
+  // Tatil günleri yoklama kâğıdında da kapalı görünsün; öğretmen o güne
+  // yanlışlıkla işaret koymasın.
+  const { data: tatilVeri } = await supabase
+    .from('okulsuz_gunler')
+    .select('tarih')
+    .is('hizmet_noktasi_id', null)
+    .gte('tarih', `${yil}-${iki(ay)}-01`)
+    .lte('tarih', `${yil}-${iki(ay)}-${new Date(yil, ay, 0).getDate()}`)
+
+  const tatilGunleri = new Set(
+    ((tatilVeri ?? []) as { tarih: string }[]).map((t) => Number(t.tarih.slice(8, 10))),
+  )
+
   const { data } = await supabase
     .from('student_balances')
     .select('student_id, ogrenci_no, ad_soyad, sinif')
@@ -55,9 +70,9 @@ export default async function YoklamaPage({
 
   const gunSayisi = new Date(yil, ay, 0).getDate()
   const gunler = Array.from({ length: gunSayisi }, (_, i) => i + 1)
-  const haftaSonu = (gun: number) => {
+  const kapali = (gun: number) => {
     const g = new Date(yil, ay - 1, gun).getDay()
-    return g === 0 || g === 6
+    return g === 0 || g === 6 || tatilGunleri.has(gun)
   }
 
   return (
@@ -153,7 +168,7 @@ export default async function YoklamaPage({
                     <th
                       key={g}
                       className={`w-6 border border-slate-400 px-0 py-1 text-center tabular-nums ${
-                        haftaSonu(g) ? 'bg-slate-300 text-slate-500' : 'bg-slate-100'
+                        kapali(g) ? 'bg-slate-300 text-slate-500' : 'bg-slate-100'
                       }`}
                     >
                       {g}
@@ -174,7 +189,7 @@ export default async function YoklamaPage({
                       <td
                         key={g}
                         className={`h-7 border border-slate-400 ${
-                          haftaSonu(g) ? 'bg-slate-200' : ''
+                          kapali(g) ? 'bg-slate-200' : ''
                         }`}
                       />
                     ))}

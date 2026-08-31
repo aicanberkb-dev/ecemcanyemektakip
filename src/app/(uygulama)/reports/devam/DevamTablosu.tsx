@@ -25,20 +25,20 @@ export function DevamTablosu({
   siniflar,
   yil,
   gunler,
-  haftaSonuGunler,
+  kapaliGunler,
 }: {
   satirlar: DevamSatiri[]
   siniflar: string[]
   yil: number
   gunler: number[]
-  /** Hafta sonuna denk gelen gün numaraları */
-  haftaSonuGunler: number[]
+  /** Okul olmayan gün numaraları: hafta sonu + resmi tatil / ara tatil */
+  kapaliGunler: number[]
 }) {
   const [arama, setArama] = useState('')
   const [sinif, setSinif] = useState('')
   const [ipucu, setIpucu] = useState<Ipucu | null>(null)
 
-  const haftaSonu = useMemo(() => new Set(haftaSonuGunler), [haftaSonuGunler])
+  const kapali = useMemo(() => new Set(kapaliGunler), [kapaliGunler])
 
   const suzulmus = useMemo(
     () =>
@@ -119,7 +119,7 @@ export function DevamTablosu({
                 <th
                   key={g}
                   className={`!px-1 text-center tabular-nums ${
-                    haftaSonu.has(g) ? 'bg-slate-200 text-slate-400' : ''
+                    kapali.has(g) ? 'bg-slate-200 text-slate-400' : ''
                   }`}
                 >
                   {g}
@@ -175,7 +175,7 @@ export function DevamTablosu({
                         className={`relative !px-1 text-center ${
                           odendi ? 'border-b-4 border-amber-500' : ''
                         } ${
-                          haftaSonu.has(g)
+                          kapali.has(g)
                             ? 'bg-slate-100'
                             : geldi
                               ? 'bg-emerald-50 font-semibold text-emerald-700'

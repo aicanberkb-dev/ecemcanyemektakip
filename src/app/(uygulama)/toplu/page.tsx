@@ -36,7 +36,7 @@ export default async function TopluPage({
 
   const supabase = await supabaseServer()
 
-  const [{ data: ogrenciVeri }, { data: kayitliVeri }] = await Promise.all([
+  const [{ data: ogrenciVeri }, { data: kayitliVeri }, { data: tatil }] = await Promise.all([
     supabase
       .from('student_balances')
       .select('*')
@@ -50,6 +50,13 @@ export default async function TopluPage({
       .eq('students.okul_id', okul.id)
       .eq('tarih', gun)
       .not('ogun_abone_tipi', 'is', null),
+    // Seçili gün resmi tatil / ara tatil mi?
+    supabase
+      .from('okulsuz_gunler')
+      .select('sebep')
+      .is('hizmet_noktasi_id', null)
+      .eq('tarih', gun)
+      .maybeSingle(),
   ])
 
   const kayitli = new Set(
@@ -93,6 +100,7 @@ export default async function TopluPage({
       <TopluEkran
         key={`${okul.id}-${gun}`}
         gun={gun}
+        tatilSebebi={(tatil as { sebep: string | null } | null)?.sebep ?? null}
         okulId={okul.id}
         ogrenciler={ogrenciler}
         siniflar={siniflar}

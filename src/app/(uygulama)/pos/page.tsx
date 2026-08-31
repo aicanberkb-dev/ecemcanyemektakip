@@ -23,6 +23,14 @@ export default async function PosPage() {
     taksitHaritasi(okul.id),
   ])
 
+  // Bugun resmi tatil / ara tatil mi? Yemek kaydi girilebilir ama uyarilir.
+  const { data: tatil } = await supabase
+    .from('okulsuz_gunler')
+    .select('sebep')
+    .is('hizmet_noktasi_id', null)
+    .eq('tarih', new Date().toISOString().slice(0, 10))
+    .maybeSingle()
+
   const tarife = data as { taban_gunluk_ucret: number } | null
   const ucretliVarsayilan = Number(tarife?.taban_gunluk_ucret ?? 0)
 
@@ -34,6 +42,7 @@ export default async function PosPage() {
       okulAdi={okul.ad}
       ucretliVarsayilan={ucretliVarsayilan}
       taksitler={Object.fromEntries(taksitler)}
+      tatilSebebi={(tatil as { sebep: string | null } | null)?.sebep ?? null}
     />
   )
 }
