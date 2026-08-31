@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { CiktiBasligi } from '@/components/CiktiBasligi'
 import { TarihAraligi } from '@/components/TarihAraligi'
 import { YazdirButonu } from '@/components/Yazdir'
-import { bugunISO, para, tarih as tarihBicim } from '@/lib/format'
+import { para, tarih as tarihBicim } from '@/lib/format'
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 
@@ -47,7 +48,7 @@ export default async function IadelerPage({
     .maybeSingle()
 
   const bas = basQ || sezon?.baslangic || `${new Date().getFullYear()}-01-01`
-  const bit = bitQ || sezon?.bitis || bugunISO()
+  const bit = bitQ || sezon?.bitis || await bugunSunucu()
 
   const { data, error } = await supabase
     .from('transactions')

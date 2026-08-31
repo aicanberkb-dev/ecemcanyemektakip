@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { useActionState, useEffect, useMemo, useState } from 'react'
 
+import { useBugun } from '@/components/BugunSaglayici'
 import { OdemeYontemiSecici } from '@/components/OdemeYontemiSecici'
 import { OgrenciSecici, type SeciliOgrenci } from '@/components/OgrenciSecici'
-import { bugunISO, para, tarih as tarihBicim } from '@/lib/format'
+import { para, tarih as tarihBicim } from '@/lib/format'
 import { supabaseBrowser } from '@/lib/supabase/client'
 import type { OdemeYontemi, Transaction } from '@/lib/types'
 
@@ -28,7 +29,7 @@ export function IslemFormu({
   const [ogrenci, setOgrenci] = useState<SeciliOgrenci | null>(baslangic)
   const [yontem, setYontem] = useState<OdemeYontemi | null>(null)
   // Mükerrer kontrolü için tarih ve tutar kontrollü tutulur
-  const [tarih, setTarih] = useState(bugunISO())
+  const [tarih, setTarih] = useState(useBugun())
   const [tutar, setTutar] = useState('')
   const [durum, gonder, bekliyor] = useActionState(tahsilatEkle, {} as IslemDurumu)
 

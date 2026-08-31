@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { AboneRozeti, Bakiye, OgrenciTipiRozeti } from '@/components/Rozetler'
 import { TaksitRozeti } from '@/components/TaksitRozeti'
 import { TarihAraligi } from '@/components/TarihAraligi'
-import { ayBasiISO, bugunISO, para } from '@/lib/format'
+import { ayBasiISO, para } from '@/lib/format'
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import { taksitHaritasi } from '@/lib/taksit-sunucu'
@@ -18,7 +19,7 @@ export default async function ReportsPage({
 }) {
   const { bas: basQ, bit: bitQ, sinif } = await searchParams
   const bas = basQ || ayBasiISO()
-  const bit = bitQ || bugunISO()
+  const bit = bitQ || await bugunSunucu()
 
   const supabase = await supabaseServer()
   const okul = await aktifOkul()

@@ -3,8 +3,9 @@
 import { useRouter } from 'next/navigation'
 import { useActionState, useMemo, useState } from 'react'
 
+import { useBugun } from '@/components/BugunSaglayici'
 import { aramaEslesir } from '@/lib/arama'
-import { bugunISO, para, tarih as tarihBicim } from '@/lib/format'
+import { para, tarih as tarihBicim } from '@/lib/format'
 
 import {
   senetEkle,
@@ -45,7 +46,7 @@ function gunFarki(iso: string, bugun: string): number {
  * vadeye göre sıralı ve gecikenler en üstte ayrıca özetleniyor.
  */
 export function SenetEkrani({ senetler }: { senetler: Senet[] }) {
-  const bugun = bugunISO()
+  const bugun = useBugun()
   const [arama, setArama] = useState('')
   const [acik, setAcik] = useState(false)
   const [gizleOdenen, setGizleOdenen] = useState(false)

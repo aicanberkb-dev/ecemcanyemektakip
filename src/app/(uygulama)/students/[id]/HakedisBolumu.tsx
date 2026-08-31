@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation'
 import { useActionState, useState } from 'react'
 
-import { bugunISO, para, tarih as tarihBicim } from '@/lib/format'
+import { useBugun } from '@/components/BugunSaglayici'
+import { para, tarih as tarihBicim } from '@/lib/format'
 
 import {
   abonelikAc,
@@ -46,7 +47,8 @@ export function HakedisBolumu({
   const router = useRouter()
   const [kapatAcik, setKapatAcik] = useState(false)
   const [iadeAcik, setIadeAcik] = useState(false)
-  const [bitis, setBitis] = useState(bugunISO())
+  const bugun = useBugun()
+  const [bitis, setBitis] = useState(bugun)
   const [sebep, setSebep] = useState('')
   const [calisiyor, setCalisiyor] = useState(false)
 
@@ -211,7 +213,7 @@ export function HakedisBolumu({
           </div>
           <div>
             <label className="etiket text-xs">Tarih</label>
-            <input type="date" name="tarih" defaultValue={bugunISO()} className="girdi !py-1.5" />
+            <input type="date" name="tarih" defaultValue={bugun} className="girdi !py-1.5" />
           </div>
           <div className="min-w-40 flex-1">
             <label className="etiket text-xs">Açıklama</label>

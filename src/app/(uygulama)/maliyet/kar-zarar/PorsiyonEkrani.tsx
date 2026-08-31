@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 
-import { AY_ADLARI, bugunISO, para } from '@/lib/format'
+import { useBugun } from '@/components/BugunSaglayici'
+import { AY_ADLARI, para } from '@/lib/format'
 
 import {
   okulYokIsaretle,
@@ -110,7 +111,7 @@ export function PorsiyonEkrani({
   const router = useRouter()
   const [durum, setDurum] = useState<MaliyetDurumu>({})
   const [kaydediliyor, basla] = useTransition()
-  const bugun = bugunISO()
+  const bugun = useBugun()
 
   /** tarih → slot → { yemek, kişi başı maliyet } */
   const menuHaritasi = useMemo(() => {

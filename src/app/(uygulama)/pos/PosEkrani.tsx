@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useBugun } from '@/components/BugunSaglayici'
 import { TaksitRozeti, type TaksitBilgisi } from '@/components/TaksitRozeti'
-import { bugunISO, para } from '@/lib/format'
+import { para } from '@/lib/format'
 import { supabaseBrowser } from '@/lib/supabase/client'
 import type { GunSonu, PosSonuc, SerbestOgunTipi } from '@/lib/types'
 
@@ -253,7 +254,7 @@ export function PosEkrani({
 
   // Yemekhane hep "bugün"e kaydeder; hafta sonu okul olmadığı için o gün
   // girilen kayıt neredeyse her zaman hatadır. Engellenmiyor, uyarılıyor.
-  const haftaSonu = [0, 6].includes(new Date(`${bugunISO()}T00:00:00`).getDay())
+  const haftaSonu = [0, 6].includes(new Date(`${useBugun()}T00:00:00`).getDay())
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">

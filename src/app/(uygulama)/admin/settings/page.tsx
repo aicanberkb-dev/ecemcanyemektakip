@@ -4,7 +4,11 @@ import { aktifOkul } from '@/lib/okul'
 import { sezonSec } from '@/lib/sezon'
 import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
+import { gercekBugun } from '@/lib/simulasyon'
+import { simulasyonTarihi } from '@/lib/simulasyon-sunucu'
 import type { AppSettings, TaksitPlani, UcretGecmisi } from '@/lib/types'
+
+import { SimulasyonKarti } from './SimulasyonKarti'
 
 import { OkulAdiFormu } from './OkulAdiFormu'
 import { SezonBolumu } from './SezonBolumu'
@@ -47,6 +51,8 @@ export default async function SettingsPage({
   const plan = (planVeri ?? []) as TaksitPlani[]
   const tarifeler = (tarifeVeri ?? []) as UcretGecmisi[]
   const bugun = new Date().toISOString().slice(0, 10)
+
+  const simulasyon = await simulasyonTarihi()
 
   return (
     <div className="space-y-5">
@@ -144,6 +150,7 @@ export default async function SettingsPage({
           varsa efektif ücreti {para(Number(ayar.taban_gunluk_ucret) * 0.9)} olur.
         </p>
       )}
+      <SimulasyonKarti acikTarih={simulasyon} gercekTarih={gercekBugun()} />
     </div>
   )
 }

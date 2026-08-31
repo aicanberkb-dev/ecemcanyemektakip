@@ -1,7 +1,8 @@
 import Link from 'next/link'
 
 import { AboneRozeti } from '@/components/Rozetler'
-import { bugunISO, para, tarih as tarihBicim, tarihSaat } from '@/lib/format'
+import { para, tarih as tarihBicim, tarihSaat } from '@/lib/format'
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { GunSonu, SerbestOgun, Transaction } from '@/lib/types'
@@ -16,7 +17,7 @@ export default async function GunSonuPage({
   searchParams: Promise<{ gun?: string }>
 }) {
   const { gun: gunQ } = await searchParams
-  const gun = gunQ || bugunISO()
+  const gun = gunQ || await bugunSunucu()
 
   const supabase = await supabaseServer()
   const okul = await aktifOkul()

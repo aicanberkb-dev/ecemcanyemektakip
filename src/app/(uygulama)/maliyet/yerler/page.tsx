@@ -1,4 +1,5 @@
-import { bugunISO } from '@/lib/format'
+
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 
 import {
@@ -12,7 +13,7 @@ export const metadata = { title: 'Hizmet Yerleri — Yemek Takip' }
 
 export default async function YerlerPage() {
   const supabase = await supabaseServer()
-  const bugun = bugunISO()
+  const bugun = await bugunSunucu()
 
   const [{ data: noktaVeri }, { data: fiyatVeri }, { data: listeVeri }, { data: tarifeVeri }] =
     await Promise.all([

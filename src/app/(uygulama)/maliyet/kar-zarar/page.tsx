@@ -4,6 +4,7 @@ import { DonemSecici } from '@/components/DonemSecici'
 import { YazdirButonu } from '@/components/Yazdir'
 import { donemCoz, donemParametreleri } from '@/lib/donem'
 import { AY_ADLARI, para, tarih as tarihBicim } from '@/lib/format'
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 
 import type { OkulsuzGun } from '../../okulsuz-actions'
@@ -71,7 +72,7 @@ export default async function KarZararPage({
   const supabase = await supabaseServer()
 
   const [{ data: raporVeri }, { data: noktaVeri }] = await Promise.all([
-    supabase.rpc('kar_zarar', { p_bas: bas, p_bit: bit }),
+    supabase.rpc('kar_zarar', { p_bas: bas, p_bit: bit, p_bugun: await bugunSunucu() }),
     supabase
       .from('hizmet_noktalari')
       .select('id, ad, liste_id, okul_id, varsayilan_kisi_sayisi, varsayilan_cikan_porsiyon')

@@ -1,4 +1,5 @@
-import { bugunISO } from '@/lib/format'
+
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { StudentBalance } from '@/lib/types'
@@ -29,7 +30,7 @@ export default async function TopluPage({
   // Hafta sonu okul yok: hafta sonuna denk gelen bir gün istenirse (bugün
   // cumartesiyse ya da adres çubuğuna elle yazıldıysa) en yakın önceki iş
   // gününe düşülür.
-  const gun = isGunuYap(gunQ || bugunISO())
+  const gun = isGunuYap(gunQ || await bugunSunucu())
 
   const okul = await aktifOkul()
   if (!okul) return null

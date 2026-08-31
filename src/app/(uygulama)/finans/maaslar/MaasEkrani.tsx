@@ -3,9 +3,10 @@
 import { useRouter } from 'next/navigation'
 import { Fragment, useActionState, useState } from 'react'
 
+import { useBugun } from '@/components/BugunSaglayici'
 import { CALISMA_YERLERI, calismaYeriSirasi } from '@/lib/calisma-yerleri'
 import { ayinSonGunu, SGK_KALEMLERI, sgkKalemiMi } from '@/lib/sgk-kalemleri'
-import { AY_ADLARI, bugunISO, para, tarih as tarihBicim } from '@/lib/format'
+import { AY_ADLARI, para, tarih as tarihBicim } from '@/lib/format'
 
 import {
   giderKaydet,
@@ -104,7 +105,7 @@ export function MaasEkrani({
   /** Bu ay şablondan çıkarılan SGK kalemleri */
   sgkGizli: string[]
 }) {
-  const bugun = bugunISO()
+  const bugun = useBugun()
   const [acik, setAcik] = useState(false)
   const [giderAcik, setGiderAcik] = useState(false)
   const [pasifGoster, setPasifGoster] = useState(false)

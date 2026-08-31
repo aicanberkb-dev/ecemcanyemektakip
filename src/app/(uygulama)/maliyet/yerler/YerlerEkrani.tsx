@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useActionState, useState } from 'react'
 
-import { bugunISO, para, tarih as tarihBicim } from '@/lib/format'
+import { useBugun } from '@/components/BugunSaglayici'
+import { para, tarih as tarihBicim } from '@/lib/format'
 
 import {
   hizmetFiyatiEkle,
@@ -153,7 +154,7 @@ function Nokta({
   if (durum.basari && duzenle) setDuzenle(false)
   if (fDurum.basari && fiyatAcik) setFiyatAcik(false)
 
-  const bugun = bugunISO()
+  const bugun = useBugun()
   const gecerli = fiyatlar.find((f) => f.gecerli_baslangic <= bugun)
   const liste = listeler.find((l) => l.id === nokta.liste_id)
   const okulaBagli = !!nokta.okul_id

@@ -1,6 +1,7 @@
 import { aramaEslesir } from '@/lib/arama'
 import { csvMetni, csvSayi, dosyaAdi, hucre } from '@/lib/csv'
-import { bugunISO } from '@/lib/format'
+
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { StudentBalance } from '@/lib/types'
@@ -71,7 +72,7 @@ export async function GET(request: Request) {
   return new Response(csv, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${dosyaAdi('borclu-ogrenciler', okul.ad, bugunISO())}.csv"`,
+      'Content-Disposition': `attachment; filename="${dosyaAdi('borclu-ogrenciler', okul.ad, await bugunSunucu())}.csv"`,
     },
   })
 }

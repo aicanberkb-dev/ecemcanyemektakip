@@ -3,8 +3,9 @@
 import { useRouter } from 'next/navigation'
 import { Fragment, useActionState, useState } from 'react'
 
+import { useBugun } from '@/components/BugunSaglayici'
 import { CARI_GRUPLARI } from '@/lib/cari-gruplari'
-import { AY_ADLARI, bugunISO, para, tarih as tarihBicim } from '@/lib/format'
+import { AY_ADLARI, para, tarih as tarihBicim } from '@/lib/format'
 
 import {
   cariAyaGizle,
@@ -503,10 +504,11 @@ function FaturaSatiri({
   const router = useRouter()
   const [tutar, setTutar] = useState(String(fatura.tutar).replace('.', ','))
   const [adet, setAdet] = useState(fatura.adet === null ? '' : String(fatura.adet))
+  const bugun = useBugun()
   const [yeniTutar, setYeniTutar] = useState('')
-  const [yeniTarih, setYeniTarih] = useState(bugunISO())
+  const [yeniTarih, setYeniTarih] = useState(bugun)
   // Tahsilatın hangi gün alındığı elle girilebilsin
-  const [kapatmaTarihi, setKapatmaTarihi] = useState(fatura.kapatildi ?? bugunISO())
+  const [kapatmaTarihi, setKapatmaTarihi] = useState(fatura.kapatildi ?? bugun)
   const [calisiyor, setCalisiyor] = useState(false)
 
   const faturaTutari = Number(fatura.tutar)

@@ -1,7 +1,8 @@
 import Link from 'next/link'
 
 import { TarihAraligi } from '@/components/TarihAraligi'
-import { ayBasiISO, bugunISO, para, tarih as tarihBicim } from '@/lib/format'
+import { ayBasiISO, para, tarih as tarihBicim } from '@/lib/format'
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { SerbestOgun, Transaction } from '@/lib/types'
@@ -17,7 +18,7 @@ export default async function DashboardPage({
 }) {
   const { bas: basQ, bit: bitQ } = await searchParams
   const bas = basQ || ayBasiISO()
-  const bit = bitQ || bugunISO()
+  const bit = bitQ || await bugunSunucu()
 
   const supabase = await supabaseServer()
   const okul = await aktifOkul()

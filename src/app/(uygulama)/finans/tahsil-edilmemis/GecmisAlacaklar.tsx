@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation'
 import { Fragment, useState } from 'react'
 
-import { bugunISO, para, tarih as tarihBicim } from '@/lib/format'
+import { useBugun } from '@/components/BugunSaglayici'
+import { para, tarih as tarihBicim } from '@/lib/format'
 
 import { faturaKapat } from '../actions'
 
@@ -109,13 +110,14 @@ export function GecmisAlacaklar({
 
 function Satir({ satir }: { satir: GecmisSatir }) {
   const router = useRouter()
+  const bugun = useBugun()
   const [calisiyor, setCalisiyor] = useState(false)
   const kapali = !!satir.kapatildi
 
   async function degistir() {
     setCalisiyor(true)
     try {
-      const s = await faturaKapat(satir.id, kapali ? null : bugunISO())
+      const s = await faturaKapat(satir.id, kapali ? null : bugun)
       if (s.hata) alert(s.hata)
       else router.refresh()
     } finally {
