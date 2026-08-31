@@ -1,4 +1,5 @@
 import { aktifOkul } from '@/lib/okul'
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { taksitHaritasi } from '@/lib/taksit-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 
@@ -13,12 +14,13 @@ export default async function PosPage() {
   // Ücretli öğünün varsayılan fiyatı: bugün geçerli tarifeden gelir.
   // Ekranda değiştirilebilir ama başlangıç değeri hep tarifedir.
   const supabase = await supabaseServer()
+  const bugun = await bugunSunucu()
 
   // Aylıkçı seçilince taksit durumu görünsün: bakiye aylıkçıda hiçbir şey
   // söylemiyor, ödeme sorusunun cevabı taksit planında.
   const [{ data }, taksitler] = await Promise.all([
     supabase
-      .rpc('ucretler', { p_okul_id: okul.id })
+      .rpc('ucretler', { p_okul_id: okul.id, p_tarih: bugun })
       .maybeSingle(),
     taksitHaritasi(okul.id),
   ])
@@ -28,7 +30,7 @@ export default async function PosPage() {
     .from('okulsuz_gunler')
     .select('sebep')
     .is('hizmet_noktasi_id', null)
-    .eq('tarih', new Date().toISOString().slice(0, 10))
+    .eq('tarih', bugun)
     .maybeSingle()
 
   const tarife = data as { taban_gunluk_ucret: number } | null

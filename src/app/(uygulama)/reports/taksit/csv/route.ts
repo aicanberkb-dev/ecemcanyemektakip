@@ -1,4 +1,5 @@
 import { csvMetni, csvSayi, dosyaAdi, hucre } from '@/lib/csv'
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { aktifOkul } from '@/lib/okul'
 import { sezonSec } from '@/lib/sezon'
 import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
   const sezon = sezonSec(await sezonlariGetir(okul.id), sezonQ)
   if (!sezon) return new Response('Sezon tanımlı değil.', { status: 400 })
 
-  const { data, error } = await supabase.rpc('taksit_durumu', { p_sezon_id: sezon.id })
+  const { data, error } = await supabase.rpc('taksit_durumu', { p_sezon_id: sezon.id, p_tarih: await bugunSunucu() })
   if (error) return new Response(error.message, { status: 500 })
 
   const satirlar = ((data ?? []) as TaksitDurumu[]).map((s) => [

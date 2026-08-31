@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 
 import { CiktiBasligi } from '@/components/CiktiBasligi'
 import { SezonUyarisi } from '@/components/SezonUyarisi'
@@ -50,7 +51,7 @@ export default async function TaksitPage({
   }
 
   const [{ data, error }, { data: planVeri }] = await Promise.all([
-    supabase.rpc('taksit_durumu', { p_sezon_id: sezon.id }),
+    supabase.rpc('taksit_durumu', { p_sezon_id: sezon.id, p_tarih: await bugunSunucu() }),
     supabase
       .from('taksit_plani')
       .select('*')

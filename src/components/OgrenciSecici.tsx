@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { useBugun } from '@/components/BugunSaglayici'
 import { para } from '@/lib/format'
 import { supabaseBrowser } from '@/lib/supabase/client'
 import type { PosSonuc } from '@/lib/types'
@@ -37,6 +38,7 @@ export function OgrenciSecici({
   onSecim,
 }: Props) {
   const supabase = useMemo(() => supabaseBrowser(), [])
+  const bugun = useBugun()
   const [terim, setTerim] = useState('')
   const [sonuclar, setSonuclar] = useState<PosSonuc[]>([])
   const [vurgulu, setVurgulu] = useState(0)
@@ -49,7 +51,7 @@ export function OgrenciSecici({
 
     let iptal = false
     const zamanlayici = setTimeout(async () => {
-      const { data } = await supabase.rpc('pos_ara', { p_okul_id: okulId, p_terim: t })
+      const { data } = await supabase.rpc('pos_ara', { p_okul_id: okulId, p_terim: t, p_tarih: bugun })
       if (!iptal) {
         setSonuclar((data ?? []) as PosSonuc[])
         setVurgulu(0)
@@ -59,7 +61,7 @@ export function OgrenciSecici({
       iptal = true
       clearTimeout(zamanlayici)
     }
-  }, [terim, secili, supabase, okulId])
+  }, [terim, secili, supabase, okulId, bugun])
 
   // Kutu boşsa liste kapalı — türetilmiş, effect gerekmez
   const gosterilen = terim.trim() === '' ? [] : sonuclar

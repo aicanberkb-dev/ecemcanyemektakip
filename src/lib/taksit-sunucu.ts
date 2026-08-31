@@ -1,4 +1,5 @@
 import type { TaksitBilgisi } from '@/components/TaksitRozeti'
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { sezonSec } from '@/lib/sezon'
 import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
@@ -20,7 +21,10 @@ export async function taksitHaritasi(
   if (!sezon) return new Map()
 
   const supabase = await supabaseServer()
-  const { data } = await supabase.rpc('taksit_durumu', { p_sezon_id: sezon.id })
+  const { data } = await supabase.rpc('taksit_durumu', {
+    p_sezon_id: sezon.id,
+    p_tarih: await bugunSunucu(),
+  })
 
   return new Map(
     ((data ?? []) as TaksitDurumu[]).map((t) => [

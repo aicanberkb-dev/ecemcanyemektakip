@@ -28,6 +28,9 @@ export function PosEkrani({
 }) {
   const supabase = useMemo(() => supabaseBrowser(), [])
   const aramaRef = useRef<HTMLInputElement>(null)
+  // Simülasyon açıkken kayıtlar da o güne yazılsın; ekranın gösterdiği
+  // tarihle veritabanına düşen tarih ayrışmasın.
+  const bugun = useBugun()
 
   const [terim, setTerim] = useState('')
   const [sonuclar, setSonuclar] = useState<PosSonuc[]>([])
@@ -46,22 +49,22 @@ export function PosEkrani({
   }, [])
 
   const ozetYenile = useCallback(async () => {
-    const { data } = await supabase.rpc('gun_sonu', { p_okul_id: okulId })
+    const { data } = await supabase.rpc('gun_sonu', { p_okul_id: okulId, p_tarih: bugun })
     if (data?.[0]) setOzet(data[0] as GunSonu)
-  }, [supabase, okulId])
+  }, [supabase, okulId, bugun])
 
   // İlk açılışta bugünün sayacını çek ve odağı arama kutusuna ver.
   // Okul değişince bileşen key ile yeniden kurulur (bkz. pos/page.tsx).
   useEffect(() => {
     let iptal = false
-    supabase.rpc('gun_sonu', { p_okul_id: okulId }).then(({ data }) => {
+    supabase.rpc('gun_sonu', { p_okul_id: okulId, p_tarih: bugun }).then(({ data }) => {
       if (!iptal && data?.[0]) setOzet(data[0] as GunSonu)
     })
     aramaRef.current?.focus()
     return () => {
       iptal = true
     }
-  }, [supabase, okulId])
+  }, [supabase, okulId, bugun])
 
   // --- Canlı arama (harfe göre) -------------------------------------------
   useEffect(() => {
@@ -73,6 +76,7 @@ export function PosEkrani({
       const { data, error } = await supabase.rpc('pos_ara', {
         p_okul_id: okulId,
         p_terim: t,
+        p_tarih: bugun,
       })
       if (iptal) return
       if (error) {
@@ -97,7 +101,7 @@ export function PosEkrani({
       iptal = true
       clearTimeout(zamanlayici)
     }
-  }, [terim, secili, supabase, okulId])
+  }, [terim, secili, supabase, okulId, bugun])
 
   // Öğrenci seçiliyse ya da kutu boşsa liste kapalı — türetilmiş, effect gerekmez
   const gosterilen = secili || terim.trim() === '' ? [] : sonuclar
@@ -142,7 +146,7 @@ export function PosEkrani({
     setKaydediliyor(true)
     const ad = secili.ad_soyad
 
-    const { error } = await supabase.rpc('yemek_kaydet', { p_student_id: secili.student_id })
+    const { error } = await supabase.rpc('yemek_kaydet', { p_student_id: secili.student_id, p_tarih: bugun })
 
     setKaydediliyor(false)
     if (error) {
@@ -167,7 +171,7 @@ export function PosEkrani({
 
     setKaydediliyor(true)
     const ad = secili.ad_soyad
-    const { error } = await supabase.rpc('yemek_geri_al', { p_student_id: secili.student_id })
+    const { error } = await supabase.rpc('yemek_geri_al', { p_student_id: secili.student_id, p_tarih: bugun })
 
     setKaydediliyor(false)
     if (error) {
@@ -188,6 +192,7 @@ export function PosEkrani({
       p_okul_id: okulId,
       p_tip: tip,
       p_adet: adet,
+      p_tarih: bugun,
       p_birim_tutar: Number.isFinite(birim) ? birim : null,
     })
 
@@ -229,6 +234,7 @@ export function PosEkrani({
       p_okul_id: okulId,
       p_tip: tip,
       p_adet: adet,
+      p_tarih: bugun,
       p_birim_tutar: fiyatli ? birim : null,
     })
 
@@ -254,7 +260,7 @@ export function PosEkrani({
 
   // Yemekhane hep "bugün"e kaydeder; hafta sonu okul olmadığı için o gün
   // girilen kayıt neredeyse her zaman hatadır. Engellenmiyor, uyarılıyor.
-  const haftaSonu = [0, 6].includes(new Date(`${useBugun()}T00:00:00`).getDay())
+  const haftaSonu = [0, 6].includes(new Date(`${bugun}T00:00:00`).getDay())
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">

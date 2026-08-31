@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { notFound } from 'next/navigation'
 
 import { AboneRozeti, Bakiye, DurumRozeti, OgrenciTipiRozeti } from '@/components/Rozetler'
@@ -69,7 +70,7 @@ export default async function OgrenciDetayPage({
   // Hakediş: aylıkçının ciro/iade hesabı. Bakiye bu soruya cevap veremiyor.
   const { data: hakedisVeri } =
     ozet.abone_tipi === 'aylik'
-      ? await supabase.rpc('ogrenci_hakedis', { p_student_id: id })
+      ? await supabase.rpc('ogrenci_hakedis', { p_student_id: id, p_tarih: await bugunSunucu() })
       : { data: null }
   const hakedis = ((hakedisVeri ?? [])[0] ?? null) as Hakedis | null
 
