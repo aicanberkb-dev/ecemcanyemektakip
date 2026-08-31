@@ -15,6 +15,7 @@ import {
 } from '@/lib/types'
 
 import { ogrenciSil } from '../actions'
+import { HakedisBolumu, type Hakedis } from './HakedisBolumu'
 import { IskontoFormu } from './IskontoFormu'
 import { IslemSatiri } from './IslemSatiri'
 import { KardesBolumu } from './KardesBolumu'
@@ -64,6 +65,13 @@ export default async function OgrenciDetayPage({
         })
       : { data: null }
   const taksitSatirlari = (taksitVeri ?? []) as OgrenciTaksitSatiri[]
+
+  // Hakediş: aylıkçının ciro/iade hesabı. Bakiye bu soruya cevap veremiyor.
+  const { data: hakedisVeri } =
+    ozet.abone_tipi === 'aylik'
+      ? await supabase.rpc('ogrenci_hakedis', { p_student_id: id })
+      : { data: null }
+  const hakedis = ((hakedisVeri ?? [])[0] ?? null) as Hakedis | null
 
   // Kardeşler ve bağlanabilecek adaylar: ikisi de aynı okuldan
   const { data: okulOgrencileri } = await supabase
@@ -132,6 +140,8 @@ export default async function OgrenciDetayPage({
           </p>
         </div>
       </div>
+
+      {hakedis && <HakedisBolumu studentId={id} hakedis={hakedis} />}
 
       {/* Taksit planı — yalnızca aylıkçılarda */}
       {ozet.abone_tipi === 'aylik' && (
