@@ -40,6 +40,7 @@ const TABLOLAR = [
   'maas_odemeleri',
   'donemsel_giderler',
   'okulsuz_gunler',
+  'abonelik_donemleri',
   'senetler',
   'fatura_gizli',
   'personel_gizli',
