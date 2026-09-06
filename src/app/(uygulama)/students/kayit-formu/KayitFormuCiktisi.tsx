@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 
-import { para, tarih as tarihBicim } from '@/lib/format'
+import { AY_ADLARI, para, tarih as tarihBicim } from '@/lib/format'
 import { OGRENCI_TIPI_ADLARI, type OgrenciTipi, type TaksitPlani } from '@/lib/types'
 
 /** 1. sınıfın ayrı planı yok — standart planın satırlarını kullanır. */
@@ -11,45 +11,79 @@ function planTipi(tip: OgrenciTipi): OgrenciTipi {
 }
 
 /**
+ * Formun başlığı okulun resmî adıyla yazılır: veli kâğıdı eline aldığında
+ * hangi okulun formu olduğunu görmeli. Sistemdeki okul adı kısaltma ("GÖKSU"),
+ * bu yüzden burada eşleniyor; tanımsız bir okul için makul bir başlık üretilir.
+ */
+const FORM_BASLIKLARI: Record<string, string> = {
+  'GÖKSU': 'Göksu Şehit Er Ersin Güner Okulu Yemekhane Kayıt Formu',
+  'AHMET MİTHAT': 'Beykoz Ahmet Mithat Okulu Kayıt Formu',
+}
+
+function formBasligi(okulAdi: string): string {
+  return FORM_BASLIKLARI[okulAdi.trim()] ?? `${okulAdi} Okulu Yemekhane Kayıt Formu`
+}
+
+/**
+ * Taksitin vadesi veliye tarihten çok sözle anlatılıyor: "aralık sonu" akılda
+ * kalıyor, 31.12.2026 kalmıyor. İlk taksit kayıt anında alındığı için onun
+ * tarihi hiç yazılmaz.
+ *
+ * Etiket tarihten türetiliyor, sabit yazılmıyor: planlar okula ve tipe göre
+ * farklı (kimi ayın 15'i, kimi ay sonu, kimi 4 taksit). Sabit bir liste bir
+ * planda doğru, öbüründe veliye yanlış tarih söylerdi.
+ */
+function vadeEtiketi(isoTarih: string, sira: number): string {
+  if (sira === 0) return 'KAYIT ESNASINDA'
+
+  const d = new Date(isoTarih)
+  if (Number.isNaN(d.getTime())) return ''
+
+  const ay = AY_ADLARI[d.getMonth()].toLocaleUpperCase('tr')
+  const gun = d.getDate()
+  const ayinSonGunu = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+
+  if (gun >= ayinSonGunu - 2) return `${ay} SONU`
+  if (gun <= 3) return `${ay} BAŞI`
+  if (gun >= 13 && gun <= 17) return `${ay} ORTASI`
+  return `${ay} AYINDA`
+}
+
+/**
  * Veli kayda geldiğinde doldurulan basılı form.
  *
  * Taksit tarihleri ve tutarları sistemdeki plandan gelir; elle yazılan bir
- * fiyat listesi zamanla gerçekle ayrışır. Alanlar birebir sistemdeki öğrenci
- * kaydına karşılık gelir, böylece form kâğıttan ekrana eksiksiz geçer.
+ * fiyat listesi zamanla gerçekle ayrışır.
  */
 
 /** Her tipin kendi rengi var: kâğıtlar masada karışmasın. */
 const TIP_GORUNUM: Record<
   OgrenciTipi,
-  { kenar: string; zemin: string; yazi: string; serit: string; kisa: string }
+  { kenar: string; zemin: string; yazi: string; serit: string }
 > = {
   standart: {
     kenar: 'border-slate-800',
     zemin: 'bg-slate-100',
     yazi: 'text-slate-900',
     serit: 'bg-slate-800',
-    kisa: 'STANDART',
   },
   birinci_sinif: {
     kenar: 'border-rose-600',
     zemin: 'bg-rose-100',
     yazi: 'text-rose-900',
     serit: 'bg-rose-600',
-    kisa: '1. SINIF',
   },
   anasinifi: {
     kenar: 'border-amber-600',
     zemin: 'bg-amber-100',
     yazi: 'text-amber-900',
     serit: 'bg-amber-500',
-    kisa: 'ANASINIFI',
   },
   anasinifi_etut: {
     kenar: 'border-violet-600',
     zemin: 'bg-violet-100',
     yazi: 'text-violet-900',
     serit: 'bg-violet-600',
-    kisa: 'ANASINIFI + ETÜT',
   },
 }
 
@@ -146,60 +180,43 @@ function Form({
       className={`kart border-2 p-0 ${g.kenar}`}
       style={sonMu ? undefined : { breakAfter: 'page' }}
     >
-      {/* Tip şeridi — kâğıdın en üstünde, uzaktan ayırt edilsin */}
-      <div className={`${g.serit} px-5 py-3 text-white`}>
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <span className="text-2xl font-black tracking-wide">{g.kisa}</span>
-          <span className="text-sm font-semibold">KAYIT FORMU</span>
-        </div>
+      {/* Okul başlığı kâğıdın en üstünde; renk şeridi tipleri ayırt ettiriyor */}
+      <div className={`${g.serit} px-5 py-4 text-center text-white`}>
+        <span className="text-xl font-black tracking-wide">{formBasligi(okulAdi)}</span>
       </div>
 
       <div className="space-y-5 p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-slate-300 pb-2">
-          <span className="text-lg font-bold">{okulAdi}</span>
-          <span className="text-sm">{sezonAdi} Eğitim Öğretim Yılı</span>
+        <div className="border-b border-slate-300 pb-2 text-center text-sm font-semibold">
+          {sezonAdi} Eğitim Öğretim Yılı
         </div>
 
         {/* Öğrenci */}
         <div>
           <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>ÖĞRENCİ BİLGİLERİ</h3>
           <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-            <Satir etiket="Adı Soyadı" genis />
+            <Satir etiket="Adı Soyadı" />
             <Satir etiket="Sınıfı" />
-            <Satir etiket="T.C. Kimlik No" />
-            <Satir etiket="Kart / Kimlik No" ipucu="yemekhane turnikesi" />
-            <Satir etiket="Doğum Tarihi" />
           </div>
         </div>
 
         {/* Veli */}
         <div>
           <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>VELİ BİLGİLERİ</h3>
-          <p className="mb-2 text-xs text-slate-600">
-            Banka havalesi yapan kişi(ler)in adını <strong>bankadaki yazımıyla</strong>{' '}
-            yazınız — ödemeler bu ada göre öğrenciyle eşleştirilir.
-          </p>
           <div className="grid grid-cols-2 gap-x-6 gap-y-3">
             <Satir etiket="1. Veli Adı Soyadı" />
             <Satir etiket="1. Veli Telefon" />
-            <Satir etiket="2. Veli Adı Soyadı" ipucu="ödeme yapabilecek diğer kişi" />
+            <Satir etiket="2. Veli Adı Soyadı" />
             <Satir etiket="2. Veli Telefon" />
-            <Satir etiket="Adres" genis />
           </div>
         </div>
 
-        {/* Kardeş ve abone tipi */}
+        {/* Abone tipi */}
         <div>
           <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>KAYIT BİLGİLERİ</h3>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-            <Satir etiket="Okulda kardeşi var mı?" ipucu="varsa adı soyadı ve sınıfı" genis />
-            <div className="col-span-2">
-              <p className="text-xs font-semibold text-slate-700">Ödeme Şekli</p>
-              <div className="mt-1 flex gap-6 text-sm">
-                <Kutucuk etiket="Aylıkçı (taksitli)" />
-                <Kutucuk etiket="Günlükçü (yemek başına)" />
-              </div>
-            </div>
+          <p className="text-xs font-semibold text-slate-700">Ödeme Şekli</p>
+          <div className="mt-1 flex gap-6 text-sm">
+            <Kutucuk etiket="Aylıkçı (taksitli)" />
+            <Kutucuk etiket="Günlükçü (yemek başına)" />
           </div>
         </div>
 
@@ -222,24 +239,34 @@ function Form({
               <thead>
                 <tr className={g.zemin}>
                   <th className="border border-slate-400 px-2 py-1.5 text-left">Taksit</th>
-                  <th className="border border-slate-400 px-2 py-1.5 text-left">Son Ödeme</th>
+                  <th className="border border-slate-400 px-2 py-1.5 text-left">
+                    Son Ödeme
+                  </th>
                   <th className="border border-slate-400 px-2 py-1.5 text-right">Tutar</th>
-                  <th className="border border-slate-400 px-2 py-1.5 text-center">Ödendi</th>
                 </tr>
               </thead>
               <tbody>
-                {taksitler.map((t) => (
-                  <tr key={t.id}>
-                    <td className="border border-slate-400 px-2 py-1.5">{t.ad}</td>
-                    <td className="border border-slate-400 px-2 py-1.5">
-                      {tarihBicim(t.vade_tarihi)}
-                    </td>
-                    <td className="border border-slate-400 px-2 py-1.5 text-right font-medium tabular-nums">
-                      {para(t.tutar)}
-                    </td>
-                    <td className="border border-slate-400 px-2 py-1.5 text-center">☐</td>
-                  </tr>
-                ))}
+                {taksitler.map((t, i) => {
+                  const etiket = vadeEtiketi(t.vade_tarihi, i)
+                  // İlk taksit kayıt anında alınıyor; tarih yazmak kafa karıştırır.
+                  const tarihGoster = i > 0
+                  return (
+                    <tr key={t.id}>
+                      <td className="border border-slate-400 px-2 py-1.5">{t.ad}</td>
+                      <td className="border border-slate-400 px-2 py-1.5">
+                        {tarihGoster && (
+                          <span className="mr-2">{tarihBicim(t.vade_tarihi)}</span>
+                        )}
+                        {etiket && (
+                          <strong className="font-bold tracking-wide">{etiket}</strong>
+                        )}
+                      </td>
+                      <td className="border border-slate-400 px-2 py-1.5 text-right font-medium tabular-nums">
+                        {para(t.tutar)}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
               <tfoot>
                 <tr className={`${g.zemin} font-bold`}>
@@ -249,31 +276,30 @@ function Form({
                   <td className="border border-slate-400 px-2 py-1.5 text-right tabular-nums">
                     {para(toplam)}
                   </td>
-                  <td className="border border-slate-400" />
                 </tr>
               </tfoot>
             </table>
           )}
           <p className="mt-2 text-xs text-slate-600">
             Ödemeler banka havalesi, nakit veya kredi kartı ile yapılabilir. Havale
-            açıklamasına <strong>öğrencinin adı ve sınıfı</strong> yazılması ödemenin
-            doğru öğrenciye işlenmesi için önemlidir.
+            açıklamasına <strong>öğrencinin adı</strong> yazılması ödemenin doğru
+            öğrenciye işlenmesi için önemlidir.
           </p>
-        </div>
 
-        {/* İmza */}
-        <div className="grid grid-cols-2 gap-8 border-t border-slate-300 pt-4">
-          <div>
-            <p className="text-xs text-slate-600">
-              Yukarıdaki bilgilerin doğruluğunu ve taksit planını kabul ediyorum.
+          {/* Banka ve iletişim — velinin formu elinden bırakmadan bakacağı bilgiler */}
+          <div className="mt-3 rounded border border-slate-400 px-3 py-2.5 text-sm">
+            <p className="text-slate-700">
+              Taksit ödemelerinizi aşağıdaki banka hesabına yapmanızı rica ederiz.
             </p>
-            <p className="mt-6 text-sm font-semibold">Veli Adı Soyadı / İmza</p>
-            <div className="mt-1 h-12 border-b border-slate-500" />
-          </div>
-          <div>
-            <p className="text-xs text-slate-600">Kayıt tarihi ve kaydı alan görevli.</p>
-            <p className="mt-6 text-sm font-semibold">Tarih / Görevli / İmza</p>
-            <div className="mt-1 h-12 border-b border-slate-500" />
+            <p className="mt-1.5 font-bold tracking-wide tabular-nums">
+              IBAN: TR40 0001 0005 3202 6049 0950 02
+            </p>
+            <p className="font-semibold">Alıcı: EKREM BAŞLANTI</p>
+            <p className="mt-2 text-slate-700">
+              <strong>Ecem Can Gıda:</strong> 0551 514 18 46
+              <span className="mx-2 text-slate-400">•</span>
+              <strong>Ayşe Hanım:</strong> 0553 985 67 68
+            </p>
           </div>
         </div>
       </div>
