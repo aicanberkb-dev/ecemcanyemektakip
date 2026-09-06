@@ -35,6 +35,31 @@ export default async function KayitFormuPage({
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
+      {/*
+        Tarayıcı; tarihi, saati, sayfa adını ("Kayıt Formu — Yemek Takip") ve
+        site adresini sayfanın kenar boşluğuna basıyor. Boşluk sıfırlanınca
+        yazacak yer kalmıyor, kâğıt temiz çıkıyor; kenar payını formun kendi
+        dolgusu veriyor. Kural yalnızca bu sayfada geçerli, diğer raporların
+        12 mm'lik boşluğuna dokunmuyor.
+
+        Renk ayarı da burada: başlık şeridi koyu zemin üzerine beyaz yazı,
+        arka plan basılmazsa başlık görünmez olurdu.
+      */}
+      <style>{`
+        @page { margin: 0; }
+        @media print {
+          .kayit-formu-kagit {
+            padding: 10mm !important;
+            border: none !important;
+          }
+          .kayit-formu-kagit,
+          .kayit-formu-kagit * {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+      `}</style>
+
       <div className="yazdirma-gizle space-y-3">
         <Link href="/students" className="text-sm text-vurgu hover:underline">
           ← Öğrenciler

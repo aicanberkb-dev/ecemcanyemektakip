@@ -16,7 +16,7 @@ function planTipi(tip: OgrenciTipi): OgrenciTipi {
  * bu yüzden burada eşleniyor; tanımsız bir okul için makul bir başlık üretilir.
  */
 const FORM_BASLIKLARI: Record<string, string> = {
-  'GÖKSU': 'Göksu Şehit Er Ersin Güner Okulu Yemekhane Kayıt Formu',
+  GÖKSU: 'Göksu Şehit Er Ersin Güner Okulu Yemekhane Kayıt Formu',
   'AHMET MİTHAT': 'Beykoz Ahmet Mithat Okulu Kayıt Formu',
 }
 
@@ -176,134 +176,147 @@ function Form({
   const toplam = taksitler.reduce((t, x) => t + Number(x.tutar), 0)
 
   return (
-    <section
-      className={`kart border-2 p-0 ${g.kenar}`}
-      style={sonMu ? undefined : { breakAfter: 'page' }}
-    >
-      {/* Okul başlığı kâğıdın en üstünde; renk şeridi tipleri ayırt ettiriyor */}
-      <div className={`${g.serit} px-5 py-4 text-center text-white`}>
-        <span className="text-xl font-black tracking-wide">{formBasligi(okulAdi)}</span>
-      </div>
-
-      <div className="space-y-5 p-5">
-        <div className="border-b border-slate-300 pb-2 text-center text-sm font-semibold">
-          {sezonAdi} Eğitim Öğretim Yılı
+    <div className="space-y-2" style={sonMu ? undefined : { breakAfter: 'page' }}>
+      <section className={`kart kayit-formu-kagit border-2 p-0 ${g.kenar}`}>
+        {/* Okul başlığı kâğıdın en üstünde; renk şeridi tipleri ayırt ettiriyor */}
+        <div className={`${g.serit} px-5 py-4 text-center text-white`}>
+          <span className="text-xl font-black tracking-wide">
+            {formBasligi(okulAdi)}
+          </span>
         </div>
 
-        {/* Öğrenci */}
-        <div>
-          <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>ÖĞRENCİ BİLGİLERİ</h3>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-            <Satir etiket="Adı Soyadı" />
-            <Satir etiket="Sınıfı" />
+        <div className="space-y-5 p-5">
+          <div className="border-b border-slate-300 pb-2 text-center text-sm font-semibold">
+            {sezonAdi} Eğitim Öğretim Yılı
           </div>
-        </div>
 
-        {/* Veli */}
-        <div>
-          <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>VELİ BİLGİLERİ</h3>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-            <Satir etiket="1. Veli Adı Soyadı" />
-            <Satir etiket="1. Veli Telefon" />
-            <Satir etiket="2. Veli Adı Soyadı" />
-            <Satir etiket="2. Veli Telefon" />
+          {/* Öğrenci */}
+          <div>
+            <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>ÖĞRENCİ BİLGİLERİ</h3>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <Satir etiket="Adı Soyadı" />
+              <Satir etiket="Sınıfı" />
+            </div>
           </div>
-        </div>
 
-        {/* Abone tipi */}
-        <div>
-          <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>KAYIT BİLGİLERİ</h3>
-          <p className="text-xs font-semibold text-slate-700">Ödeme Şekli</p>
-          <div className="mt-1 flex gap-6 text-sm">
-            <Kutucuk etiket="Aylıkçı (taksitli)" />
-            <Kutucuk etiket="Günlükçü (yemek başına)" />
+          {/* Veli */}
+          <div>
+            <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>VELİ BİLGİLERİ</h3>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <Satir etiket="1. Veli Adı Soyadı" />
+              <Satir etiket="1. Veli Telefon" />
+              <Satir etiket="2. Veli Adı Soyadı" />
+              <Satir etiket="2. Veli Telefon" />
+            </div>
           </div>
-        </div>
 
-        {/* Taksit planı */}
-        <div>
-          <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>
-            {OGRENCI_TIPI_ADLARI[tip].toLocaleUpperCase('tr')} TAKSİT PLANI
-            {tip === 'birinci_sinif' && (
-              <span className="ml-2 text-xs font-normal text-slate-600">
-                (standart ücret tarifesi)
-              </span>
+          {/* Abone tipi */}
+          <div>
+            <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>KAYIT BİLGİLERİ</h3>
+            <p className="text-xs font-semibold text-slate-700">Ödeme Şekli</p>
+            <div className="mt-1 flex gap-12 text-sm">
+              <Kutucuk etiket="Aylıkçı (Taksitli)" />
+              <Kutucuk etiket="Günlükçü (Yemek Başına)" />
+            </div>
+          </div>
+
+          {/* Taksit planı */}
+          <div>
+            <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>
+              {OGRENCI_TIPI_ADLARI[tip].toLocaleUpperCase('tr')} TAKSİT PLANI
+              {tip === 'birinci_sinif' && (
+                <span className="ml-2 text-xs font-normal text-slate-600">
+                  (standart ücret tarifesi)
+                </span>
+              )}
+            </h3>
+            {taksitler.length === 0 ? (
+              <p className="rounded border border-dashed border-slate-400 px-3 py-4 text-center text-sm text-slate-600">
+                Bu tip için {sezonAdi} sezonunda taksit tanımlı değil.
+              </p>
+            ) : (
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className={g.zemin}>
+                    <th className="border border-slate-400 px-2 py-1.5 text-left">
+                      Taksit
+                    </th>
+                    <th className="border border-slate-400 px-2 py-1.5 text-left">
+                      Son Ödeme
+                    </th>
+                    <th className="border border-slate-400 px-2 py-1.5 text-right">
+                      Tutar
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {taksitler.map((t, i) => {
+                    const etiket = vadeEtiketi(t.vade_tarihi, i)
+                    // İlk taksit kayıt anında alınıyor; tarih yazmak kafa karıştırır.
+                    const tarihGoster = i > 0
+                    return (
+                      <tr key={t.id}>
+                        <td className="border border-slate-400 px-2 py-1.5">{t.ad}</td>
+                        <td className="border border-slate-400 px-2 py-1.5">
+                          {tarihGoster && (
+                            <span className="mr-2">{tarihBicim(t.vade_tarihi)}</span>
+                          )}
+                          {etiket && (
+                            <strong className="font-bold tracking-wide">{etiket}</strong>
+                          )}
+                        </td>
+                        <td className="border border-slate-400 px-2 py-1.5 text-right font-medium tabular-nums">
+                          {para(t.tutar)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className={`${g.zemin} font-bold`}>
+                    <td className="border border-slate-400 px-2 py-1.5" colSpan={2}>
+                      YILLIK TOPLAM ({taksitler.length} taksit)
+                    </td>
+                    <td className="border border-slate-400 px-2 py-1.5 text-right tabular-nums">
+                      {para(toplam)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             )}
-          </h3>
-          {taksitler.length === 0 ? (
-            <p className="rounded border border-dashed border-slate-400 px-3 py-4 text-center text-sm text-slate-600">
-              Bu tip için {sezonAdi} sezonunda taksit tanımlı değil.
+            <p className="mt-2 text-xs text-slate-600">
+              Ödemeler banka havalesi, nakit veya kredi kartı ile yapılabilir. Havale
+              açıklamasına <strong>öğrencinin adı</strong> yazılması ödemenin doğru
+              öğrenciye işlenmesi için önemlidir.
             </p>
-          ) : (
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className={g.zemin}>
-                  <th className="border border-slate-400 px-2 py-1.5 text-left">Taksit</th>
-                  <th className="border border-slate-400 px-2 py-1.5 text-left">
-                    Son Ödeme
-                  </th>
-                  <th className="border border-slate-400 px-2 py-1.5 text-right">Tutar</th>
-                </tr>
-              </thead>
-              <tbody>
-                {taksitler.map((t, i) => {
-                  const etiket = vadeEtiketi(t.vade_tarihi, i)
-                  // İlk taksit kayıt anında alınıyor; tarih yazmak kafa karıştırır.
-                  const tarihGoster = i > 0
-                  return (
-                    <tr key={t.id}>
-                      <td className="border border-slate-400 px-2 py-1.5">{t.ad}</td>
-                      <td className="border border-slate-400 px-2 py-1.5">
-                        {tarihGoster && (
-                          <span className="mr-2">{tarihBicim(t.vade_tarihi)}</span>
-                        )}
-                        {etiket && (
-                          <strong className="font-bold tracking-wide">{etiket}</strong>
-                        )}
-                      </td>
-                      <td className="border border-slate-400 px-2 py-1.5 text-right font-medium tabular-nums">
-                        {para(t.tutar)}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-              <tfoot>
-                <tr className={`${g.zemin} font-bold`}>
-                  <td className="border border-slate-400 px-2 py-1.5" colSpan={2}>
-                    YILLIK TOPLAM ({taksitler.length} taksit)
-                  </td>
-                  <td className="border border-slate-400 px-2 py-1.5 text-right tabular-nums">
-                    {para(toplam)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          )}
-          <p className="mt-2 text-xs text-slate-600">
-            Ödemeler banka havalesi, nakit veya kredi kartı ile yapılabilir. Havale
-            açıklamasına <strong>öğrencinin adı</strong> yazılması ödemenin doğru
-            öğrenciye işlenmesi için önemlidir.
-          </p>
 
-          {/* Banka ve iletişim — velinin formu elinden bırakmadan bakacağı bilgiler */}
-          <div className="mt-3 rounded border border-slate-400 px-3 py-2.5 text-sm">
-            <p className="text-slate-700">
-              Taksit ödemelerinizi aşağıdaki banka hesabına yapmanızı rica ederiz.
-            </p>
-            <p className="mt-1.5 font-bold tracking-wide tabular-nums">
-              IBAN: TR40 0001 0005 3202 6049 0950 02
-            </p>
-            <p className="font-semibold">Alıcı: EKREM BAŞLANTI</p>
-            <p className="mt-2 text-slate-700">
-              <strong>Ecem Can Gıda:</strong> 0551 514 18 46
-              <span className="mx-2 text-slate-400">•</span>
-              <strong>Ayşe Hanım:</strong> 0553 985 67 68
-            </p>
+            {/* Banka ve iletişim — velinin formu elinden bırakmadan bakacağı bilgiler */}
+            <div className="mt-3 rounded border border-slate-400 px-3 py-2.5 text-sm">
+              <p className="text-slate-700">
+                Taksit ödemelerinizi aşağıdaki banka hesabına yapmanızı rica ederiz.
+              </p>
+              <p className="mt-1.5 font-bold tracking-wide tabular-nums">
+                IBAN: TR40 0001 0005 3202 6049 0950 02
+              </p>
+              <p className="font-semibold">Alıcı: EKREM BAŞLANTI</p>
+              <p className="mt-2 text-slate-700">
+                <strong>Ecem Can Gıda:</strong> 0551 514 18 46
+                <span className="mx-2 text-slate-400">•</span>
+                <strong>Ayşe Hanım:</strong> 0553 985 67 68
+              </p>
+            </div>
+          </div>
+
+          {/* Veli imzası — sağ altta, kâğıdın kapanışı */}
+          <div className="flex justify-end">
+            <div className="w-64">
+              <p className="text-xs font-semibold text-slate-700">Veli İmza</p>
+              <div className="mt-10 border-b border-slate-500" />
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   )
 }
 
