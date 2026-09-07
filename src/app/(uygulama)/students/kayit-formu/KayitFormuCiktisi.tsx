@@ -227,10 +227,10 @@ function Form({
             <div className="grid grid-cols-3 gap-x-6 gap-y-3">
               <Satir etiket="1. Veli Adı Soyadı" />
               <Satir etiket="1. Veli Telefon" />
-              <Satir etiket="1. Veli T.C. Kimlik No" ipucu="fatura için" />
+              <Satir etiket="Fatura için TC Kimlik No" />
               <Satir etiket="2. Veli Adı Soyadı" />
               <Satir etiket="2. Veli Telefon" />
-              <Satir etiket="2. Veli T.C. Kimlik No" ipucu="fatura için" />
+              <Satir etiket="Fatura için TC Kimlik No" />
             </div>
           </div>
 
