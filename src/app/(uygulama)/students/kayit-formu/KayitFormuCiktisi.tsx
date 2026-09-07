@@ -223,11 +223,14 @@ function Form({
           {/* Veli */}
           <div>
             <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>VELİ BİLGİLERİ</h3>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+            {/* Üçüncü sütun T.C. no: fatura kesilirken gereken tek alan bu */}
+            <div className="grid grid-cols-3 gap-x-6 gap-y-3">
               <Satir etiket="1. Veli Adı Soyadı" />
               <Satir etiket="1. Veli Telefon" />
+              <Satir etiket="1. Veli T.C. Kimlik No" ipucu="fatura için" />
               <Satir etiket="2. Veli Adı Soyadı" />
               <Satir etiket="2. Veli Telefon" />
+              <Satir etiket="2. Veli T.C. Kimlik No" ipucu="fatura için" />
             </div>
           </div>
 
@@ -298,7 +301,7 @@ function Form({
                 <tfoot>
                   <tr className={`${g.zemin} font-bold`}>
                     <td className="border border-slate-400 px-2 py-1.5" colSpan={2}>
-                      YILLIK TOPLAM ({taksitler.length} taksit)
+                      YILLIK TOPLAM ({taksitler.length} Taksit)
                     </td>
                     <td className="border border-slate-400 px-2 py-1.5 text-right tabular-nums">
                       {para(toplam)}
