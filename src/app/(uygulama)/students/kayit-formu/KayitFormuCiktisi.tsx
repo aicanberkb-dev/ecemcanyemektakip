@@ -25,6 +25,18 @@ function formBasligi(okulAdi: string): string {
 }
 
 /**
+ * Başlıktaki ikinci satır: anasınıfı formları uzaktan ayırt edilebilsin.
+ *
+ * Standart ve 1. sınıf formlarında yok — okul adı yeterli. Anasınıfının iki
+ * çeşidi ise birbirine benziyor, kâğıt masada karıştığında hangisi olduğu
+ * ancak taksit tablosuna bakınca anlaşılıyordu.
+ */
+const BASLIK_ALT: Partial<Record<OgrenciTipi, string>> = {
+  anasinifi: 'ANASINIFI',
+  anasinifi_etut: 'ANASINIFI + ETÜT',
+}
+
+/**
  * Taksitin vadesi veliye tarihten çok sözle anlatılıyor: "aralık sonu" akılda
  * kalıyor, 31.12.2026 kalmıyor. İlk taksit kayıt anında alındığı için onun
  * tarihi hiç yazılmaz.
@@ -174,6 +186,8 @@ function Form({
 }) {
   const g = TIP_GORUNUM[tip]
   const toplam = taksitler.reduce((t, x) => t + Number(x.tutar), 0)
+  // Anasınıfında günlükçü diye bir şey yok; ödeme şekli sorulmuyor.
+  const anasinifiMi = tip === 'anasinifi' || tip === 'anasinifi_etut'
 
   return (
     <div className="space-y-2" style={sonMu ? undefined : { breakAfter: 'page' }}>
@@ -183,6 +197,13 @@ function Form({
           <span className="text-xl font-black tracking-wide">
             {formBasligi(okulAdi)}
           </span>
+          {BASLIK_ALT[tip] && (
+            <div className="mt-2">
+              <span className="inline-block rounded border-2 border-white px-4 py-0.5 text-lg font-black tracking-[0.2em]">
+                {BASLIK_ALT[tip]}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-5 p-5">
@@ -210,15 +231,17 @@ function Form({
             </div>
           </div>
 
-          {/* Abone tipi */}
-          <div>
-            <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>KAYIT BİLGİLERİ</h3>
-            <p className="text-xs font-semibold text-slate-700">Ödeme Şekli</p>
-            <div className="mt-1 flex gap-12 text-sm">
-              <Kutucuk etiket="Aylıkçı (Taksitli)" />
-              <Kutucuk etiket="Günlükçü (Yemek Başına)" />
+          {/* Abone tipi — anasınıfında seçenek yok, hepsi taksitli */}
+          {!anasinifiMi && (
+            <div>
+              <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>KAYIT BİLGİLERİ</h3>
+              <p className="text-xs font-semibold text-slate-700">Ödeme Şekli</p>
+              <div className="mt-1 flex gap-12 text-sm">
+                <Kutucuk etiket="Aylıkçı (Taksitli)" />
+                <Kutucuk etiket="Günlükçü (Yemek Başına)" />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Taksit planı */}
           <div>
