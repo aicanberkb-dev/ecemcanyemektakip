@@ -62,9 +62,12 @@ export type Student = {
   kimlik_no: string | null
   veli_adi: string | null
   veli_telefon: string | null
+  /** Fatura kesilirken gereken T.C. kimlik no */
+  veli_tc: string | null
   // Ödemeyi anne de baba da yapabiliyor; ekstre eşleştirmesi iki ada da bakar.
   veli2_adi: string | null
   veli2_telefon: string | null
+  veli2_tc: string | null
   /** Aynı gruptaki öğrenciler kardeştir; null ise kardeşi tanımlı değil. */
   kardes_grup_id: string | null
   iskonto_orani: number
@@ -86,8 +89,10 @@ export type StudentBalance = {
   kimlik_no: string | null
   veli_adi: string | null
   veli_telefon: string | null
+  veli_tc: string | null
   veli2_adi: string | null
   veli2_telefon: string | null
+  veli2_tc: string | null
   /** Aynı gruptaki öğrenciler kardeştir; null ise kardeşi tanımlı değil. */
   kardes_grup_id: string | null
   abone_tipi: AboneTipi

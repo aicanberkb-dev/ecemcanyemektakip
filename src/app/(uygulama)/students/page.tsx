@@ -27,7 +27,7 @@ export default async function StudentsPage() {
     ogrenci_no: o.ogrenci_no,
     ad_soyad: o.ad_soyad,
     sinif: o.sinif,
-    kimlik_no: o.kimlik_no,
+    veli_tc: o.veli_tc,
     veli_adi: o.veli_adi,
     veli_telefon: o.veli_telefon,
     veli2_adi: o.veli2_adi,

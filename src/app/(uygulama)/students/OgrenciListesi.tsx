@@ -17,7 +17,7 @@ export type OgrenciSatiri = {
   ogrenci_no: string
   ad_soyad: string
   sinif: string | null
-  kimlik_no: string | null
+  veli_tc: string | null
   veli_adi: string | null
   veli_telefon: string | null
   veli2_adi: string | null
@@ -73,7 +73,7 @@ export function OgrenciListesi({
         if (borc === 'borcsuz' && borcluMu(o)) return false
         if (!arama.trim()) return true
         return aramaEslesir(
-          `${o.ad_soyad} ${o.ogrenci_no} ${o.kimlik_no ?? ''} ${o.veli_adi ?? ''} ${o.veli2_adi ?? ''}`,
+          `${o.ad_soyad} ${o.ogrenci_no} ${o.veli_tc ?? ''} ${o.veli_adi ?? ''} ${o.veli2_adi ?? ''}`,
           arama,
         )
       }),
@@ -424,7 +424,7 @@ function GunlukcuBolumu({
             <th>Tip</th>
             <th>Veli</th>
             <th>Telefon</th>
-            <th>Kimlik / Kart</th>
+            <th>Veli T.C.</th>
             <th className="text-right">İskonto</th>
             <th className="text-right">Devir</th>
             <th className="text-right">Öğün</th>
@@ -444,7 +444,7 @@ function GunlukcuBolumu({
                 <OgrenciTipiRozeti tip={o.ogrenci_tipi} />
               </td>
               <VeliHucreleri ogrenci={o} />
-              <td className="tabular-nums text-solgun">{o.kimlik_no ?? '—'}</td>
+              <td className="tabular-nums text-solgun">{o.veli_tc ?? '—'}</td>
               <td className="text-right tabular-nums text-solgun">
                 {o.iskonto_orani > 0 || o.iskonto_tutar > 0 ? (
                   <span className="text-amber-700">

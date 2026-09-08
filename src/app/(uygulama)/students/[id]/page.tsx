@@ -306,9 +306,15 @@ export default async function OgrenciDetayPage({
                 </dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-solgun">Kimlik / Kart No</dt>
-                <dd className="text-right tabular-nums">{ozet.kimlik_no ?? '—'}</dd>
+                <dt className="text-solgun">Veli T.C. No</dt>
+                <dd className="text-right tabular-nums">{ozet.veli_tc ?? '—'}</dd>
               </div>
+              {ozet.veli2_tc && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-solgun">2. Veli T.C. No</dt>
+                  <dd className="text-right tabular-nums">{ozet.veli2_tc}</dd>
+                </div>
+              )}
               <div className="flex justify-between gap-3">
                 <dt className="text-solgun">Toplam öğün</dt>
                 <dd className="text-right tabular-nums">{ozet.ogun_sayisi}</dd>

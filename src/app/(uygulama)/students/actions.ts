@@ -13,19 +13,31 @@ export type FormDurumu = {
   alanlar?: Record<string, string>
 }
 
+/**
+ * Fatura için velinin T.C. kimlik no'su: boş bırakılabilir ama girilecekse
+ * eksiksiz girilmeli. Yarım numara faturada işe yaramıyor, üstelik hatanın
+ * fark edilmesi fatura kesilene kadar sürüyor.
+ */
+const tcKimlik = z
+  .string()
+  .trim()
+  .transform((d) => (d === '' ? null : d))
+  .refine((d) => d === null || /^\d{11}$/.test(d), 'T.C. kimlik no 11 haneli olmalı.')
+
 // ogrenci_no burada yok: numarayı sunucu atar (bkz. sonraki_ogrenci_no).
 const ogrenciSemasi = z.object({
   ad_soyad: z.string().trim().min(2, 'Ad soyad gerekli.'),
   sinif: bosNull,
-  kimlik_no: bosNull,
   veli_adi: bosNull,
   veli_telefon: bosNull,
+  veli_tc: tcKimlik,
   veli2_adi: bosNull,
   veli2_telefon: bosNull,
+  veli2_tc: tcKimlik,
   iskonto_orani: trSayi({ min: 0, max: 100 }),
   iskonto_tutar: trSayi({ min: 0 }),
   devir: trSayi(),
-  abone_tipi: z.enum(['gunluk', 'aylik']),
+  abone_tipi: z.enum(['gunluk', 'aylik'], { message: 'Abone tipi seçin.' }),
   // Ücretlendirme tipi: aylıkçının hangi taksit planına tabi olduğunu belirler
   ogrenci_tipi: z.enum(['standart', 'birinci_sinif', 'anasinifi', 'anasinifi_etut']),
   aktif: trBoolean,
@@ -71,9 +83,10 @@ export async function ogrenciEkle(
     p_okul_id: okulId,
     p_ad_soyad: g.ad_soyad,
     p_sinif: g.sinif,
-    p_kimlik_no: g.kimlik_no,
     p_veli_adi: g.veli_adi,
     p_veli_telefon: g.veli_telefon,
+    p_veli_tc: g.veli_tc,
+    p_veli2_tc: g.veli2_tc,
     p_iskonto_orani: g.iskonto_orani,
     p_iskonto_tutar: g.iskonto_tutar,
     p_devir: g.devir,

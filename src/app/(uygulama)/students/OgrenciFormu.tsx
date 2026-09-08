@@ -50,10 +50,6 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
           <SinifSecici baslangic={ogrenci?.sinif} />
         </Alan>
 
-        <Alan ad="kimlik_no" etiket="Kimlik / Kart No" hata={h.kimlik_no}>
-          <input name="kimlik_no" defaultValue={ogrenci?.kimlik_no ?? ''} className="girdi" />
-        </Alan>
-
         <Alan ad="veli_adi" etiket="Veli Adı" hata={h.veli_adi}>
           <input name="veli_adi" defaultValue={ogrenci?.veli_adi ?? ''} className="girdi" />
         </Alan>
@@ -64,6 +60,17 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
             defaultValue={ogrenci?.veli_telefon ?? ''}
             className="girdi"
             placeholder="0555 555 55 55"
+          />
+        </Alan>
+
+        <Alan ad="veli_tc" etiket="Veli T.C. Kimlik No (fatura için)" hata={h.veli_tc}>
+          <input
+            name="veli_tc"
+            defaultValue={ogrenci?.veli_tc ?? ''}
+            className="girdi tabular-nums"
+            inputMode="numeric"
+            maxLength={11}
+            placeholder="11 hane"
           />
         </Alan>
 
@@ -84,6 +91,21 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
             placeholder="0555 555 55 55"
           />
         </Alan>
+
+        <Alan
+          ad="veli2_tc"
+          etiket="2. Veli T.C. Kimlik No (fatura için)"
+          hata={h.veli2_tc}
+        >
+          <input
+            name="veli2_tc"
+            defaultValue={ogrenci?.veli2_tc ?? ''}
+            className="girdi tabular-nums"
+            inputMode="numeric"
+            maxLength={11}
+            placeholder="11 hane"
+          />
+        </Alan>
       </div>
 
       <p className="text-xs text-solgun">
@@ -93,12 +115,16 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
       </p>
 
       <div className="grid gap-4 border-t border-cizgi pt-5 sm:grid-cols-3">
-        <Alan ad="abone_tipi" etiket="Abone Tipi" hata={h.abone_tipi}>
+        {/* Varsayılan yok: seçilmeden kaydedilirse öğrenci yanlış tarifeye
+            düşer ve hatayı ancak ay sonunda fark ederiz. */}
+        <Alan ad="abone_tipi" etiket="Abone Tipi *" hata={h.abone_tipi}>
           <select
             name="abone_tipi"
-            defaultValue={ogrenci?.abone_tipi ?? 'gunluk'}
+            defaultValue={ogrenci?.abone_tipi ?? ''}
             className="girdi"
+            required
           >
+            <option value="">Seçiniz</option>
             <option value="gunluk">Günlükçü (yemek başına düşer)</option>
             <option value="aylik">Aylıkçı (taksitten tahsil edilir)</option>
           </select>
