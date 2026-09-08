@@ -55,6 +55,18 @@ export default async function StudentsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="baslik">Öğrenciler</h1>
         <div className="flex flex-wrap gap-2">
+          {/* Telefon rehberine toplu kişi eklemek için: WhatsApp numaraları
+              rehberden okuyor, kendi içine kaydedilemiyor.
+              Link değil <a>: bu bir sayfa değil, dosya indiren bir uç nokta;
+              istemci tarafı gezinme indirmeyi başlatmaz. */}
+          <a
+            href="/students/rehber"
+            download
+            className="btn-ikincil"
+            title="Veli numaralarını telefon rehberine aktarmak için vCard dosyası indirir"
+          >
+            Veli Rehberi İndir
+          </a>
           <Link href="/students/kayit-formu" className="btn-ikincil">
             Kayıt Formu Yazdır
           </Link>
