@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useActionState, useMemo, useState, useTransition } from 'react'
 
 import { para, tarih as tarihBicim } from '@/lib/format'
+import { mukerrerAnahtarlar, tahsilatAnahtari } from '@/lib/tahsilat-mukerrer'
 
 import {
   ekstreCozumle,
@@ -42,12 +43,25 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
     anahtar: string
     paylar: Record<number, Pay[]>
     isaretli: Record<number, boolean>
-  }>({ anahtar: '', paylar: {}, isaretli: {} })
+    /** Mükerrer uyarısına rağmen aktarılması onaylanan satırlar */
+    onayli: Record<number, boolean>
+  }>({ anahtar: '', paylar: {}, isaretli: {}, onayli: {} })
 
   const ogrenciHarita = useMemo(() => new Map(ogrenciler.map((o) => [o.id, o])), [ogrenciler])
 
   const satirlar = durum.satirlar ?? []
   const anahtar = durum.satirlar ? `${durum.dosyaAdi}|${satirlar.length}` : ''
+
+  /**
+   * Sistemde zaten duran tahsilatlar (öğrenci|gün|tutar).
+   *
+   * Elle girilmiş bir ödeme ekstreden ikinci kez aktarılabiliyordu: elle
+   * girişte banka fiş numarası olmadığı için fiş kontrolü bunu görmüyor.
+   */
+  const varOlanlar = useMemo(
+    () => mukerrerAnahtarlar(durum.mevcutTahsilatlar ?? []),
+    [durum.mevcutTahsilatlar],
+  )
 
   if (anahtar && secim.anahtar !== anahtar) {
     const paylar: Record<number, Pay[]> = {}
@@ -55,9 +69,11 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
     satirlar.forEach((s, i) => {
       const tek = s.adaylar.length === 1 ? s.adaylar[0].studentId : ''
       paylar[i] = [{ studentId: tek, tutar: String(s.tutar) }]
-      isaretli[i] = tek !== '' && !s.zatenVar
+      // Mükerrer görünen satır kendiliğinden işaretlenmez; kullanıcı görsün.
+      const mukerrerMi = tek !== '' && varOlanlar.has(tahsilatAnahtari(tek, s.tarih, s.tutar))
+      isaretli[i] = tek !== '' && !s.zatenVar && !mukerrerMi
     })
-    setSecim({ anahtar, paylar, isaretli })
+    setSecim({ anahtar, paylar, isaretli, onayli: {} })
     setKayit({})
   }
 
@@ -91,9 +107,25 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
     }, 0)
   }
 
+  /** Bu satırdaki paylardan hangileri sistemde zaten duruyor? */
+  function mukerrerPaylar(i: number): Pay[] {
+    const s = satirlar[i]
+    if (!s) return []
+    return (secim.paylar[i] ?? []).filter((p) => {
+      const t = sayiOku(p.tutar)
+      if (!p.studentId || !Number.isFinite(t)) return false
+      return varOlanlar.has(tahsilatAnahtari(p.studentId, s.tarih, t))
+    })
+  }
+
+  /** Uyarı var ve kullanıcı onaylamadıysa satır aktarılmaz. */
+  function engelliMi(i: number): boolean {
+    return mukerrerPaylar(i).length > 0 && !secim.onayli[i]
+  }
+
   const aktarilacak = satirlar
     .map((s, i) => ({ s, i }))
-    .filter(({ s, i }) => secim.isaretli[i] && !s.zatenVar && gecerliMi(i))
+    .filter(({ s, i }) => secim.isaretli[i] && !s.zatenVar && gecerliMi(i) && !engelliMi(i))
 
   const toplam = aktarilacak.reduce((t, { i }) => t + dagitilanTutar(i), 0)
   const kalemSayisi = aktarilacak.reduce((t, { i }) => t + (secim.paylar[i]?.length ?? 0), 0)
@@ -101,6 +133,7 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
   const kismi = aktarilacak.filter(({ s, i }) => Math.abs(dagitilanTutar(i) - s.tutar) >= KURUS)
     .length
   const mukerrer = satirlar.filter((s) => s.zatenVar).length
+  const ayniOdeme = satirlar.filter((s, i) => !s.zatenVar && mukerrerPaylar(i).length > 0).length
 
   function aktar() {
     basla(async () => {
@@ -111,6 +144,7 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
           tutar: sayiOku(p.tutar),
           fisNo: s.fisNo,
           aciklama: s.aciklama,
+          onay: secim.onayli[i] === true,
         })),
       )
       const sonuc = await tahsilatlariKaydet(girdiler)
@@ -157,6 +191,11 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
             {mukerrer > 0 && (
               <span className="text-solgun">{mukerrer} satır daha önce aktarılmış</span>
             )}
+            {ayniOdeme > 0 && (
+              <span className="font-medium text-amber-700">
+                {ayniOdeme} satırda aynı ödeme zaten girilmiş
+              </span>
+            )}
             <span className="ml-auto">
               Aktarılacak: <strong>{kalemSayisi}</strong> kayıt · <strong>{para(toplam)}</strong>
             </span>
@@ -180,14 +219,25 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
                   const dagitilan = dagitilanTutar(i)
                   const fark = s.tutar - dagitilan
                   const tamam = gecerliMi(i)
+                  const ayniOlanlar = mukerrerPaylar(i)
+                  const engelli = engelliMi(i)
 
                   return (
-                    <tr key={`${s.fisNo}-${i}`} className={s.zatenVar ? 'opacity-50' : undefined}>
+                    <tr
+                      key={`${s.fisNo}-${i}`}
+                      className={
+                        s.zatenVar
+                          ? 'opacity-50'
+                          : ayniOlanlar.length > 0
+                            ? 'bg-amber-50'
+                            : undefined
+                      }
+                    >
                       <td className="align-top">
                         <input
                           type="checkbox"
                           checked={secim.isaretli[i] ?? false}
-                          disabled={s.zatenVar || !tamam}
+                          disabled={s.zatenVar || !tamam || engelli}
                           onChange={(e) =>
                             setSecim((o) => ({
                               ...o,
@@ -327,6 +377,43 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
                                   ? `${para(fark)} aktarılmayacak — kasıtlıysa sorun yok.`
                                   : `Ekstre tutarından ${para(-fark)} fazla giriliyor.`}
                               </p>
+                            )}
+
+                            {/* Elle girilmiş ödeme ekstreden ikinci kez
+                                işlenmesin: bakiye sessizce şişiyordu. */}
+                            {ayniOlanlar.length > 0 && (
+                              <div className="rounded border border-amber-300 bg-amber-100 px-2 py-1.5 text-xs text-amber-900">
+                                <p className="font-semibold">
+                                  Bu ödeme zaten girilmiş görünüyor.
+                                </p>
+                                <ul className="mt-0.5">
+                                  {ayniOlanlar.map((p, x) => (
+                                    <li key={x}>
+                                      {ogrenciHarita.get(p.studentId)?.ad_soyad ?? '—'} ·{' '}
+                                      {tarihBicim(s.tarih)} · {para(sayiOku(p.tutar))}
+                                    </li>
+                                  ))}
+                                </ul>
+                                {secim.onayli[i] ? (
+                                  <p className="mt-1 font-semibold">
+                                    Onaylandı — yine de aktarılacak.
+                                  </p>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setSecim((o) => ({
+                                        ...o,
+                                        onayli: { ...o.onayli, [i]: true },
+                                        isaretli: { ...o.isaretli, [i]: true },
+                                      }))
+                                    }
+                                    className="mt-1 rounded border border-amber-400 bg-white px-2 py-0.5 font-medium hover:bg-amber-50"
+                                  >
+                                    Ayrı bir ödeme, yine de aktar
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}

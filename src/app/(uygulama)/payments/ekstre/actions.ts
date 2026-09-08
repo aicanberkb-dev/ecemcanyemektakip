@@ -5,6 +5,11 @@ import { revalidatePath } from 'next/cache'
 import { adaylariBul, ekstreOku, type EslesmeAdayi, type VeliKaydi } from '@/lib/ekstre'
 import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
+import {
+  mukerrerAnahtarlar,
+  tahsilatAnahtari,
+  type MevcutTahsilat,
+} from '@/lib/tahsilat-mukerrer'
 
 export type OneriSatiri = {
   tarih: string
@@ -21,6 +26,15 @@ export type CozumlemeDurumu = {
   hata?: string
   dosyaAdi?: string
   satirlar?: OneriSatiri[]
+  /**
+   * Ekstrenin kapsadığı tarihlerdeki mevcut tahsilatlar.
+   *
+   * Fiş numarası kontrolü yalnızca "aynı ekstre iki kez yüklendi" durumunu
+   * yakalıyor. Asıl tuzak başka: ödeme önce elle giriliyor (fiş numarası yok),
+   * sonra aynı ödeme ekstreden aktarılıyor ve öğrenciye iki kez işleniyor.
+   * Bu liste, öğrenci seçilir seçilmez ekranda uyarı çıkarmak için gönderiliyor.
+   */
+  mevcutTahsilatlar?: MevcutTahsilat[]
 }
 
 /**
@@ -79,8 +93,28 @@ export async function ekstreCozumle(
     (mevcut ?? []).map((m) => `${m.banka_fis_no}|${m.tarih}|${Number(m.tutar)}`),
   )
 
+  // Ekstrenin kapsadığı günlerdeki tahsilatlar: öğrenci seçilince ekran
+  // "bu ödeme zaten girilmiş" diyebilsin. Elle girilenler de buraya dahil,
+  // çünkü asıl mükerrerlik oradan geliyor.
+  const tarihler = satirlar.map((s) => s.tarih).sort()
+  const { data: gunlukTahsilat } = await supabase
+    .from('transactions')
+    .select('student_id, tarih, tutar')
+    .eq('tip', 'tahsilat')
+    .gte('tarih', tarihler[0])
+    .lte('tarih', tarihler[tarihler.length - 1])
+    .in(
+      'student_id',
+      veliler.length > 0 ? veliler.map((v) => v.studentId) : ['00000000-0000-0000-0000-000000000000'],
+    )
+
+  const mevcutTahsilatlar: MevcutTahsilat[] = (
+    (gunlukTahsilat ?? []) as { student_id: string; tarih: string; tutar: number | string }[]
+  ).map((t) => ({ studentId: t.student_id, tarih: t.tarih, tutar: Number(t.tutar) }))
+
   return {
     dosyaAdi: dosya.name,
+    mevcutTahsilatlar,
     satirlar: satirlar.map((s) => ({
       ...s,
       adaylar: adaylariBul(s.gonderen, veliler),
@@ -95,6 +129,8 @@ export type KayitGirdisi = {
   tutar: number
   fisNo: string
   aciklama: string
+  /** Kullanıcı mükerrer uyarısını görüp "yine de aktar" dediyse true */
+  onay?: boolean
 }
 
 export type KayitDurumu = {
@@ -102,6 +138,8 @@ export type KayitDurumu = {
   basari?: string
   eklenen?: number
   atlanan?: number
+  /** Aynı öğrenci/gün/tutar zaten kayıtlı olduğu için aktarılmayanlar */
+  mukerrerAtlanan?: number
 }
 
 /**
@@ -132,10 +170,35 @@ export async function tahsilatlariKaydet(girdiler: KayitGirdisi[]): Promise<Kayi
     return { hata: 'Seçilen öğrencilerden bazıları bu okula ait değil.' }
   }
 
+  // Mükerrer kontrolü sunucuda da yapılır: ekran uyarı gösteriyor ama tek
+  // güvence o değil. Aradan geçen sürede başka biri aynı ödemeyi girmiş
+  // olabilir; ayrıca aynı aktarımda iki özdeş satır bulunabilir.
+  const tarihler = girdiler.map((g) => g.tarih).sort()
+  const { data: mevcutVeri } = await supabase
+    .from('transactions')
+    .select('student_id, tarih, tutar')
+    .eq('tip', 'tahsilat')
+    .gte('tarih', tarihler[0])
+    .lte('tarih', tarihler[tarihler.length - 1])
+    .in('student_id', idler)
+
+  const varOlan = mukerrerAnahtarlar(
+    ((mevcutVeri ?? []) as { student_id: string; tarih: string; tutar: number | string }[]).map(
+      (t) => ({ studentId: t.student_id, tarih: t.tarih, tutar: Number(t.tutar) }),
+    ),
+  )
+
   let eklenen = 0
   let atlanan = 0
+  let mukerrerAtlanan = 0
 
   for (const g of girdiler) {
+    const anahtar = tahsilatAnahtari(g.studentId, g.tarih, g.tutar)
+    if (varOlan.has(anahtar) && !g.onay) {
+      mukerrerAtlanan++
+      continue
+    }
+
     const { error } = await supabase.from('transactions').insert({
       student_id: g.studentId,
       tarih: g.tarih,
@@ -151,9 +214,11 @@ export async function tahsilatlariKaydet(girdiler: KayitGirdisi[]): Promise<Kayi
         atlanan++
         continue
       }
-      return { hata: error.message, eklenen, atlanan }
+      return { hata: error.message, eklenen, atlanan, mukerrerAtlanan }
     }
     eklenen++
+    // Aynı aktarımdaki ikinci özdeş satır da yakalansın.
+    varOlan.add(anahtar)
   }
 
   revalidatePath('/students')
@@ -162,5 +227,10 @@ export async function tahsilatlariKaydet(girdiler: KayitGirdisi[]): Promise<Kayi
 
   const parcalar = [`${eklenen} tahsilat aktarıldı.`]
   if (atlanan > 0) parcalar.push(`${atlanan} satır daha önce aktarıldığı için atlandı.`)
-  return { basari: parcalar.join(' '), eklenen, atlanan }
+  if (mukerrerAtlanan > 0) {
+    parcalar.push(
+      `${mukerrerAtlanan} satır, aynı öğrenciye aynı gün aynı tutar zaten girildiği için atlandı.`,
+    )
+  }
+  return { basari: parcalar.join(' '), eklenen, atlanan, mukerrerAtlanan }
 }
