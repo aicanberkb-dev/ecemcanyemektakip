@@ -1,4 +1,4 @@
-import { birinciSinifMi } from '@/components/SinifSecici'
+import { birinciSinifMi } from '@/lib/sinif'
 import { OGRENCI_TIPI_ADLARI, type AboneTipi, type OgrenciTipi } from '@/lib/types'
 
 export function AboneRozeti({ tip }: { tip: AboneTipi }) {
