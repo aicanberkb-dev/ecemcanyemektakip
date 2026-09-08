@@ -4,12 +4,11 @@
 export type AboneTipi = 'gunluk' | 'aylik'
 
 /**
- * Öğrenci tipi.
+ * Öğrenci tipi — hangi taksit planına tabi olduğunu belirler.
  *
- * Tiplerin çoğu kendi taksit planına tabidir; **1. sınıf** istisnadır — ücreti
- * standartla aynıdır, ayrı bir plana ihtiyacı yoktur. Tip yine de gerekli:
- * 1. sınıflar sınıflarından toplu alınıp yoklamaları kâğıtta tutulduğu için
- * ekranlarda ayırt edilmeleri gerekiyor.
+ * `birinci_sinif` artık seçilmiyor: 1. sınıf ayrı bir ücret tipi değil,
+ * standart plana tabi bir sınıf kademesi ve sınıf alanından anlaşılıyor. Tip
+ * yalnızca eski kayıtlar okunabilsin diye duruyor.
  */
 export type OgrenciTipi = 'standart' | 'birinci_sinif' | 'anasinifi' | 'anasinifi_etut'
 
@@ -20,12 +19,8 @@ export const OGRENCI_TIPI_ADLARI: Record<OgrenciTipi, string> = {
   anasinifi_etut: 'Anasınıfı + Etüt',
 }
 
-export const OGRENCI_TIPLERI: OgrenciTipi[] = [
-  'standart',
-  'birinci_sinif',
-  'anasinifi',
-  'anasinifi_etut',
-]
+/** Kayıtta seçilebilen tipler — 1. sınıf sınıf alanından geldiği için burada yok. */
+export const OGRENCI_TIPLERI: OgrenciTipi[] = ['standart', 'anasinifi', 'anasinifi_etut']
 
 /** Taksit planı tanımlanan tipler — 1. sınıf standart planı kullanır. */
 export const PLANLI_OGRENCI_TIPLERI: OgrenciTipi[] = [

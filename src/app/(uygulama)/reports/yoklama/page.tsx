@@ -50,7 +50,7 @@ export default async function YoklamaPage({
     .select('student_id, ogrenci_no, ad_soyad, sinif')
     .eq('okul_id', okul.id)
     .eq('aktif', true)
-    .eq('ogrenci_tipi', 'birinci_sinif')
+    .like('sinif', '1-%')
     .order('ad_soyad')
 
   const ogrenciler = (data ?? []) as Pick<

@@ -4,13 +4,48 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 
+import { benzerAdlar } from '@/lib/ad-benzerlik'
 import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
 import { bosNull, trBoolean, trSayi } from '@/lib/zod-tr'
 
+export type BenzerOgrenci = {
+  id: string
+  ad_soyad: string
+  ogrenci_no: string
+  sinif: string | null
+  benzerlik: 'ayni' | 'benzer'
+}
+
 export type FormDurumu = {
   hata?: string
   alanlar?: Record<string, string>
+  /** Aynı/benzer adlı kayıt bulundu; kullanıcı onaylamadan kaydedilmez. */
+  benzerler?: BenzerOgrenci[]
+  /**
+   * Kullanıcının girdiği değerler.
+   *
+   * React, form eylemi bittiğinde kontrolsüz alanları kendiliğinden
+   * temizliyor. Doğrulama hatasında ya da mükerrer uyarısında form boşalırsa
+   * kaydı alan kişi her şeyi baştan yazmak zorunda kalır; alanlar bu değerlerle
+   * yeniden doldurulur.
+   */
+  girilen?: Record<string, string>
+  /** Her başarısız denemede artar; formun yeniden kurulmasını tetikler. */
+  deneme?: number
+}
+
+/** Formu geri gönderirken girilen değerleri de taşı. */
+function girilenle(
+  onceki: FormDurumu,
+  formData: FormData,
+  durum: Omit<FormDurumu, 'girilen' | 'deneme'>,
+): FormDurumu {
+  const girilen: Record<string, string> = {}
+  for (const [ad, deger] of formData.entries()) {
+    if (typeof deger === 'string') girilen[ad] = deger
+  }
+  return { ...durum, girilen, deneme: (onceki.deneme ?? 0) + 1 }
 }
 
 /**
@@ -38,10 +73,47 @@ const ogrenciSemasi = z.object({
   iskonto_tutar: trSayi({ min: 0 }),
   devir: trSayi(),
   abone_tipi: z.enum(['gunluk', 'aylik'], { message: 'Abone tipi seçin.' }),
-  // Ücretlendirme tipi: aylıkçının hangi taksit planına tabi olduğunu belirler
-  ogrenci_tipi: z.enum(['standart', 'birinci_sinif', 'anasinifi', 'anasinifi_etut']),
+  // Ücretlendirme tipi: hangi taksit planına tabi olduğunu belirler. 1. sınıf
+  // artık ayrı bir tip değil; sınıf alanından anlaşılıyor ve standart plana tabi.
+  ogrenci_tipi: z.enum(['standart', 'anasinifi', 'anasinifi_etut'], {
+    message: 'Öğrenci tipi seçin.',
+  }),
   aktif: trBoolean,
 })
+
+/**
+ * Aynı ya da birkaç harf farklı adla kayıtlı öğrenci var mı?
+ *
+ * Kayıt masasında iki kişi aynı anda çalışıyor; aynı öğrenci iki kez
+ * girilebiliyor. Kaydı engellemiyoruz — gerçekten aynı adlı iki öğrenci
+ * olabilir — ama kullanıcı listeyi görüp onaylamadan kayıt tamamlanmıyor.
+ */
+async function benzerleriBul(
+  ad: string,
+  okulId: string,
+  haricTutId?: string,
+): Promise<BenzerOgrenci[]> {
+  const supabase = await supabaseServer()
+  const { data } = await supabase
+    .from('students')
+    .select('id, ad_soyad, ogrenci_no, sinif')
+    .eq('okul_id', okulId)
+
+  const kayitlar = (data ?? []) as {
+    id: string
+    ad_soyad: string
+    ogrenci_no: string
+    sinif: string | null
+  }[]
+
+  return benzerAdlar(ad, kayitlar, haricTutId).map((k) => ({
+    id: k.id,
+    ad_soyad: k.ad_soyad,
+    ogrenci_no: k.ogrenci_no,
+    sinif: k.sinif,
+    benzerlik: k.benzerlik,
+  }))
+}
 
 function formuOku(formData: FormData) {
   return Object.fromEntries(formData.entries())
@@ -67,15 +139,22 @@ function hataMesaji(mesaj: string): string {
 }
 
 export async function ogrenciEkle(
-  _onceki: FormDurumu,
+  onceki: FormDurumu,
   formData: FormData,
 ): Promise<FormDurumu> {
   const sonuc = ogrenciSemasi.safeParse(formuOku(formData))
-  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+  if (!sonuc.success)
+    return girilenle(onceki, formData, { alanlar: alanHatalari(sonuc.error) })
 
   const supabase = await supabaseServer()
   const okulId = await aktifOkulId()
   const g = sonuc.data
+
+  // "Yine de kaydet" denmediyse önce mükerrer kaydı sor.
+  if (formData.get('benzerlik_onayi') !== '1') {
+    const benzerler = await benzerleriBul(g.ad_soyad, okulId)
+    if (benzerler.length > 0) return girilenle(onceki, formData, { benzerler })
+  }
 
   // Numarayı ogrenci_ekle atar: boşluk varsa doldurur, aynı anda iki kayıt
   // açılırsa çakışmayı kendi içinde çözer.
@@ -97,7 +176,7 @@ export async function ogrenciEkle(
     p_ogrenci_tipi: g.ogrenci_tipi,
   })
 
-  if (error) return { hata: hataMesaji(error.message) }
+  if (error) return girilenle(onceki, formData, { hata: hataMesaji(error.message) })
 
   revalidatePath('/students')
   redirect(`/students/${(data as { id: string }).id}`)
@@ -105,14 +184,21 @@ export async function ogrenciEkle(
 
 export async function ogrenciGuncelle(
   id: string,
-  _onceki: FormDurumu,
+  oncekiDurum: FormDurumu,
   formData: FormData,
 ): Promise<FormDurumu> {
   const sonuc = ogrenciSemasi.safeParse(formuOku(formData))
-  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+  if (!sonuc.success)
+    return girilenle(oncekiDurum, formData, { alanlar: alanHatalari(sonuc.error) })
 
   const supabase = await supabaseServer()
   const okulId = await aktifOkulId()
+
+  // Ad değiştirilirken de mükerrer kayda düşülebilir; kendisi hariç tutulur.
+  if (formData.get('benzerlik_onayi') !== '1') {
+    const benzerler = await benzerleriBul(sonuc.data.ad_soyad, okulId, id)
+    if (benzerler.length > 0) return girilenle(oncekiDurum, formData, { benzerler })
+  }
 
   // Abone tipi değiştiyse geçmiş öğünler yeniden fiyatlandırılmalı; önce
   // eski tipi öğreniyoruz.
@@ -130,7 +216,7 @@ export async function ogrenciGuncelle(
     .eq('id', id)
     .eq('okul_id', okulId)
 
-  if (error) return { hata: hataMesaji(error.message) }
+  if (error) return girilenle(oncekiDurum, formData, { hata: hataMesaji(error.message) })
 
   // Günlükçü ↔ aylıkçı geçişinde geçmiş öğün kayıtları yeni tipe göre
   // yeniden hesaplanır: aylıkçıda 0 ₺, günlükçüde güncel günlük ücret.

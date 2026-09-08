@@ -66,7 +66,7 @@ export default async function DevamOgrenciPage({
             <span className="tabular-nums">{ogrenci.ogrenci_no}</span>
             {ogrenci.sinif && <span>· {ogrenci.sinif}</span>}
             <AboneRozeti tip={ogrenci.abone_tipi} />
-            <OgrenciTipiRozeti tip={ogrenci.ogrenci_tipi} />
+            <OgrenciTipiRozeti tip={ogrenci.ogrenci_tipi} sinif={ogrenci.sinif} />
           </p>
         </div>
         <form className="flex items-end gap-2">

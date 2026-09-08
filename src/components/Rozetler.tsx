@@ -1,3 +1,4 @@
+import { birinciSinifMi } from '@/components/SinifSecici'
 import { OGRENCI_TIPI_ADLARI, type AboneTipi, type OgrenciTipi } from '@/lib/types'
 
 export function AboneRozeti({ tip }: { tip: AboneTipi }) {
@@ -29,9 +30,29 @@ const TIP_BASLIGI: Record<OgrenciTipi, string> = {
  * Standart tip yazılmaz: öğrencilerin çoğu standart olduğu için her satıra
  * rozet koymak ekranı okunmaz hale getirir. Görülmesi gereken, standarttan
  * ayrılanlar.
+ *
+ * 1. sınıf rozeti artık tipten değil sınıf alanından geliyor: 1. sınıf ayrı
+ * bir ücret tipi değil, standart plana tabi bir sınıf kademesi. Tek doğru
+ * kaynak sınıf bilgisi olunca ikisi çelişemiyor.
  */
-export function OgrenciTipiRozeti({ tip }: { tip: OgrenciTipi }) {
-  if (tip === 'standart') return null
+export function OgrenciTipiRozeti({
+  tip,
+  sinif,
+}: {
+  tip: OgrenciTipi
+  sinif?: string | null
+}) {
+  if (tip === 'standart') {
+    if (!birinciSinifMi(sinif)) return null
+    return (
+      <span
+        className={`rozet ml-1 ${TIP_RENGI.birinci_sinif}`}
+        title={TIP_BASLIGI.birinci_sinif}
+      >
+        1. Sınıf
+      </span>
+    )
+  }
   return (
     <span className={`rozet ml-1 ${TIP_RENGI[tip]}`} title={TIP_BASLIGI[tip]}>
       {OGRENCI_TIPI_ADLARI[tip]}

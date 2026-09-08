@@ -150,7 +150,7 @@ export function TaksitListesi({ satirlar }: { satirlar: TaksitDurumu[] }) {
                   {s.ogrenci_tipi === 'standart' ? (
                     <span className="text-solgun">Standart</span>
                   ) : (
-                    <OgrenciTipiRozeti tip={s.ogrenci_tipi} />
+                    <OgrenciTipiRozeti tip={s.ogrenci_tipi} sinif={s.sinif} />
                   )}
                 </td>
                 <td className="text-right tabular-nums">{para(s.yillik_toplam)}</td>

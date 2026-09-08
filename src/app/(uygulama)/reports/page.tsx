@@ -135,7 +135,7 @@ export default async function ReportsPage({
                 <td>{s.sinif ?? '—'}</td>
                 <td className="whitespace-nowrap">
                   <AboneRozeti tip={s.abone_tipi} />
-                  <OgrenciTipiRozeti tip={s.ogrenci_tipi} />
+                  <OgrenciTipiRozeti tip={s.ogrenci_tipi} sinif={s.sinif} />
                 </td>
                 <td className="text-right tabular-nums">{para(s.devir)}</td>
                 <td className="text-right tabular-nums text-emerald-700">

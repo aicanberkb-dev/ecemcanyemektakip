@@ -115,7 +115,7 @@ export default async function OgrenciDetayPage({
             <span className="tabular-nums">{ozet.ogrenci_no}</span>
             {ozet.sinif && <span>· {ozet.sinif}</span>}
             <AboneRozeti tip={ozet.abone_tipi} />
-            <OgrenciTipiRozeti tip={ozet.ogrenci_tipi} />
+            <OgrenciTipiRozeti tip={ozet.ogrenci_tipi} sinif={ozet.sinif} />
             <DurumRozeti aktif={ozet.aktif} />
           </p>
         </div>

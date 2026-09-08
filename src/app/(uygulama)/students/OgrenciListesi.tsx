@@ -336,7 +336,7 @@ function AylikciBolumu({
                 <AdHucresi ogrenci={o} kardesSayisi={kardesSayisi} />
                 <td>{o.sinif ?? '—'}</td>
                 <td className="whitespace-nowrap">
-                  <OgrenciTipiRozeti tip={o.ogrenci_tipi} />
+                  <OgrenciTipiRozeti tip={o.ogrenci_tipi} sinif={o.sinif} />
                   {t?.ozel_plan && (
                     <span
                       className="rozet ml-1 bg-blue-100 text-blue-800"
@@ -441,7 +441,7 @@ function GunlukcuBolumu({
               <AdHucresi ogrenci={o} kardesSayisi={kardesSayisi} />
               <td>{o.sinif ?? '—'}</td>
               <td className="whitespace-nowrap">
-                <OgrenciTipiRozeti tip={o.ogrenci_tipi} />
+                <OgrenciTipiRozeti tip={o.ogrenci_tipi} sinif={o.sinif} />
               </td>
               <VeliHucreleri ogrenci={o} />
               <td className="tabular-nums text-solgun">{o.veli_tc ?? '—'}</td>

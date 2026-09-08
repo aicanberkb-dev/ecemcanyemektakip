@@ -481,7 +481,7 @@ export function TopluEkran({
                   <td>{o.sinif ?? '—'}</td>
                   <td>
                     <AboneRozeti tip={o.abone_tipi} />
-                    <OgrenciTipiRozeti tip={o.ogrenci_tipi} />
+                    <OgrenciTipiRozeti tip={o.ogrenci_tipi} sinif={o.sinif} />
                   </td>
                   <td className="text-right">
                     <Bakiye tutar={o.kalan} />
