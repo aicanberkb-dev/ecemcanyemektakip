@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { aktifOkul } from '@/lib/okul'
+import { bekleyenler, rehberListesi } from '@/lib/rehber-sunucu'
 import { taksitHaritasi } from '@/lib/taksit-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { StudentBalance } from '@/lib/types'
@@ -46,6 +47,12 @@ export default async function StudentsPage() {
     taksit: taksitler.get(o.student_id) ?? null,
   }))
 
+  // Rehberde kaç veli bekliyor? Daha önce aktarılanlar tekrar verilmiyor.
+  const rehberKisiler = await rehberListesi(false, okul.id)
+  const { yeni, degisen } = await bekleyenler(rehberKisiler)
+  const bekleyenSayisi = yeni.length + degisen.length
+  const rehberToplam = rehberKisiler.length
+
   const siniflar = [
     ...new Set((sinifSatirlari ?? []).map((s) => s.sinif as string).filter(Boolean)),
   ].sort()
@@ -59,14 +66,7 @@ export default async function StudentsPage() {
               rehberden okuyor, kendi içine kaydedilemiyor.
               Link değil <a>: bu bir sayfa değil, dosya indiren bir uç nokta;
               istemci tarafı gezinme indirmeyi başlatmaz. */}
-          <a
-            href="/students/rehber"
-            download
-            className="btn-ikincil"
-            title="Veli numaralarını telefon rehberine aktarmak için vCard dosyası indirir"
-          >
-            Veli Rehberi İndir
-          </a>
+          <RehberDugmesi bekleyen={bekleyenSayisi} toplam={rehberToplam} />
           <Link href="/students/kayit-formu" className="btn-ikincil">
             Kayıt Formu Yazdır
           </Link>
@@ -86,5 +86,42 @@ export default async function StudentsPage() {
         sezonVarMi={taksitler.size > 0}
       />
     </div>
+  )
+}
+
+/**
+ * Rehber indirme.
+ *
+ * Varsayılan indirme yalnızca daha önce verilmemiş numaraları içerir; aynı
+ * numarayı ikinci kez vermek telefonda mükerrer kart oluşturuyor. Tamamı
+ * gerekirse ikinci bağlantı duruyor — telefon değiştirmek ya da rehberi
+ * sıfırdan kurmak gibi durumlar için.
+ */
+function RehberDugmesi({ bekleyen, toplam }: { bekleyen: number; toplam: number }) {
+  return (
+    <span className="inline-flex flex-col items-start">
+      {bekleyen > 0 ? (
+        <a
+          href="/students/rehber"
+          download
+          className="btn-ikincil"
+          title="Daha önce aktarılmamış veli numaralarını vCard olarak indirir"
+        >
+          Veli Rehberi İndir ({bekleyen} yeni)
+        </a>
+      ) : (
+        <span className="btn-ikincil cursor-default opacity-60" title="Yeni veli yok">
+          Rehber güncel
+        </span>
+      )}
+      <a
+        href="/students/rehber?kapsam=tumu"
+        download
+        className="mt-1 text-xs text-solgun hover:underline"
+        title="Daha önce aktarılanlar dahil bütün velileri indirir"
+      >
+        tümünü indir ({toplam})
+      </a>
+    </span>
   )
 }
