@@ -55,43 +55,77 @@ function buyuk(deger: string): string {
   return deger.trim().toLocaleUpperCase('tr')
 }
 
+/** Okul adının baş harfi: GÖKSU → G, AHMET MİTHAT → A. */
+export function okulKodu(okulAdi: string): string {
+  return buyuk(okulAdi).slice(0, 1)
+}
+
+/**
+ * Aynı numaradaki kardeşlerin adını tek isimde toplar.
+ *
+ * "ENES SARIKAYA, İNCİ SARIKAYA" yerine "ENES-İNCİ SARIKAYA": soyadı bir kez
+ * yazmak rehberde hem kısa hem okunaklı. Soyadları farklıysa (üvey kardeş,
+ * farklı soyad) birleştirme yapılmaz, adlar virgülle ayrılır.
+ */
+export function ogrenciAdlariniBirlestir(adlar: string[]): string {
+  if (adlar.length < 2) return adlar[0] ?? ''
+
+  const parcalar = adlar.map((a) => a.trim().split(/\s+/).filter(Boolean))
+  if (parcalar.some((p) => p.length < 2)) return adlar.join(', ')
+
+  const soyadlar = parcalar.map((p) => p[p.length - 1])
+  if (!soyadlar.every((s) => s === soyadlar[0])) return adlar.join(', ')
+
+  const onAdlar = parcalar.map((p) => p.slice(0, -1).join(' '))
+  return `${onAdlar.join('-')} ${soyadlar[0]}`
+}
+
 /**
  * Aynı numaraya düşen kayıtları tek kişide toplar.
  *
  * Kardeşlerin velisi aynı numara oluyor. Ayrı ayrı yazılırsa telefon rehberi
  * aynı numarayı iki kez gösterir ve WhatsApp hangisini açacağını şaşırtır;
- * bunun yerine tek kişide iki öğrenci adı yazılıyor.
+ * bunun yerine tek kişide kardeşlerin adı birlikte yazılıyor.
+ *
+ * Biçim: ÖĞRENCİ(OKUL KODU-VELİ) — "MELİN BİLGE DEVECİ(G-MERAL ÖZKAN DEVECİ)".
+ * Okul tam adıyla yazılınca isim rehberde taşıyordu; tek harf yeterli.
  */
 export function rehberKisileri(kayitlar: VeliKisi[]): RehberKisisi[] {
   const gruplar = new Map<
     string,
-    { ogrenciler: string[]; veliler: string[]; okullar: string[] }
+    { ogrenciler: string[]; veliler: string[]; okullar: string[]; kodlar: string[] }
   >()
 
   for (const k of kayitlar) {
     const telefon = telefonNormalize(k.telefon)
     if (!telefon) continue
 
-    const g = gruplar.get(telefon) ?? { ogrenciler: [], veliler: [], okullar: [] }
+    const g = gruplar.get(telefon) ?? {
+      ogrenciler: [],
+      veliler: [],
+      okullar: [],
+      kodlar: [],
+    }
     const ogrenci = buyuk(k.ogrenciAdi)
     const veli = buyuk(k.veliAdi ?? '')
     const okul = buyuk(k.okulAdi)
+    const kod = okulKodu(k.okulAdi)
 
     if (ogrenci && !g.ogrenciler.includes(ogrenci)) g.ogrenciler.push(ogrenci)
     if (veli && !g.veliler.includes(veli)) g.veliler.push(veli)
     if (okul && !g.okullar.includes(okul)) g.okullar.push(okul)
+    if (kod && !g.kodlar.includes(kod)) g.kodlar.push(kod)
 
     gruplar.set(telefon, g)
   }
 
   return [...gruplar.entries()]
     .map(([telefon, g]) => {
-      const parantez = [g.veliler.join(', '), g.okullar.join(', ')]
+      const ogrenciler = ogrenciAdlariniBirlestir(g.ogrenciler)
+      const parantez = [g.kodlar.join('/'), g.veliler.join(', ')]
         .filter(Boolean)
         .join('-')
-      const ad = parantez
-        ? `${g.ogrenciler.join(', ')}(${parantez})`
-        : g.ogrenciler.join(', ')
+      const ad = parantez ? `${ogrenciler}(${parantez})` : ogrenciler
       return { ad, telefon, okulAdi: g.okullar.join(', ') }
     })
     .sort((a, b) => a.ad.localeCompare(b.ad, 'tr'))
