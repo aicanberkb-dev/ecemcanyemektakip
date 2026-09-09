@@ -80,14 +80,36 @@ export function OgrenciListesi({
     [ogrenciler, arama, sinif, borc, durum],
   )
 
-  // Kardeş sayısı: listede rozet olarak gösterilir, kimin kardeşi olduğu
-  // detay sayfasında yazar.
-  const kardesSayisi = useMemo(() => {
-    const grup = new Map<string, number>()
+  /**
+   * Kardeş grupları, numaralandırılmış.
+   *
+   * Rozet önce "kardeş {kardeş sayısı}" yazıyordu; iki çocuklu her ailede bu
+   * hep "kardeş 1" olduğu için gruplar birbirinden ayırt edilemiyordu. Artık
+   * grup numarası yazıyor: aynı numarayı taşıyan öğrenciler kardeş.
+   *
+   * Sıra numarası grubun en küçük öğrenci numarasına göre veriliyor; liste
+   * süzülse de sıralama değişse de aynı aile aynı numarayı alıyor.
+   */
+  const kardesGruplari = useMemo(() => {
+    const uyeler = new Map<string, OgrenciSatiri[]>()
     for (const o of ogrenciler) {
-      if (o.kardes_grup_id) grup.set(o.kardes_grup_id, (grup.get(o.kardes_grup_id) ?? 0) + 1)
+      if (!o.kardes_grup_id) continue
+      const liste = uyeler.get(o.kardes_grup_id) ?? []
+      liste.push(o)
+      uyeler.set(o.kardes_grup_id, liste)
     }
-    return grup
+
+    const gruplar = [...uyeler.entries()]
+      .filter(([, u]) => u.length > 1)
+      .map(
+        ([id, u]) =>
+          [id, [...u].sort((a, b) => a.ogrenci_no.localeCompare(b.ogrenci_no, 'tr'))] as const,
+      )
+      .sort((a, b) => a[1][0].ogrenci_no.localeCompare(b[1][0].ogrenci_no, 'tr'))
+
+    return new Map(
+      gruplar.map(([id, u], i) => [id, { sira: i + 1, adlar: u.map((x) => x.ad_soyad) }]),
+    )
   }, [ogrenciler])
 
   const oneriler = useMemo(
@@ -185,24 +207,30 @@ export function OgrenciListesi({
 
       <AylikciBolumu
         ogrenciler={aylikcilar}
-        kardesSayisi={kardesSayisi}
+        kardesGruplari={kardesGruplari}
         sezonVarMi={sezonVarMi}
         arama={arama}
       />
 
-      <GunlukcuBolumu ogrenciler={gunlukculer} kardesSayisi={kardesSayisi} arama={arama} />
+      <GunlukcuBolumu ogrenciler={gunlukculer} kardesGruplari={kardesGruplari} arama={arama} />
     </div>
   )
 }
 
+export type KardesGrubu = { sira: number; adlar: string[] }
+
 /** Ad + kardeş rozeti — iki tabloda da aynı görünür. */
 function AdHucresi({
   ogrenci,
-  kardesSayisi,
+  kardesGruplari,
 }: {
   ogrenci: OgrenciSatiri
-  kardesSayisi: Map<string, number>
+  kardesGruplari: Map<string, KardesGrubu>
 }) {
+  const grup = ogrenci.kardes_grup_id
+    ? kardesGruplari.get(ogrenci.kardes_grup_id)
+    : undefined
+
   return (
     <td>
       <Link
@@ -211,12 +239,12 @@ function AdHucresi({
       >
         {ogrenci.ad_soyad}
       </Link>
-      {ogrenci.kardes_grup_id && (kardesSayisi.get(ogrenci.kardes_grup_id) ?? 0) > 1 && (
+      {grup && (
         <span
           className="rozet ml-2 bg-violet-100 text-violet-800"
-          title="Bu öğrencinin kardeşi tanımlı"
+          title={`${grup.sira}. kardeş grubu: ${grup.adlar.join(', ')}`}
         >
-          kardeş {(kardesSayisi.get(ogrenci.kardes_grup_id) ?? 1) - 1}
+          kardeş {grup.sira}
         </span>
       )}
     </td>
@@ -259,12 +287,12 @@ function VeliHucreleri({ ogrenci }: { ogrenci: OgrenciSatiri }) {
  */
 function AylikciBolumu({
   ogrenciler,
-  kardesSayisi,
+  kardesGruplari,
   sezonVarMi,
   arama,
 }: {
   ogrenciler: OgrenciSatiri[]
-  kardesSayisi: Map<string, number>
+  kardesGruplari: Map<string, KardesGrubu>
   sezonVarMi: boolean
   arama: string
 }) {
@@ -333,7 +361,7 @@ function AylikciBolumu({
             return (
               <tr key={o.student_id} className={eksik > 0 ? 'bg-red-50/50' : undefined}>
                 <td className="tabular-nums text-solgun">{o.ogrenci_no}</td>
-                <AdHucresi ogrenci={o} kardesSayisi={kardesSayisi} />
+                <AdHucresi ogrenci={o} kardesGruplari={kardesGruplari} />
                 <td>{o.sinif ?? '—'}</td>
                 <td className="whitespace-nowrap">
                   <OgrenciTipiRozeti tip={o.ogrenci_tipi} sinif={o.sinif} />
@@ -388,11 +416,11 @@ function AylikciBolumu({
 /** Günlükçüler — ölçü bakiye: yatırılan para eksi yenen öğünler. */
 function GunlukcuBolumu({
   ogrenciler,
-  kardesSayisi,
+  kardesGruplari,
   arama,
 }: {
   ogrenciler: OgrenciSatiri[]
-  kardesSayisi: Map<string, number>
+  kardesGruplari: Map<string, KardesGrubu>
   arama: string
 }) {
   const toplamKalan = ogrenciler.reduce((t, o) => t + o.kalan, 0)
@@ -438,7 +466,7 @@ function GunlukcuBolumu({
           {ogrenciler.map((o) => (
             <tr key={o.student_id}>
               <td className="tabular-nums text-solgun">{o.ogrenci_no}</td>
-              <AdHucresi ogrenci={o} kardesSayisi={kardesSayisi} />
+              <AdHucresi ogrenci={o} kardesGruplari={kardesGruplari} />
               <td>{o.sinif ?? '—'}</td>
               <td className="whitespace-nowrap">
                 <OgrenciTipiRozeti tip={o.ogrenci_tipi} sinif={o.sinif} />

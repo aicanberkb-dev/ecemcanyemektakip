@@ -18,7 +18,7 @@ export const SUBELER = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
  * kolaylaştırıyor; saklanan değer yine tek harf.
  */
 export const ANASINIFI_SUBELERI = [
-  { kod: 'A', ad: 'A' },
+  { kod: 'A', ad: 'A - Arılar Sınıfı' },
   { kod: 'B', ad: 'B - Masal Sınıfı' },
   { kod: 'C', ad: 'C - Uğur Böcekleri Sınıfı' },
 ]
