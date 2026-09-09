@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useActionState, useMemo, useState, useTransition } from 'react'
 
 import { para, tarih as tarihBicim } from '@/lib/format'
@@ -38,6 +39,7 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
   const [durum, cozumle, cozumleniyor] = useActionState(ekstreCozumle, {} as CozumlemeDurumu)
   const [kayit, setKayit] = useState<KayitDurumu>({})
   const [gonderiliyor, basla] = useTransition()
+  const router = useRouter()
 
   const [secim, setSecim] = useState<{
     anahtar: string
@@ -147,7 +149,16 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
           onay: secim.onayli[i] === true,
         })),
       )
-      const sonuc = await tahsilatlariKaydet(girdiler)
+
+      // Dosyanın kapsadığı tarih aralığı kayıt izine yazılır: listede
+      // "şu tarihler arası ekstre, şu saatte aktarıldı" yazabilmek için.
+      const tarihler = satirlar.map((s) => s.tarih).sort()
+      const sonuc = await tahsilatlariKaydet(girdiler, {
+        dosyaAdi: durum.dosyaAdi ?? 'ekstre',
+        satirSayisi: satirlar.length,
+        ekstreBas: tarihler[0],
+        ekstreBit: tarihler[tarihler.length - 1],
+      })
       setKayit(sonuc)
       if (sonuc.eklenen && sonuc.eklenen > 0) {
         setSecim((o) => ({
@@ -155,6 +166,8 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
           isaretli: Object.fromEntries(Object.keys(o.isaretli).map((k) => [k, false])),
         }))
       }
+      // Aktarım geçmişi sunucuda üretiliyor; yeni satır görünsün.
+      router.refresh()
     })
   }
 

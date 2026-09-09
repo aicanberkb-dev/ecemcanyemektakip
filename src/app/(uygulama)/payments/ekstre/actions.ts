@@ -142,14 +142,31 @@ export type KayitDurumu = {
   mukerrerAtlanan?: number
 }
 
+/** Aktarımın kaydına yazılacak dosya bilgisi */
+export type AktarimBilgisi = {
+  dosyaAdi: string
+  /** Dosyada okunan toplam para girişi sayısı */
+  satirSayisi: number
+  /** Dosyadaki en erken ve en geç hareket tarihi */
+  ekstreBas: string
+  ekstreBit: string
+}
+
 /**
  * Onaylanan satırları tahsilat olarak yazar.
  *
  * Ödeme yöntemi havale olarak sabittir — bu ekran yalnızca banka ekstresinden
  * beslenir. Mükerrer kayıt veritabanındaki benzersiz kısıtla engellenir; kısıta
  * takılan satır hata sayılmaz, atlanır.
+ *
+ * Her aktarım `ekstre_aktarimlari` tablosuna işleniyor ve yazılan tahsilatlar
+ * o kayda bağlanıyor: sonradan "bu ödeme hangi dosyadan geldi" sorusu
+ * cevaplanabilsin.
  */
-export async function tahsilatlariKaydet(girdiler: KayitGirdisi[]): Promise<KayitDurumu> {
+export async function tahsilatlariKaydet(
+  girdiler: KayitGirdisi[],
+  bilgi?: AktarimBilgisi,
+): Promise<KayitDurumu> {
   if (girdiler.length === 0) return { hata: 'Aktarılacak satır seçilmedi.' }
 
   const supabase = await supabaseServer()
@@ -188,9 +205,34 @@ export async function tahsilatlariKaydet(girdiler: KayitGirdisi[]): Promise<Kayi
     ),
   )
 
+  // Aktarım kaydı önce açılır: yazılan tahsilatlar ona bağlanacak.
+  let aktarimId: string | null = null
+  if (bilgi) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    const { data: aktarim, error: aktarimHata } = await supabase
+      .from('ekstre_aktarimlari')
+      .insert({
+        okul_id: okulId,
+        dosya_adi: bilgi.dosyaAdi,
+        satir_sayisi: bilgi.satirSayisi,
+        ekstre_bas: bilgi.ekstreBas,
+        ekstre_bit: bilgi.ekstreBit,
+        aktaran_user_id: user?.id,
+      })
+      .select('id')
+      .single()
+
+    // Kayıt izi tutulamazsa aktarımı durdurmuyoruz; para girişi izden önemli.
+    if (!aktarimHata) aktarimId = (aktarim as { id: string }).id
+  }
+
   let eklenen = 0
   let atlanan = 0
   let mukerrerAtlanan = 0
+  let toplamTutar = 0
 
   for (const g of girdiler) {
     const anahtar = tahsilatAnahtari(g.studentId, g.tarih, g.tutar)
@@ -207,6 +249,7 @@ export async function tahsilatlariKaydet(girdiler: KayitGirdisi[]): Promise<Kayi
       aciklama: g.aciklama,
       odeme_yontemi: 'havale',
       banka_fis_no: g.fisNo || null,
+      ekstre_aktarim_id: aktarimId,
     })
 
     if (error) {
@@ -217,13 +260,27 @@ export async function tahsilatlariKaydet(girdiler: KayitGirdisi[]): Promise<Kayi
       return { hata: error.message, eklenen, atlanan, mukerrerAtlanan }
     }
     eklenen++
+    toplamTutar += g.tutar
     // Aynı aktarımdaki ikinci özdeş satır da yakalansın.
     varOlan.add(anahtar)
+  }
+
+  if (aktarimId) {
+    await supabase
+      .from('ekstre_aktarimlari')
+      .update({
+        eklenen,
+        atlanan,
+        mukerrer_atlanan: mukerrerAtlanan,
+        toplam_tutar: toplamTutar,
+      })
+      .eq('id', aktarimId)
   }
 
   revalidatePath('/students')
   revalidatePath('/reports')
   revalidatePath('/dashboard')
+  revalidatePath('/payments/ekstre')
 
   const parcalar = [`${eklenen} tahsilat aktarıldı.`]
   if (atlanan > 0) parcalar.push(`${atlanan} satır daha önce aktarıldığı için atlandı.`)
