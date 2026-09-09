@@ -140,6 +140,14 @@ export type EslesmeAdayi = {
   sinif: string | null
   /** Hangi alandan eşleşti */
   kaynak: 'veli' | 'veli2'
+  /**
+   * Ana veride kayıtlı veli adı.
+   *
+   * Bankanın gönderen alanı veli adının ardına öğrenci adını ve 'YEMEK' gibi
+   * açıklamaları ekliyor. Ekranda bu karışık metni değil, sistemde kayıtlı
+   * temiz adı göstermek için taşınıyor.
+   */
+  veliAdi: string
 }
 
 export type VeliKaydi = {
@@ -192,6 +200,7 @@ export function adaylariBul(gonderen: string, ogrenciler: VeliKaydi[]): EslesmeA
         adSoyad: o.adSoyad,
         sinif: o.sinif,
         kaynak: alan,
+        veliAdi: ad,
       }
 
       if (n === hedef) {

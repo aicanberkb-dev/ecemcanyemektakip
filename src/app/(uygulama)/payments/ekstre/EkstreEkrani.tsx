@@ -125,6 +125,26 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
     return mukerrerPaylar(i).length > 0 && !secim.onayli[i]
   }
 
+  /**
+   * Gönderen sütununda ne yazsın?
+   *
+   * Bankanın gönderen alanı veli adının ardına öğrenci adını ve "YEMEK" gibi
+   * açıklamaları ekliyor. Eşleşme bulunduysa ana verideki temiz veli adı
+   * yazılır; ham metin zaten Açıklama sütununda duruyor.
+   */
+  function gonderenAdi(i: number): string {
+    const s = satirlar[i]
+    if (!s) return '—'
+
+    const secili = (secim.paylar[i] ?? []).find((p) => p.studentId)?.studentId
+    const seciliAday = secili
+      ? s.adaylar.find((a) => a.studentId === secili)
+      : undefined
+    const eslesen = seciliAday ?? s.adaylar[0]
+
+    return eslesen?.veliAdi || s.gonderen || '—'
+  }
+
   const aktarilacak = satirlar
     .map((s, i) => ({ s, i }))
     .filter(({ s, i }) => secim.isaretli[i] && !s.zatenVar && gecerliMi(i) && !engelliMi(i))
@@ -261,7 +281,7 @@ export function EkstreEkrani({ ogrenciler }: { ogrenciler: OgrenciSecenegi[] }) 
                       </td>
                       <td className="align-top whitespace-nowrap">{tarihBicim(s.tarih)}</td>
                       <td className="align-top whitespace-nowrap font-medium">
-                        {s.gonderen || '—'}
+                        {gonderenAdi(i)}
                       </td>
 
                       <td className="align-top">
