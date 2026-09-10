@@ -23,6 +23,8 @@ export function YanSeritler({ tema, okulAdi }: { tema: OkulTema | null; okulAdi:
 
   return (
     <>
+      {/* Bütün ekranın arkası: seçilen görünüme göre boyanır ([data-orta]) */}
+      <div aria-hidden className="orta-zemin yazdirma-gizle pointer-events-none fixed inset-0 -z-10" />
       {serit('left-0')}
       {serit('right-0')}
     </>

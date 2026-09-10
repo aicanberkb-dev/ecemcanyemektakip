@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
@@ -6,6 +7,7 @@ import { SimulasyonSeridi } from '@/components/SimulasyonSeridi'
 import { UstMenu } from '@/components/UstMenu'
 import { YanSeritler } from '@/components/YanSeritler'
 import { aktifOkul, genelModu, GENEL, okullar } from '@/lib/okul'
+import { GORUNUM_CEREZI, gorunumCozumle } from '@/lib/gorunum'
 import { okulTemasi } from '@/lib/okul-tema'
 import { gercekBugun } from '@/lib/simulasyon'
 import { bugunSunucu, simulasyonTarihi } from '@/lib/simulasyon-sunucu'
@@ -47,10 +49,12 @@ export default async function UygulamaLayout({
 
   // Okulun rengi: menü, okul düğmesi ve geniş ekranda yan şeritler
   const tema = genel ? null : okulTemasi(aktif?.ad)
+  // Orta alan görünümü: Ayarlar'dan seçilir, bu cihazın çerezinde
+  const gorunum = gorunumCozumle((await cookies()).get(GORUNUM_CEREZI)?.value)
 
   return (
     <BugunSaglayici bugun={bugun}>
-      <div data-tema={tema ?? undefined} className="contents">
+      <div data-tema={tema ?? undefined} data-orta={gorunum} className="contents">
         <YanSeritler tema={tema} okulAdi={aktif?.ad ?? ''} />
         {simulasyon && (
           <SimulasyonSeridi tarih={simulasyon} gercekTarih={gercekBugun()} />
@@ -61,8 +65,8 @@ export default async function UygulamaLayout({
           aktifOkulId={genel ? GENEL : aktif!.id}
           genel={genel}
         />
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">{children}</main>
       </div>
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">{children}</main>
     </BugunSaglayici>
   )
 }

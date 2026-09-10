@@ -1,5 +1,9 @@
+import { cookies } from 'next/headers'
+
+import { GorunumSecici } from '@/components/GorunumSecici'
 import { SezonUyarisi } from '@/components/SezonUyarisi'
 import { para, tarih as tarihBicim } from '@/lib/format'
+import { GORUNUM_CEREZI, gorunumCozumle } from '@/lib/gorunum'
 import { aktifOkul } from '@/lib/okul'
 import { sezonSec } from '@/lib/sezon'
 import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
@@ -60,6 +64,8 @@ export default async function SettingsPage({
         <h1 className="baslik">Ayarlar</h1>
         <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
       </div>
+
+      <GorunumSecici secili={gorunumCozumle((await cookies()).get(GORUNUM_CEREZI)?.value)} />
 
       <p className="rounded-md bg-blue-50 px-4 py-3 text-sm text-blue-900">
         Bu sayfadaki ücretler, sezonlar ve taksit planı yalnızca{' '}

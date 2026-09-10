@@ -247,6 +247,133 @@ body {
   }
 }
 
+/* --- Orta alan görünümü --------------------------------------------------
+   Ayarlar'dan seçilir (src/lib/gorunum.ts), [data-orta] ile gelir. Yalnız
+   okul temasında ([data-tema]) ve yalnız ekranda geçerli: kâğıda basılmaz. */
+
+[data-tema='goksu'] {
+  --acik-zemin: #fbeeee;
+  --duz: #b81d24;
+  --koyu-zemin: radial-gradient(ellipse at 50% 30%, #3a0d12 0%, #140507 75%);
+  --dolu-yazi: #ffffff;
+  --dolu-yazi-soluk: rgb(255 255 255 / 0.8);
+}
+
+[data-tema='ahmet-mithat'] {
+  --acik-zemin: #fff6d6;
+  --duz: #f5c518;
+  --koyu-zemin: radial-gradient(ellipse at 50% 30%, #1e1e1e 0%, #070707 75%);
+  --dolu-yazi: #111111;
+  --dolu-yazi-soluk: #3d3300;
+}
+
+/* 3: yazı okulun renginin üstünde; 5: koyu zeminde beyaz */
+[data-orta='3'] {
+  --orta-yazi: var(--dolu-yazi);
+  --orta-yazi-soluk: var(--dolu-yazi-soluk);
+}
+
+[data-orta='5'] {
+  --orta-yazi: #ffffff;
+  --orta-yazi-soluk: rgb(255 255 255 / 0.75);
+}
+
+/* 5: menü de koyu */
+[data-tema='goksu'][data-orta='5'] {
+  --menu-zemin: #140507;
+  --menu-marka: #ffffff;
+  --menu-yazi: #cdb9ba;
+  --menu-ustune-zemin: #2a0e11;
+  --menu-ustune-yazi: #ffffff;
+  --menu-aktif-zemin: #3a1216;
+  --menu-aktif-yazi: #ff9b95;
+  --menu-solgun: #a38d8f;
+  --menu-serit: #8e0c12;
+  --cikis-zemin: #2a0e11;
+  --cikis-yazi: #f3e4e5;
+  --cikis-kenar: #4a1a1f;
+  --cikis-ustune: #3a1216;
+  --yan-yazi: #f0c9cb;
+}
+
+[data-tema='ahmet-mithat'][data-orta='5'] {
+  --menu-serit: #f5c518;
+  --yan-yazi: #f5c518;
+}
+
+@media screen {
+  [data-orta='2'] .orta-zemin {
+    background: var(--acik-zemin);
+  }
+
+  [data-orta='3'] .orta-zemin,
+  [data-orta='4'] .orta-zemin {
+    background: var(--yan-zemin);
+  }
+
+  [data-orta='5'] .orta-zemin {
+    background: var(--koyu-zemin);
+  }
+
+  [data-orta='6'] .orta-zemin {
+    background: linear-gradient(90deg, var(--duz) 0%, var(--duz) 8%, var(--acik-zemin) 24%,
+        var(--acik-zemin) 76%, var(--duz) 92%, var(--duz) 100%);
+  }
+
+  /* Zemin bütün ekranı boyadığında yan şeritler ayrıca boyanmaz: tek parça */
+  :is([data-orta='3'], [data-orta='4'], [data-orta='5'], [data-orta='6']) .yan-serit {
+    background: transparent;
+  }
+
+  /* 4: çalışma alanı renkli zeminin üstünde açık bir sayfa */
+  [data-tema][data-orta='4'] main {
+    background: #f6f7f9;
+    border-radius: 14px 14px 0 0;
+    margin-top: 16px;
+    min-height: calc(100vh - 90px);
+    box-shadow: 0 -4px 30px -6px rgb(0 0 0 / 0.45);
+  }
+
+  /* 3 ve 5: doğrudan zeminin üstündeki yazılar (başlık, açıklama, bağlantı)
+     zemine göre renk alır. Kartların, tabloların, renkli kutuların ve
+     düğmelerin içindeki yazılar olduğu gibi kalır. */
+  :is([data-orta='3'], [data-orta='5'])[data-tema] main {
+    color: var(--orta-yazi);
+  }
+
+  :is([data-orta='3'], [data-orta='5'])[data-tema]
+    main
+    :is(.baslik, .etiket, h1, h2, h3, .text-metin, .text-vurgu, a, [class*='text-slate-6'], [class*='text-slate-7'], [class*='text-slate-8'], [class*='text-slate-9']):not(
+      :is(.kart, table, .tablo, [class*='bg-'], [class*='border'], button, .btn-birincil, .btn-ikincil) *,
+      .btn-birincil,
+      .btn-ikincil
+    ) {
+    color: var(--orta-yazi);
+  }
+
+  :is([data-orta='3'], [data-orta='5'])[data-tema]
+    main
+    :is(.text-solgun, [class*='text-slate-4'], [class*='text-slate-5'], [class*='text-gray-']):not(
+      :is(.kart, table, .tablo, [class*='bg-'], [class*='border'], button, .btn-birincil, .btn-ikincil) *
+    ) {
+    color: var(--orta-yazi-soluk);
+  }
+}
+
+/* 3 ve 5: kartların, tabloların ve renkli kutuların içi yeniden koyu yazı.
+   Kendi rengi olmayan yazılar (tablo hücreleri) orta alanın beyaz rengini
+   miras alıp beyaz kartta kayboluyordu. base katmanında: kendi renk sınıfı
+   olan her şey (kırmızı bakiye, sarı uyarı) bunu ezer. */
+@layer base {
+  @media screen {
+    :is([data-orta='3'], [data-orta='5'])[data-tema]
+      main
+      :is(.kart, table, .tablo, [class*='bg-'], [class*='border']) {
+      color: var(--color-metin);
+    }
+  }
+}
+
 /* --- Yazdırma ------------------------------------------------------------
    Ekranda gereken menü, filtre ve butonlar kâğıda basılmaz; çıktı başlığı
    ise yalnızca kâğıtta görünür. */
