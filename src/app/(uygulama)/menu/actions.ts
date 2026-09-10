@@ -85,8 +85,17 @@ export async function menuKaydet(
  * Bir listenin bir ayını başka bir listeye/aya kopyalar.
  *
  * GÖKSU ile AHMET MİTHAT menüleri neredeyse aynı; sıfırdan yazmak yerine
- * kopyalayıp farkları düzeltmek çok daha hızlı. Hafta içi günler sırayla
- * eşlenir, hafta sonları atlanır.
+ * kopyalayıp farkları düzeltmek çok daha hızlı.
+ *
+ * İki ayrı durum var:
+ *   - **Aynı ay, başka liste:** günler tarihe göre eşlenir. Önce sırayla
+ *     eşleniyordu; GÖKSU'nun 15 Eylül'de başlayan menüsü AHMET MİTHAT'a
+ *     1 Eylül'den başlayarak yazılıyor, her şey iki hafta kayıyordu.
+ *   - **Başka ay:** hafta içi günler sırayla eşlenir — geçen ayın döngüsü bu
+ *     ayın başından itibaren tekrar eder, tatiller atlanır.
+ *
+ * Hedef ay kopyanın birebir aynısı olur: kopyada olmayan günler silinir.
+ * Önceki denemelerden kalan artıklar üst üste biniyor, liste karışıyordu.
  */
 export async function menuKopyala(
   kaynakListeId: string,
@@ -136,27 +145,56 @@ export async function menuKopyala(
 
   const tatiller = new Set(((tatilVeri ?? []) as { tarih: string }[]).map((t) => t.tarih))
 
-  const hedefGunler: string[] = []
-  for (let g = 1; g <= gunSayisi; g++) {
-    const h = new Date(hedefYil, hedefAy - 1, g).getDay()
-    const tarih = `${hedefYil}-${iki(hedefAy)}-${iki(g)}`
-    if (h !== 0 && h !== 6 && !tatiller.has(tarih)) hedefGunler.push(tarih)
+  const ayniAy = kaynakYil === hedefYil && kaynakAy === hedefAy
+  if (ayniAy && kaynakListeId === hedefListeId) {
+    return { hata: 'Kaynak ile hedef aynı liste ve aynı ay.' }
   }
 
-  const satirlar = hedefGunler.slice(0, kaynak.length).map((tarih, i) => ({
+  const satir = (tarih: string, g: (typeof kaynak)[number]) => ({
     liste_id: hedefListeId,
     okul_id: hedefListe.okul_id,
     tarih,
-    corba: kaynak[i].corba,
-    ana_yemek: kaynak[i].ana_yemek,
-    yardimci: kaynak[i].yardimci,
-    ek: kaynak[i].ek,
-  }))
+    corba: g.corba,
+    ana_yemek: g.ana_yemek,
+    yardimci: g.yardimci,
+    ek: g.ek,
+  })
 
-  const { error: yazmaHatasi } = await supabase
+  let satirlar: ReturnType<typeof satir>[]
+  if (ayniAy) {
+    // Aynı ay: tarih tarihe. Okul 15'inde açıldıysa menü de 15'inde başlar.
+    satirlar = kaynak.filter((g) => !tatiller.has(g.tarih)).map((g) => satir(g.tarih, g))
+  } else {
+    const hedefGunler: string[] = []
+    for (let g = 1; g <= gunSayisi; g++) {
+      const h = new Date(hedefYil, hedefAy - 1, g).getDay()
+      const tarih = `${hedefYil}-${iki(hedefAy)}-${iki(g)}`
+      if (h !== 0 && h !== 6 && !tatiller.has(tarih)) hedefGunler.push(tarih)
+    }
+    satirlar = hedefGunler
+      .slice(0, kaynak.length)
+      .map((tarih, i) => satir(tarih, kaynak[i]))
+  }
+
+  // Önce yaz, sonra artıkları sil: yazma başarısız olursa hedef ay boş kalmasın.
+  if (satirlar.length > 0) {
+    const { error: yazmaHatasi } = await supabase
+      .from('menu_gunleri')
+      .upsert(satirlar, { onConflict: 'liste_id,tarih' })
+    if (yazmaHatasi) return { hata: yazmaHatasi.message }
+  }
+
+  let silme = supabase
     .from('menu_gunleri')
-    .upsert(satirlar, { onConflict: 'liste_id,tarih' })
-  if (yazmaHatasi) return { hata: yazmaHatasi.message }
+    .delete()
+    .eq('liste_id', hedefListeId)
+    .gte('tarih', `${hedefYil}-${iki(hedefAy)}-01`)
+    .lte('tarih', `${hedefYil}-${iki(hedefAy)}-${iki(gunSayisi)}`)
+  if (satirlar.length > 0) {
+    silme = silme.not('tarih', 'in', `(${satirlar.map((s) => s.tarih).join(',')})`)
+  }
+  const { error: silmeHatasi } = await silme
+  if (silmeHatasi) return { hata: silmeHatasi.message }
 
   revalidatePath('/menu')
   return {

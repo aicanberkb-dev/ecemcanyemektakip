@@ -162,6 +162,7 @@ export default async function MenuPage({
           hedefListeId={secili.id}
           hedefYil={yil}
           hedefAy={ay}
+          hedefGunSayisi={menu.length}
           kaynaklar={kopyaKaynaklari.map((l) => ({ id: l.id, ad: l.ad }))}
         />
 

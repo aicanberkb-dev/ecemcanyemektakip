@@ -18,11 +18,14 @@ export function MenuKopyalaFormu({
   hedefListeId,
   hedefYil,
   hedefAy,
+  hedefGunSayisi,
   kaynaklar,
 }: {
   hedefListeId: string
   hedefYil: number
   hedefAy: number
+  /** Hedef ayda hâlihazırda menüsü olan gün sayısı — üzerine yazmadan önce sorulur */
+  hedefGunSayisi: number
   kaynaklar: { id: string; ad: string }[]
 }) {
   const router = useRouter()
@@ -87,7 +90,17 @@ export function MenuKopyalaFormu({
       <button
         type="button"
         disabled={calisiyor}
-        onClick={() =>
+        onClick={() => {
+          // Kopya hedef ayın yerine geçer; elle yapılmış düzeltmeler gider.
+          if (
+            hedefGunSayisi > 0 &&
+            !window.confirm(
+              `${AY_ADLARI[hedefAy - 1]} ${hedefYil} ayında ${hedefGunSayisi} günlük menü var. ` +
+                'Kopyalanan menü bunların yerine geçecek. Devam edilsin mi?',
+            )
+          ) {
+            return
+          }
           basla(async () => {
             const s = await menuKopyala(
               kaynakListe,
@@ -103,7 +116,7 @@ export function MenuKopyalaFormu({
               router.refresh()
             }
           })
-        }
+        }}
         className="btn-birincil !py-1.5"
       >
         {calisiyor ? 'Kopyalanıyor…' : 'Kopyala'}
