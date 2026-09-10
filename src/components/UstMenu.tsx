@@ -99,14 +99,17 @@ export function UstMenu({
     <header className="yazdirma-gizle relative z-10 border-b border-cizgi bg-white">
       {/* Renkler okulun temasından (globals.css, [data-tema]) */}
       <div className="ust-bar">
-      <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-2.5">
+      {/* Telefonda aralıklar dar: logo, okul düğmesi ve ☰ tek satıra sığsın */}
+      <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 py-2.5 sm:gap-6 sm:px-4">
         <Link
           href={genel ? '/menu' : '/pos'}
+          aria-label="Yemek Takip"
           className="ust-marka flex shrink-0 items-center gap-2.5 text-lg font-bold tracking-tight"
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- vektör logo */}
           <img src="/logo/logo-kirmizi-beyaz.svg" alt="" className="h-9 w-auto" />
-          Yemek Takip
+          {/* Telefonda yalnız logo; yazı ☰ düğmesini ekran dışına itiyordu */}
+          <span className="hidden sm:inline">Yemek Takip</span>
         </Link>
 
         <OkulSecici okullar={okullar} aktifId={aktifOkulId} />
@@ -127,14 +130,16 @@ export function UstMenu({
 
         <div className="ml-auto flex items-center gap-3 md:ml-0">
           <span className="ust-kisi hidden text-sm sm:inline">{kullanici}</span>
-          <form action="/auth/cikis" method="post">
+          {/* Telefonda Çıkış üst satıra sığmıyor; ☰ menüsünün en altında */}
+          <form action="/auth/cikis" method="post" className="hidden md:block">
             <button className="btn-ikincil ust-cikis !px-3 !py-1.5 text-xs">Çıkış</button>
           </form>
           <button
             type="button"
             onClick={() => setAcikMenu((a) => !a)}
-            className="btn-ikincil !px-3 !py-1.5 md:hidden"
+            className="btn-ikincil shrink-0 !px-3 !py-1.5 md:hidden"
             aria-label="Menü"
+            aria-expanded={acikMenu}
           >
             ☰
           </button>
@@ -157,6 +162,11 @@ export function UstMenu({
               {b.ad}
             </Link>
           ))}
+          <form action="/auth/cikis" method="post" className="mt-1 border-t border-cizgi pt-1">
+            <button className="w-full rounded-md px-3 py-2 text-left text-sm font-medium text-red-700 hover:bg-red-50">
+              Çıkış
+            </button>
+          </form>
         </nav>
       )}
 
