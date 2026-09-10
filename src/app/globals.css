@@ -103,6 +103,150 @@ body {
   }
 }
 
+/* --- Okul teması ---------------------------------------------------------
+   Okul değişince menü, okul düğmesi ve geniş ekrandaki yan şeritler renk
+   değiştirir (src/lib/okul-tema.ts). Varsayılanlar bugünkü görünüm: genel
+   mod ve tanınmayan okul böyle kalır. */
+
+:root {
+  --menu-zemin: #ffffff;
+  --menu-marka: var(--color-vurgu);
+  --menu-yazi: #475569;
+  --menu-ustune-zemin: #f1f5f9;
+  --menu-ustune-yazi: var(--color-metin);
+  --menu-aktif-zemin: #eff6ff;
+  --menu-aktif-yazi: var(--color-vurgu);
+  --menu-solgun: var(--color-solgun);
+  --menu-serit: transparent;
+  --cikis-zemin: #ffffff;
+  --cikis-yazi: var(--color-metin);
+  --cikis-kenar: var(--color-cizgi);
+  --cikis-ustune: #f8fafc;
+  --okul-zemin: #f8fafc;
+  --okul-yazi: var(--color-metin);
+  --okul-kenar: var(--color-cizgi);
+  --okul-ustune: #f1f5f9;
+  --okul-nokta: var(--color-vurgu);
+  --yan-zemin: transparent;
+  --yan-yazi: var(--color-metin);
+  --yan-logo-golge: none;
+}
+
+/* GÖKSU: kırmızı — logonun kırmızısıyla aynı aile */
+[data-tema='goksu'] {
+  --menu-marka: #8e0c12;
+  --menu-ustune-zemin: #fdf2f2;
+  --menu-ustune-yazi: #8e0c12;
+  --menu-aktif-zemin: #fdecec;
+  --menu-aktif-yazi: #8e0c12;
+  --menu-serit: #6d0810;
+  --okul-zemin: #8e0c12;
+  --okul-yazi: #ffffff;
+  --okul-kenar: #8e0c12;
+  --okul-ustune: #6d0810;
+  --okul-nokta: #ffffff;
+  --yan-zemin: linear-gradient(160deg, #e5453f 0%, #b81d24 30%, #8e0c12 65%, #5a060b 100%);
+  --yan-yazi: #ffffff;
+  --yan-logo-golge: drop-shadow(0 0 1px #ffffff) drop-shadow(0 10px 18px rgb(40 0 4 / 0.55));
+}
+
+/* AHMET MİTHAT: sarı-siyah */
+[data-tema='ahmet-mithat'] {
+  --menu-zemin: #0b0b0b;
+  --menu-marka: #f5c518;
+  --menu-yazi: #c9c4b4;
+  --menu-ustune-zemin: #1f1f1f;
+  --menu-ustune-yazi: #ffffff;
+  --menu-aktif-zemin: #f5c518;
+  --menu-aktif-yazi: #111111;
+  --menu-solgun: #8f8a7c;
+  --menu-serit: #0b0b0b;
+  --cikis-zemin: #1a1a1a;
+  --cikis-yazi: #f5c518;
+  --cikis-kenar: #3a3208;
+  --cikis-ustune: #262626;
+  --okul-zemin: #f5c518;
+  --okul-yazi: #111111;
+  --okul-kenar: #f5c518;
+  --okul-ustune: #e2b100;
+  --okul-nokta: #111111;
+  --yan-zemin: radial-gradient(ellipse at 50% 40%, #ffe36e 0%, #f5c518 55%, #d9a400 100%);
+  --yan-yazi: #111111;
+  --yan-logo-golge: drop-shadow(0 10px 18px rgb(0 0 0 / 0.35));
+}
+
+@layer components {
+  .ust-bar {
+    background: var(--menu-zemin);
+    border-bottom: 3px solid var(--menu-serit);
+  }
+
+  .ust-marka {
+    color: var(--menu-marka);
+  }
+
+  .ust-link {
+    color: var(--menu-yazi);
+  }
+
+  .ust-link:hover {
+    background: var(--menu-ustune-zemin);
+    color: var(--menu-ustune-yazi);
+  }
+
+  .ust-link-aktif,
+  .ust-link-aktif:hover {
+    background: var(--menu-aktif-zemin);
+    color: var(--menu-aktif-yazi);
+  }
+
+  .ust-kisi {
+    color: var(--menu-solgun);
+  }
+
+  .ust-cikis {
+    background: var(--cikis-zemin);
+    color: var(--cikis-yazi);
+    border-color: var(--cikis-kenar);
+  }
+
+  .ust-cikis:hover {
+    background: var(--cikis-ustune);
+  }
+
+  .okul-cip {
+    background: var(--okul-zemin);
+    color: var(--okul-yazi);
+    border-color: var(--okul-kenar);
+  }
+
+  .okul-cip:hover {
+    background: var(--okul-ustune);
+  }
+
+  .okul-cip-nokta {
+    background: var(--okul-nokta);
+  }
+
+  .yan-serit {
+    background: var(--yan-zemin);
+    color: var(--yan-yazi);
+  }
+
+  .yan-serit-logo {
+    filter: var(--yan-logo-golge);
+  }
+
+  /* Giriş ekranı (koyu sahne): düğme bordo */
+  .giris-koyu .btn-birincil {
+    background: #8e0c12;
+  }
+
+  .giris-koyu .btn-birincil:hover {
+    background: #6d0810;
+  }
+}
+
 /* --- Yazdırma ------------------------------------------------------------
    Ekranda gereken menü, filtre ve butonlar kâğıda basılmaz; çıktı başlığı
    ise yalnızca kâğıtta görünür. */

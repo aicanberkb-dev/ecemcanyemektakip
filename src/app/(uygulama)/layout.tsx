@@ -4,7 +4,9 @@ import { redirect } from 'next/navigation'
 import { BugunSaglayici } from '@/components/BugunSaglayici'
 import { SimulasyonSeridi } from '@/components/SimulasyonSeridi'
 import { UstMenu } from '@/components/UstMenu'
+import { YanSeritler } from '@/components/YanSeritler'
 import { aktifOkul, genelModu, GENEL, okullar } from '@/lib/okul'
+import { okulTemasi } from '@/lib/okul-tema'
 import { gercekBugun } from '@/lib/simulasyon'
 import { bugunSunucu, simulasyonTarihi } from '@/lib/simulasyon-sunucu'
 import { oturumBilgisi } from '@/lib/yetki'
@@ -43,17 +45,23 @@ export default async function UygulamaLayout({
     )
   }
 
+  // Okulun rengi: menü, okul düğmesi ve geniş ekranda yan şeritler
+  const tema = genel ? null : okulTemasi(aktif?.ad)
+
   return (
     <BugunSaglayici bugun={bugun}>
-      {simulasyon && (
-        <SimulasyonSeridi tarih={simulasyon} gercekTarih={gercekBugun()} />
-      )}
-      <UstMenu
-        kullanici={oturum.adSoyad ?? oturum.email ?? ''}
-        okullar={liste}
-        aktifOkulId={genel ? GENEL : aktif!.id}
-        genel={genel}
-      />
+      <div data-tema={tema ?? undefined} className="contents">
+        <YanSeritler tema={tema} okulAdi={aktif?.ad ?? ''} />
+        {simulasyon && (
+          <SimulasyonSeridi tarih={simulasyon} gercekTarih={gercekBugun()} />
+        )}
+        <UstMenu
+          kullanici={oturum.adSoyad ?? oturum.email ?? ''}
+          okullar={liste}
+          aktifOkulId={genel ? GENEL : aktif!.id}
+          genel={genel}
+        />
+      </div>
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">{children}</main>
     </BugunSaglayici>
   )

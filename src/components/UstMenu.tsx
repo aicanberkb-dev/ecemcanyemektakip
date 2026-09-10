@@ -95,9 +95,17 @@ export function UstMenu({
           : null
 
   return (
-    <header className="yazdirma-gizle border-b border-cizgi bg-white">
-      <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-3">
-        <Link href={genel ? '/menu' : '/pos'} className="text-lg font-bold tracking-tight text-vurgu">
+    // relative z-10: geniş ekrandaki sabit yan şeritler menünün altında kalsın
+    <header className="yazdirma-gizle relative z-10 border-b border-cizgi bg-white">
+      {/* Renkler okulun temasından (globals.css, [data-tema]) */}
+      <div className="ust-bar">
+      <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-2.5">
+        <Link
+          href={genel ? '/menu' : '/pos'}
+          className="ust-marka flex shrink-0 items-center gap-2.5 text-lg font-bold tracking-tight"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- vektör logo */}
+          <img src="/logo/logo-kirmizi-beyaz.svg" alt="" className="h-9 w-auto" />
           Yemek Takip
         </Link>
 
@@ -109,9 +117,7 @@ export function UstMenu({
               key={b.yol}
               href={b.yol}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                aktifMi(b.yol)
-                  ? 'bg-blue-50 text-vurgu'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-metin'
+                aktifMi(b.yol) ? 'ust-link-aktif' : 'ust-link'
               }`}
             >
               {b.ad}
@@ -120,9 +126,9 @@ export function UstMenu({
         </nav>
 
         <div className="ml-auto flex items-center gap-3 md:ml-0">
-          <span className="hidden text-sm text-solgun sm:inline">{kullanici}</span>
+          <span className="ust-kisi hidden text-sm sm:inline">{kullanici}</span>
           <form action="/auth/cikis" method="post">
-            <button className="btn-ikincil !px-3 !py-1.5 text-xs">Çıkış</button>
+            <button className="btn-ikincil ust-cikis !px-3 !py-1.5 text-xs">Çıkış</button>
           </form>
           <button
             type="button"
@@ -133,6 +139,7 @@ export function UstMenu({
             ☰
           </button>
         </div>
+      </div>
       </div>
 
       {acikMenu && (

@@ -31,7 +31,7 @@ export function SimulasyonSeridi({
   }
 
   return (
-    <div className="yazdirma-gizle border-b-2 border-orange-400 bg-orange-100">
+    <div className="yazdirma-gizle relative z-10 border-b-2 border-orange-400 bg-orange-100">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2 text-sm">
         <span className="font-bold text-orange-900">SİMÜLASYON</span>
         <span className="text-orange-900">

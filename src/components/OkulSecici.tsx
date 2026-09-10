@@ -72,17 +72,17 @@ export function OkulSecici({ okullar, aktifId }: Props) {
                     transition disabled:opacity-60 ${
                       genelMi
                         ? 'border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100'
-                        : 'border-cizgi bg-slate-50 text-metin hover:bg-slate-100'
+                        : 'okul-cip'
                     }`}
       >
         <span
-          className={`size-2 shrink-0 rounded-full ${genelMi ? 'bg-violet-600' : 'bg-vurgu'}`}
+          className={`size-2 shrink-0 rounded-full ${genelMi ? 'bg-violet-600' : 'okul-cip-nokta'}`}
           aria-hidden
         />
         <span className="max-w-40 truncate">
           {bekliyor ? 'Geçiliyor…' : genelMi ? 'GENEL' : aktif?.ad}
         </span>
-        <span className="text-xs text-solgun" aria-hidden>
+        <span className="text-xs opacity-70" aria-hidden>
           ▾
         </span>
       </button>
