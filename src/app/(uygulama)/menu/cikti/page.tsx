@@ -4,24 +4,29 @@ import { YazdirButonu } from '@/components/Yazdir'
 import { AY_ADLARI } from '@/lib/format'
 import { supabaseServer } from '@/lib/supabase/server'
 
-import { afisGunleri, MenuAfisi, type AfisGunu } from './MenuAfisi'
+import { AfisIndir } from './AfisIndir'
+import { afisGunleri, KAGIT_SINIFI, MenuAfisi, type AfisGunu, type AfisTuru } from './MenuAfisi'
 
 export const metadata = { title: 'Yemek Listesi Çıktısı — Yemek Takip' }
 
 /**
- * Aylık yemek listesi afişi — veri buradan çekilir, çizim MenuAfisi'nde.
+ * Aylık yemek listesi — iki biçim, aynı düzen:
+ *   Renkli afiş: velilere telefondan gönderilen görsel (PNG indir / paylaş).
+ *   Siyah-beyaz çıktı: yazıcıdan basılan kâğıt; renkli afiş siyah-beyaz
+ *   yazıcıda sarı bant soluk griye dönüyordu.
  *
- * Ekrandaki düzenleme tablosu veri girişi için; bu sayfa okunmak için.
+ * Veri buradan çekilir, çizim MenuAfisi'nde.
  */
 export default async function MenuCiktiPage({
   searchParams,
 }: {
-  searchParams: Promise<{ liste?: string; yil?: string; ay?: string }>
+  searchParams: Promise<{ liste?: string; yil?: string; ay?: string; tur?: string }>
 }) {
   const q = await searchParams
   const simdi = new Date()
   const yil = Number(q.yil) || simdi.getFullYear()
   const ay = Number(q.ay) || simdi.getMonth() + 1
+  const tur: AfisTuru = q.tur === 'cikti' ? 'cikti' : 'afis'
 
   const supabase = await supabaseServer()
 
@@ -47,29 +52,88 @@ export default async function MenuCiktiPage({
       .order('tarih'),
     supabase
       .from('okulsuz_gunler')
-      .select('tarih')
+      .select('tarih, sebep')
       .is('hizmet_noktasi_id', null)
       .gte('tarih', bas)
       .lte('tarih', bit),
   ])
 
-  const kapali = new Set(((okulsuzVeri ?? []) as { tarih: string }[]).map((o) => o.tarih))
+  // tarih → menü ekranında o güne girilen açıklama; afişte kartın içinde yazar
+  const kapali = new Map(
+    ((okulsuzVeri ?? []) as { tarih: string; sebep: string | null }[]).map((o) => [
+      o.tarih,
+      o.sebep?.trim() || null,
+    ]),
+  )
   const gunler = afisGunleri((data ?? []) as AfisGunu[], kapali)
+  const dortSatir = (liste.satir_sayisi ?? 4) >= 4
+
+  const adres = (t: AfisTuru) => `/menu/cikti?liste=${liste.id}&yil=${yil}&ay=${ay}&tur=${t}`
+  const SEKMELER: { tur: AfisTuru; ad: string; tarif: string }[] = [
+    { tur: 'afis', ad: 'Renkli Afiş', tarif: 'Telefondan velilere göndermek için' },
+    { tur: 'cikti', ad: 'Siyah-Beyaz Çıktı', tarif: 'Yazıcıdan basmak için' },
+  ]
 
   return (
     <div className="space-y-4">
-      <div className="yazdirma-gizle flex flex-wrap items-center justify-between gap-3">
+      {/*
+        Kâğıdın kenar boşluğu sıfır: tarayıcı oraya tarih, saat ve site adresi
+        basıyordu. Kenar payını afişin kendi dolgusu veriyor. Kural yalnızca
+        bu sayfada geçerli.
+      */}
+      <style>{`@page { size: A4 portrait; margin: 0; }`}</style>
+
+      <div className="yazdirma-gizle space-y-3">
         <Link
           href={`/menu?liste=${liste.id}&yil=${yil}&ay=${ay}`}
           className="text-sm text-vurgu hover:underline"
         >
           ← Yemek listesine dön
         </Link>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-solgun">
-            {liste.ad} · {gunler.length} gün
-          </span>
-          <YazdirButonu etiket="Yazdır / PDF kaydet" />
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <nav className="flex flex-wrap gap-2" aria-label="Çıktı biçimi">
+            {SEKMELER.map((s) => (
+              <Link
+                key={s.tur}
+                href={adres(s.tur)}
+                aria-current={s.tur === tur ? 'page' : undefined}
+                className={`rounded-md border px-3.5 py-2 text-left leading-tight ${
+                  s.tur === tur
+                    ? 'border-gray-900 bg-gray-900 text-white'
+                    : 'border-cizgi bg-white hover:bg-gray-50'
+                }`}
+              >
+                <span className="block text-sm font-semibold">{s.ad}</span>
+                <span className={`block text-xs ${s.tur === tur ? 'text-gray-300' : 'text-solgun'}`}>
+                  {s.tarif}
+                </span>
+              </Link>
+            ))}
+          </nav>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-solgun">
+              {liste.ad} · {gunler.length} gün
+            </span>
+            {tur === 'afis' ? (
+              <AfisIndir
+                key={`${liste.id}-${yil}-${ay}`}
+                dosyaAdi={`Yemek Listesi ${AY_ADLARI[ay - 1]} ${yil}.png`}
+              >
+                <MenuAfisi
+                  yil={yil}
+                  ay={ay}
+                  gunler={gunler}
+                  kapali={kapali}
+                  dortSatir={dortSatir}
+                  tur="afis"
+                />
+              </AfisIndir>
+            ) : (
+              <YazdirButonu etiket="Yazdır" />
+            )}
+          </div>
         </div>
       </div>
 
@@ -79,13 +143,16 @@ export default async function MenuCiktiPage({
         </p>
       )}
 
-      <MenuAfisi
-        yil={yil}
-        ay={ay}
-        gunler={gunler}
-        kapali={kapali}
-        dortSatir={(liste.satir_sayisi ?? 4) >= 4}
-      />
+      <div className={`${KAGIT_SINIFI} mx-auto w-full max-w-[794px] shadow-lg`}>
+        <MenuAfisi
+          yil={yil}
+          ay={ay}
+          gunler={gunler}
+          kapali={kapali}
+          dortSatir={dortSatir}
+          tur={tur}
+        />
+      </div>
     </div>
   )
 }

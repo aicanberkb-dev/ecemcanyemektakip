@@ -1,0 +1,264 @@
+/*
+ * Yemek listesi afişi. Bütün ölçüler afiş genişliğine göre (cqw): telefonda,
+ * ekranda, 2382 px'lik görselde ve A4 kâğıtta aynı oranda görünür.
+ *
+ * İki tema, aynı düzen:
+ *   .renkli     — Sarı Bant: sarı başlık bandı, siyah gövde. Paylaşılan görsel.
+ *   .siyahBeyaz — siyah-beyaz yazıcı için: siyah bant, beyaz gövde, gri yok
+ *                 denecek kadar az (yazıcı griyi noktalarla basıyor).
+ */
+
+.poster {
+  container-type: inline-size;
+  width: 100%;
+  /* A4 oranı. Uzun bir ay sığmazsa afiş aşağı uzar, kesilmez. */
+  aspect-ratio: 210 / 297;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.poster * {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.cerceve {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 0 5cqw 3.6cqw;
+}
+
+/* --- Başlık bandı: logo solda, ay adı sağında --- */
+.bant {
+  margin: 0 -5cqw;
+  padding: 3.2cqw 5cqw 3cqw;
+  display: flex;
+  align-items: center;
+  gap: 4cqw;
+  background: var(--bant);
+  border-bottom: 0.6cqw solid var(--bantAlt);
+  box-shadow: var(--bantGolge, none);
+}
+
+.logo {
+  width: 27cqw;
+  aspect-ratio: 1480 / 950;
+  flex: none;
+  display: block;
+}
+
+.baslik {
+  display: grid;
+  gap: 1.1cqw;
+  justify-items: start;
+}
+
+.ustYazi {
+  display: flex;
+  align-items: center;
+  gap: 2.4cqw;
+  font: 700 1.45cqw/1 var(--fb);
+  letter-spacing: 0.45em;
+  text-transform: uppercase;
+  color: var(--bantIkincil);
+}
+
+.ustYazi::after {
+  content: '';
+  width: 12cqw;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.55;
+}
+
+.ay {
+  margin: 0;
+  font: 700 8.6cqw/0.95 var(--fd);
+  letter-spacing: -0.01em;
+  color: var(--bantYazi);
+}
+
+.ay span {
+  color: var(--yil);
+}
+
+.altYazi {
+  font: italic 500 2.1cqw/1 var(--fd);
+  color: var(--bantIkincil);
+}
+
+/* --- Gün başlıkları ve haftalar --- */
+.gunler,
+.hafta {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1.3cqw;
+}
+
+.gunler {
+  margin-top: 3.6cqw;
+}
+
+.gunler div {
+  text-align: center;
+  font: 700 1.2cqw/1 var(--fb);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* Haftalar kalan yüksekliği paylaşır: kısa ayda kartlar sayfayı doldurur. */
+.haftalar {
+  flex: 1;
+  display: grid;
+  grid-auto-rows: 1fr;
+  gap: 1.3cqw;
+  margin-top: 1.3cqw;
+}
+
+.kart {
+  background: var(--card);
+  border: var(--kenarKalinlik, 1px) solid var(--line);
+  min-height: 14cqw;
+  display: flex;
+  flex-direction: column;
+  break-inside: avoid;
+}
+
+.kartUst {
+  padding: 1.2cqw 1.3cqw 0.8cqw;
+}
+
+.no {
+  font: 700 3.7cqw/1 var(--fd);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.kart ul {
+  list-style: none;
+  margin: 0 1.3cqw;
+  padding: 0.8cqw 0 1.3cqw;
+  border-top: 1px solid var(--icCizgi);
+  display: grid;
+  gap: 0.5cqw;
+}
+
+.kart li {
+  font: 500 1.38cqw/1.2 var(--fb);
+  color: var(--muted);
+}
+
+.kart li.ana {
+  font-weight: 700;
+  font-size: 1.58cqw;
+  color: var(--ink);
+}
+
+.kapali {
+  background: var(--closed);
+}
+
+.kapali .no {
+  opacity: 0.55;
+}
+
+.not {
+  margin: 0;
+  padding: 0 1.3cqw 1.3cqw;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.not span {
+  font: italic 600 1.45cqw/1.3 var(--fd);
+  color: var(--notc);
+  background: var(--notZemin, transparent);
+}
+
+.alt {
+  margin-top: 2.2cqw;
+  padding-top: 2.2cqw;
+  border-top: var(--altKalinlik, 1px) solid var(--altCizgi);
+  display: flex;
+  justify-content: flex-end;
+  font: 700 2cqw/1 var(--fd);
+  letter-spacing: 0.03em;
+  color: var(--footc);
+}
+
+/* ---------- Renkli: Sarı Bant ---------- */
+.renkli {
+  --bg: #111111;
+  --card: #1a1a1a;
+  --closed: #151515;
+  --line: #2e2e2e;
+  --icCizgi: #2e2e2e;
+  --altCizgi: #2e2e2e;
+  --accent: #f5c518;
+  --ink: #f4f1e8;
+  --muted: #b5b0a3;
+  --footc: #f5c518;
+  --notc: #f5c518;
+  --bant: linear-gradient(180deg, #ffd84a 0%, #f5c518 55%, #e2ac00 100%);
+  --bantAlt: #0b0b0b;
+  --bantGolge: inset 0 -1px 0 rgb(255 255 255 / 0.35), 0 0.6cqw 1.2cqw rgb(0 0 0 / 0.5);
+  --bantYazi: #111111;
+  --bantIkincil: #3d3300;
+  --yil: #9e1017;
+}
+
+/* ---------- Siyah-beyaz çıktı ---------- */
+.siyahBeyaz {
+  --bg: #ffffff;
+  --card: #ffffff;
+  /* Kapalı gün: ince çapraz tarama — renksiz yazıcıda da "boş gün" okunur */
+  --closed: repeating-linear-gradient(135deg, #d6d6d6 0 0.25cqw, #ffffff 0.25cqw 1.1cqw);
+  --line: #000000;
+  --kenarKalinlik: 0.2cqw;
+  --icCizgi: #9a9a9a;
+  --altCizgi: #000000;
+  --altKalinlik: 0.4cqw;
+  --accent: #000000;
+  --ink: #000000;
+  --muted: #262626;
+  --footc: #000000;
+  --notc: #000000;
+  --notZemin: #ffffff;
+  --bant: #000000;
+  --bantAlt: #000000;
+  --bantYazi: #ffffff;
+  --bantIkincil: #e6e6e6;
+  --yil: #ffffff;
+}
+
+.siyahBeyaz .ay span {
+  font-weight: 500;
+}
+
+.siyahBeyaz .kapali .no {
+  opacity: 1;
+  color: #555555;
+}
+
+/* --- Kâğıt: A4, kenar boşluğu afişin kendi dolgusu --- */
+@media print {
+  .kagit {
+    width: 210mm !important;
+    max-width: none !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .kagit .poster {
+    /* Tam 297 mm bazen yuvarlamayla ikinci sayfaya bir çizgi taşırıyor */
+    aspect-ratio: auto;
+    min-height: 296mm;
+  }
+}
