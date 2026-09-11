@@ -78,8 +78,13 @@ export default async function MenuPage({
   const havuz = (havuzVeri ?? []) as HavuzKaydi[]
   const okulsuz = (okulsuzVeri ?? []) as OkulsuzGun[]
 
-  // Kopyalama kaynağı olarak aynı havuz grubundaki listeler anlamlı
-  const kopyaKaynaklari = tumListeler.filter((l) => l.havuz_grubu === secili.havuz_grubu)
+  // Her liste her listeden kopyalayabilir; önce yalnız aynı havuz grubundakiler
+  // görünüyordu, taşımalı ile okul menüleri arasında kopyalanamıyordu. 4 çeşitten
+  // 3 çeşide kopyalanırken 4. kalem veritabanında düşer (menu_cesit_siniri).
+  const kopyaKaynaklari = tumListeler.map((l) => ({
+    id: l.id,
+    ad: (l.satir_sayisi ?? 4) < 4 ? `${l.ad} (3 çeşit)` : l.ad,
+  }))
 
   const bag = (l: string) =>
     `/menu?liste=${encodeURIComponent(l)}&yil=${yil}&ay=${ay}`
