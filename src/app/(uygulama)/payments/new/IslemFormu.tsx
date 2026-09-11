@@ -1,11 +1,13 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useActionState, useEffect, useMemo, useState } from 'react'
 
 import { useBugun } from '@/components/BugunSaglayici'
 import { OdemeYontemiSecici } from '@/components/OdemeYontemiSecici'
 import { OgrenciSecici, type SeciliOgrenci } from '@/components/OgrenciSecici'
+import { TaksitRozeti, type TaksitBilgisi } from '@/components/TaksitRozeti'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import { supabaseBrowser } from '@/lib/supabase/client'
 import type { OdemeYontemi, Transaction } from '@/lib/types'
@@ -20,10 +22,14 @@ import { SonTahsilatlar } from './SonTahsilatlar'
 export function IslemFormu({
   okulId,
   baslangic,
+  taksitler,
 }: {
   okulId: string
   baslangic: SeciliOgrenci | null
+  /** öğrenci id → aylıkçının taksit durumu (aktif sezon) */
+  taksitler: Record<string, TaksitBilgisi>
 }) {
+  const router = useRouter()
   const supabase = useMemo(() => supabaseBrowser(), [])
 
   const [ogrenci, setOgrenci] = useState<SeciliOgrenci | null>(baslangic)
@@ -64,6 +70,8 @@ export function IslemFormu({
   }, [studentId, supabase, durum.zaman])
 
   // Kayıttan sonra bakiye sunucudan geldiği gibi yazılır; öğrenci seçili kalır.
+  // Taksit durumu sayfadan geldiği için sayfa da yenilenir: alınan taksit
+  // hemen "ödendi" görünsün.
   const [islenenZaman, setIslenenZaman] = useState<number | undefined>(undefined)
   if (durum.zaman && durum.zaman !== islenenZaman) {
     setIslenenZaman(durum.zaman)
@@ -72,6 +80,9 @@ export function IslemFormu({
     }
     setTutar('')
   }
+  useEffect(() => {
+    if (durum.zaman) router.refresh()
+  }, [durum.zaman, router])
 
   const kayitlar = gecmis.studentId === studentId ? gecmis.kayitlar : []
   const ayniGun = kayitlar.filter((k) => k.tarih === tarih)
@@ -105,6 +116,9 @@ export function IslemFormu({
             onSecim={setOgrenci}
           />
           {durum.alanlar?.student_id && <p className="hata">{durum.alanlar.student_id}</p>}
+          {ogrenci && (
+            <OdemeDurumu ogrenci={ogrenci} taksit={taksitler[ogrenci.student_id]} />
+          )}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -165,9 +179,6 @@ export function IslemFormu({
           />
         </div>
 
-        {/* Bakiye yalnızca öğrenci kutusunda gösteriliyor: aynı sayıyı iki
-            yerde tutmak, biri güncellenip diğeri kalınca kafa karıştırıyordu. */}
-
         {durum.hata && (
           <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{durum.hata}</p>
         )}
@@ -204,6 +215,79 @@ export function IslemFormu({
         </Link>{' '}
         ekranını kullanın.
       </p>
+    </div>
+  )
+}
+
+/**
+ * Tahsilat almadan önce öğrencinin ne kadar ödemesi gerektiği.
+ *
+ * Günlükçüde ölçü bakiye: eksideyse o kadar borcu var. Aylıkçıda bakiye
+ * yanıltıcı (öğün ücreti düşülmüyor); ölçü taksit planı — yemekhane
+ * ekranındaki rozetle aynı.
+ */
+function OdemeDurumu({
+  ogrenci,
+  taksit,
+}: {
+  ogrenci: SeciliOgrenci
+  taksit: TaksitBilgisi | undefined
+}) {
+  if (ogrenci.abone_tipi === 'aylik') {
+    const plan = !!taksit && taksit.yillik_toplam > 0
+    return (
+      <div
+        className={`mt-2 rounded-md border px-3 py-2.5 text-sm ${
+          plan && taksit.eksik > 0
+            ? 'border-red-200 bg-red-50'
+            : plan
+              ? 'border-emerald-200 bg-emerald-50'
+              : 'border-amber-200 bg-amber-50'
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold text-slate-800">Aylıkçı · taksit durumu</span>
+          <TaksitRozeti taksit={taksit} />
+        </div>
+        {plan && (
+          <p className="mt-1.5 text-slate-700 tabular-nums">
+            Vadesi gelen <strong>{para(taksit.vadesi_gelen)}</strong> · ödenen{' '}
+            <strong>{para(taksit.odenen)}</strong>
+            {taksit.eksik > 0 ? (
+              <>
+                {' '}
+                · <span className="font-bold text-red-700">eksik {para(taksit.eksik)}</span>
+              </>
+            ) : null}
+            <span className="text-slate-500"> · yıllık toplam {para(taksit.yillik_toplam)}</span>
+          </p>
+        )}
+        {plan && taksit.son_vade && (
+          <p className="mt-0.5 text-xs text-slate-500">
+            Son vadesi gelen taksit: {tarihBicim(taksit.son_vade)}
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  const borc = ogrenci.kalan < 0
+  return (
+    <div
+      className={`mt-2 flex flex-wrap items-baseline gap-x-2 rounded-md border px-3 py-2.5 text-sm ${
+        borc ? 'border-red-200 bg-red-50' : 'border-emerald-200 bg-emerald-50'
+      }`}
+    >
+      <span className="font-semibold text-slate-800">Günlükçü ·</span>
+      {borc ? (
+        <span className="font-bold text-red-700 tabular-nums">
+          Güncel borç {para(Math.abs(ogrenci.kalan))}
+        </span>
+      ) : (
+        <span className="font-bold text-emerald-700 tabular-nums">
+          Borcu yok · bakiye {para(ogrenci.kalan)}
+        </span>
+      )}
     </div>
   )
 }

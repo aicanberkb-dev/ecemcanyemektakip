@@ -1,6 +1,7 @@
 import type { SeciliOgrenci } from '@/components/OgrenciSecici'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
+import { taksitHaritasi } from '@/lib/taksit-sunucu'
 import type { StudentBalance } from '@/lib/types'
 
 import { IslemFormu } from './IslemFormu'
@@ -15,6 +16,9 @@ export default async function YeniIslemPage({
   const { student } = await searchParams
   const okul = await aktifOkul()
   if (!okul) return null
+
+  // Aylıkçının ödeme durumu taksit planından: yemekhane ekranıyla aynı ölçü
+  const taksitler = await taksitHaritasi(okul.id)
 
   let baslangic: SeciliOgrenci | null = null
   if (student) {
@@ -47,7 +51,12 @@ export default async function YeniIslemPage({
         <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
       </div>
       {/* key: okul değişince form ve seçili öğrenci sıfırlanır */}
-      <IslemFormu key={okul.id} okulId={okul.id} baslangic={baslangic} />
+      <IslemFormu
+        key={okul.id}
+        okulId={okul.id}
+        baslangic={baslangic}
+        taksitler={Object.fromEntries(taksitler)}
+      />
     </div>
   )
 }
