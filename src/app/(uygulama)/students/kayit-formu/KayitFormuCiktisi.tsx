@@ -17,7 +17,7 @@ function planTipi(tip: OgrenciTipi): OgrenciTipi {
  */
 const FORM_BASLIKLARI: Record<string, string> = {
   GÖKSU: 'Göksu Şehit Er Ersin Güner Okulu Yemekhane Kayıt Formu',
-  'AHMET MİTHAT': 'Beykoz Ahmet Mithat Okulu Kayıt Formu',
+  'AHMET MİTHAT': 'Beykoz Ahmet Mithat Efendi Okulu Kayıt Formu',
 }
 
 function formBasligi(okulAdi: string): string {
@@ -38,6 +38,8 @@ type OkulBilgisi = {
   /**
    * Kayıt bilgilerinde günlükçü / aylıkçı açıklamaları yazılsın mı. Açıklamalar
    * yer kapladığı için bu formda aralıklar da daralıyor: form tek A4'e sığsın.
+   * Tablonun altındaki ödeme cümlesi de "Taksit ödemeleri" diye başlıyor:
+   * günlükçüden havale alınmadığı için "ödemeler" genel kalıp karışıyordu.
    */
   kayitAciklamasi: boolean
 }
@@ -366,9 +368,10 @@ function Form({
               </table>
             )}
             <p className="mt-2 text-xs text-slate-600">
-              Ödemeler banka havalesi, nakit veya kredi kartı ile yapılabilir. Havale
-              açıklamasına <strong>öğrencinin adı</strong> yazılması ödemenin doğru
-              öğrenciye işlenmesi için önemlidir.
+              {bilgi.kayitAciklamasi ? 'Taksit ödemeleri' : 'Ödemeler'} banka havalesi, nakit
+              veya kredi kartı ile yapılabilir. Havale açıklamasına{' '}
+              <strong>öğrencinin adı</strong> yazılması ödemenin doğru öğrenciye işlenmesi
+              için önemlidir.
             </p>
 
             {/* Banka ve iletişim — velinin formu elinden bırakmadan bakacağı bilgiler */}
@@ -405,14 +408,19 @@ function Form({
 /**
  * İki kayıt tipi ve farkları (AHMET MİTHAT). Günlükçü önce: veliye önce en
  * esnek seçenek anlatılıyor, havale kabul edilmediği açıkça yazıyor.
+ *
+ * Bakiye hesaplanıp veliyi arama usulünün bittiği cümle kalın ve büyük: eski
+ * alışkanlıkla bekleyen veli bunu kaçırmamalı.
  */
 function KayitTipiAciklamalari() {
   return (
     <div className="space-y-1.5">
       <p className="text-xs leading-snug text-slate-700">
-        Öğrencilerimiz 2 farklı kayıt tipinden birini seçerek yemekhaneden
-        faydalanabilir. Geçmiş dönemlerde uyguladığımız “aybaşlarında öğrencinin
-        bakiyesinin hesaplanıp veliyle iletişime geçilmesi” şeklinde ilerlemeyeceğiz.
+        Öğrencilerimiz 2 farklı kayıt tipinden birini seçerek yemekhaneden faydalanabilir.{' '}
+        <strong className="text-sm font-bold text-slate-900">
+          Geçmiş dönemlerde uyguladığımız “aybaşlarında öğrencinin bakiyesinin hesaplanıp
+          veliyle iletişime geçilmesi” şeklinde ilerlemeyeceğiz.
+        </strong>
       </p>
       <div>
         <Kutucuk etiket="Günlükçü (Yemek Başına)" kalin />
@@ -427,7 +435,7 @@ function KayitTipiAciklamalari() {
         <Kutucuk etiket="Aylıkçı (Taksitli)" kalin />
         <p className="mt-0.5 ml-[1.375rem] text-xs leading-snug text-slate-700">
           Öğrenci sabit bir yıllık ücretle yemekhaneye kayıt edilecektir. Yıl içinde
-          herhangi bir fiyat revizyonu olmayacaktır. Ücret, ilk taksiti kayıt esnasında
+          herhangi bir fiyat değişikliği olmayacaktır. Ücret, ilk taksiti kayıt esnasında
           olmak üzere dönem başına 2 taksit, toplam <strong>4 eşit taksit</strong> halinde
           ödenecektir.
         </p>
