@@ -236,6 +236,32 @@ export async function hizmetNoktasiSil(id: string): Promise<MaliyetDurumu> {
   return { basari: 'Yer silindi.' }
 }
 
+/**
+ * Yerin kaç çeşit yemek verdiği: yediği menü listesinin satır sayısı.
+ *
+ * 3'e çekilince veritabanı bugünden sonraki günlerin 4. kalemini temizler ve
+ * o listeye bir daha 4. kalem yazmaz (menu_cesit_siniri tetikleyicisi). Liste
+ * başka yerlerle ortaksa çeşit hepsinde değişir.
+ */
+export async function listeCesitDegistir(
+  listeId: string,
+  cesit: number,
+): Promise<MaliyetDurumu> {
+  if (cesit !== 3 && cesit !== 4) return { hata: 'Çeşit 3 ya da 4 olabilir.' }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase
+    .from('menu_listeleri')
+    .update({ satir_sayisi: cesit })
+    .eq('id', listeId)
+  if (error) return { hata: error.message }
+
+  tazele()
+  revalidatePath('/maliyet/yerler')
+  revalidatePath('/menu')
+  return { basari: `Menü ${cesit} çeşit olarak ayarlandı.` }
+}
+
 // ---------------------------------------------------------------------------
 // Satış fiyatları
 // ---------------------------------------------------------------------------

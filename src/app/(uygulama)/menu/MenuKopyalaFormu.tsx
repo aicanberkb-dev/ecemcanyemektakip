@@ -42,9 +42,22 @@ export function MenuKopyalaFormu({
 
   if (!acik) {
     return (
-      <button type="button" onClick={() => setAcik(true)} className="btn-ikincil">
-        Başka listeden/aydan kopyala
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setDurum({})
+            setAcik(true)
+          }}
+          className="btn-ikincil"
+        >
+          Başka listeden/aydan kopyala
+        </button>
+        {/* Form kapanınca sonuç kaybolmasın: kaç gün geldiği burada görünür */}
+        {durum.basari && (
+          <span className="text-sm font-medium text-emerald-700">{durum.basari}</span>
+        )}
+      </div>
     )
   }
 

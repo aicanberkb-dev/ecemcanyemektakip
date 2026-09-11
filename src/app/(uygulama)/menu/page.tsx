@@ -119,8 +119,8 @@ export default async function MenuPage({
             }`}
           >
             {l.ad}
-            {l.havuz_grubu === 'tasimali' && (
-              <span className="ml-1.5 text-xs opacity-70">3 satır</span>
+            {(l.satir_sayisi ?? 4) < 4 && (
+              <span className="ml-1.5 text-xs opacity-70">3 çeşit</span>
             )}
           </Link>
         ))}
@@ -179,6 +179,7 @@ export default async function MenuPage({
         key={`${secili.id}-${yil}-${ay}`}
         listeId={secili.id}
         satirSayisi={secili.satir_sayisi ?? 4}
+        serbestSatir={secili.havuz_grubu === 'tasimali'}
         yil={yil}
         ay={ay}
         menu={menu}

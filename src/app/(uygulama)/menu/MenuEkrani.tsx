@@ -37,8 +37,11 @@ const RENKLER: Record<Alan, string> = {
   ek: 'bg-sky-50 border-sky-200',
 }
 
-/** Taşımalıda satırlar serbest (çorba/sandviç/meyve); okul menüsünde sabit. */
-function alanlar(satirSayisi: number): { anahtar: Alan; etiket: string }[] {
+/**
+ * Satır başlıkları. 4 çeşitte çorba, ana yemek, yardımcı ve 4. kalem; 3 çeşitte
+ * 4. kalem yok. Taşımalıda satırlar serbest (çorba/sandviç/meyve), adları da yok.
+ */
+function alanlar(satirSayisi: number, serbest: boolean): { anahtar: Alan; etiket: string }[] {
   const dort = [
     { anahtar: 'corba' as Alan, etiket: 'Çorba' },
     { anahtar: 'ana_yemek' as Alan, etiket: 'Ana Yemek' },
@@ -46,6 +49,7 @@ function alanlar(satirSayisi: number): { anahtar: Alan; etiket: string }[] {
     { anahtar: 'ek' as Alan, etiket: '4. Kalem' },
   ]
   if (satirSayisi >= 4) return dort
+  if (!serbest) return dort.slice(0, 3)
   return [
     { anahtar: 'corba' as Alan, etiket: '1. Kalem' },
     { anahtar: 'ana_yemek' as Alan, etiket: '2. Kalem' },
@@ -63,6 +67,7 @@ function alanlar(satirSayisi: number): { anahtar: Alan; etiket: string }[] {
 export function MenuEkrani({
   listeId,
   satirSayisi,
+  serbestSatir,
   yil,
   ay,
   menu,
@@ -71,6 +76,8 @@ export function MenuEkrani({
 }: {
   listeId: string
   satirSayisi: number
+  /** Taşımalı: satırların sabit adı yok (çorba/sandviç/meyve) */
+  serbestSatir: boolean
   yil: number
   ay: number
   menu: MenuGunu[]
@@ -79,7 +86,7 @@ export function MenuEkrani({
   okulsuz: OkulsuzGun[]
 }) {
   const router = useRouter()
-  const ALANLAR = alanlar(satirSayisi)
+  const ALANLAR = alanlar(satirSayisi, serbestSatir)
   const gunSayisi = new Date(yil, ay, 0).getDate()
 
   const baslangic = useMemo(() => {
@@ -110,12 +117,25 @@ export function MenuEkrani({
   const [kaydediliyor, basla] = useTransition()
   const [havuzArama, setHavuzArama] = useState('')
 
+  // Sunucudaki menü değişince (kopyalama, kayıt) tablo da yenilenir. Önce
+  // yalnız liste ya da ay değişince kuruluyordu: kopyalama başarılı olsa da
+  // ekranda eski menü kalıyor, "Kaydet" denirse eski menü kopyanın üstüne
+  // yazılıyordu. İmza içerikten: aynı veriyle gelen yenileme ("okul yok"
+  // işareti) yazılmış ama kaydedilmemiş hücreleri silmez.
+  const imza = useMemo(() => JSON.stringify(menu), [menu])
+  const [sonImza, setSonImza] = useState(imza)
+
   // Liste ya da ay değişince tablo yeniden kurulur
   if (anahtar !== `${listeId}-${yil}-${ay}`) {
     setAnahtar(`${listeId}-${yil}-${ay}`)
+    setSonImza(imza)
     setGunler(baslangic)
     setIsaretli(new Set())
     setDurum({})
+  } else if (sonImza !== imza) {
+    setSonImza(imza)
+    setGunler(baslangic)
+    setIsaretli(new Set())
   }
 
   function yaz(tarih: string, alan: Alan, deger: string) {

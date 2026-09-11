@@ -191,7 +191,10 @@ function GunKarti({
     )
   }
 
-  const kalemler = [gun.corba, gun.ana_yemek, gun.yardimci, gun.ek]
+  // 3 çeşit veren yerin afişinde 4. kalem yok
+  const kalemler = dortSatir
+    ? [gun.corba, gun.ana_yemek, gun.yardimci, gun.ek]
+    : [gun.corba, gun.ana_yemek, gun.yardimci]
 
   return (
     <div className={s.kart}>

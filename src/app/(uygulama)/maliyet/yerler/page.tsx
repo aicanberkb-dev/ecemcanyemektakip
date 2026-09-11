@@ -22,7 +22,11 @@ export default async function YerlerPage() {
         .from('hizmet_fiyatlari')
         .select('*')
         .order('gecerli_baslangic', { ascending: false }),
-      supabase.from('menu_listeleri').select('id, ad').eq('aktif', true).order('sira'),
+      supabase
+        .from('menu_listeleri')
+        .select('id, ad, satir_sayisi')
+        .eq('aktif', true)
+        .order('sira'),
       // Okula bağlı noktaların fiyatı ayarlardaki tarifeden gelir
       supabase
         .from('ucret_gecmisi')

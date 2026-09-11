@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useActionState, useState } from 'react'
+import { useActionState, useState, useTransition } from 'react'
 
 import { useBugun } from '@/components/BugunSaglayici'
 import { para, tarih as tarihBicim } from '@/lib/format'
@@ -13,6 +13,7 @@ import {
   hizmetNoktasiEkle,
   hizmetNoktasiGuncelle,
   hizmetNoktasiSil,
+  listeCesitDegistir,
   type MaliyetDurumu,
 } from '../actions'
 
@@ -34,7 +35,8 @@ export type HizmetFiyati = {
   kisi_basi_fiyat: number | string
 }
 
-export type ListeSecenegi = { id: string; ad: string }
+/** satir_sayisi: listenin çeşit sayısı (3 ya da 4) */
+export type ListeSecenegi = { id: string; ad: string; satir_sayisi: number | null }
 
 /**
  * Hizmet yerleri ve satış fiyatları.
@@ -74,6 +76,9 @@ export function YerlerEkrani({
           fiyatlar={fiyatlar.filter((f) => f.hizmet_noktasi_id === n.id)}
           listeler={listeler}
           okulFiyati={n.okul_id ? okulTarifesi[n.okul_id] : undefined}
+          ortaklar={noktalar
+            .filter((x) => x.id !== n.id && x.liste_id && x.liste_id === n.liste_id)
+            .map((x) => x.ad)}
         />
       ))}
 
@@ -135,11 +140,14 @@ function Nokta({
   fiyatlar,
   listeler,
   okulFiyati,
+  ortaklar,
 }: {
   nokta: HizmetNoktasi
   fiyatlar: HizmetFiyati[]
   listeler: ListeSecenegi[]
   okulFiyati: number | undefined
+  /** Aynı menü listesini yiyen diğer yerler — çeşit onlarda da değişir */
+  ortaklar: string[]
 }) {
   const router = useRouter()
   const [duzenle, setDuzenle] = useState(false)
@@ -241,6 +249,7 @@ function Nokta({
                 </>
               )}
             </p>
+            {liste && <CesitSecici liste={liste} ortaklar={ortaklar} />}
           </div>
           <div className="ml-auto text-right">
             <p className="text-xs text-solgun">Günde çıkan porsiyon</p>
@@ -414,5 +423,70 @@ function Nokta({
         )}
       </div>
     </section>
+  )
+}
+
+/**
+ * Yerin kaç çeşit yemek verdiği (3 ya da 4). Çeşit, yerin yediği menü
+ * listesinin ayarı: 3 çeşitte menüye 4. kalem yazılmaz, afişte ve maliyette
+ * de görünmez. Liste başka yerlerle ortaksa değişiklik hepsine uygulanır;
+ * yalnız birini değiştirmek için o yere ayrı bir menü listesi gerekir.
+ */
+function CesitSecici({ liste, ortaklar }: { liste: ListeSecenegi; ortaklar: string[] }) {
+  const router = useRouter()
+  const [bekliyor, basla] = useTransition()
+  const [hata, setHata] = useState<string>()
+  const cesit = (liste.satir_sayisi ?? 4) < 4 ? 3 : 4
+
+  function sec(yeni: 3 | 4) {
+    if (yeni === cesit) return
+    const ortakNotu =
+      ortaklar.length > 0
+        ? `\n\n${liste.ad} menüsünü ${ortaklar.join(', ')} de yiyor; çeşit onlarda da değişir.`
+        : ''
+    const mesaj =
+      yeni === 3
+        ? `${liste.ad} menüsü 3 çeşide inecek. Bugünden sonraki günlerin 4. kalemi silinecek, geçmiş günler olduğu gibi kalır.${ortakNotu}`
+        : `${liste.ad} menüsü 4 çeşide çıkacak; menü ekranında 4. kalem satırı açılır.${ortakNotu}`
+    if (!confirm(mesaj)) return
+    basla(async () => {
+      const s = await listeCesitDegistir(liste.id, yeni)
+      if (s.hata) {
+        setHata(s.hata)
+      } else {
+        setHata(undefined)
+        router.refresh()
+      }
+    })
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+      <span className="text-solgun">Çeşit:</span>
+      <div
+        className="inline-flex overflow-hidden rounded-md border border-cizgi"
+        role="group"
+        aria-label="Çeşit sayısı"
+      >
+        {([3, 4] as const).map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => sec(n)}
+            disabled={bekliyor}
+            aria-pressed={cesit === n}
+            className={`px-2.5 py-1 font-semibold transition disabled:opacity-60 ${
+              cesit === n ? 'bg-gray-900 text-white' : 'bg-white text-metin hover:bg-slate-50'
+            }`}
+          >
+            {n} çeşit
+          </button>
+        ))}
+      </div>
+      {ortaklar.length > 0 && (
+        <span className="text-solgun">· menü {ortaklar.join(', ')} ile ortak</span>
+      )}
+      {hata && <span className="text-red-600">{hata}</span>}
+    </div>
   )
 }
