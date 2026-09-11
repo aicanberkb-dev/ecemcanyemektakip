@@ -25,6 +25,52 @@ function formBasligi(okulAdi: string): string {
 }
 
 /**
+ * Okula göre banka ve iletişim bilgisi, ve kayıt tipi açıklamaları.
+ *
+ * Okullar farklı hesaba ödeme alıyor. AHMET MİTHAT'ta veliye iki kayıt tipi
+ * arasındaki fark kâğıt üzerinde açıkça anlatılıyor; önceki dönemlerde ay
+ * başında bakiye hesaplayıp veliyi arama usulü bırakıldı.
+ */
+type OkulBilgisi = {
+  iban: string
+  alici: string
+  iletisim: { ad: string; tel: string }[]
+  /**
+   * Kayıt bilgilerinde günlükçü / aylıkçı açıklamaları yazılsın mı. Açıklamalar
+   * yer kapladığı için bu formda aralıklar da daralıyor: form tek A4'e sığsın.
+   */
+  kayitAciklamasi: boolean
+}
+
+const VARSAYILAN_BILGI: OkulBilgisi = {
+  iban: 'TR40 0001 0005 3202 6049 0950 02',
+  alici: 'EKREM BAŞLANTI',
+  iletisim: [
+    { ad: 'Ecem Can Gıda', tel: '0551 514 18 46' },
+    { ad: 'Ayşe Hanım', tel: '0553 985 67 68' },
+  ],
+  kayitAciklamasi: false,
+}
+
+const OKUL_BILGILERI: Record<string, OkulBilgisi> = {
+  GÖKSU: VARSAYILAN_BILGI,
+  'AHMET MİTHAT': {
+    iban: 'TR34 0001 0005 3202 6049 0950 13',
+    alici: 'EKREM BAŞLANTI',
+    iletisim: [
+      { ad: 'Ecem Can Gıda', tel: '0551 514 18 46' },
+      { ad: 'Meltem Hanım', tel: '0541 349 79 71' },
+      { ad: 'Ayşe Hanım', tel: '0553 985 67 68' },
+    ],
+    kayitAciklamasi: true,
+  },
+}
+
+function okulBilgisi(okulAdi: string): OkulBilgisi {
+  return OKUL_BILGILERI[okulAdi.trim()] ?? VARSAYILAN_BILGI
+}
+
+/**
  * Başlıktaki ikinci satır: anasınıfı formları uzaktan ayırt edilebilsin.
  *
  * Standart ve 1. sınıf formlarında yok — okul adı yeterli. Anasınıfının iki
@@ -185,9 +231,12 @@ function Form({
   sonMu: boolean
 }) {
   const g = TIP_GORUNUM[tip]
+  const bilgi = okulBilgisi(okulAdi)
   const toplam = taksitler.reduce((t, x) => t + Number(x.tutar), 0)
   // Anasınıfında günlükçü diye bir şey yok; ödeme şekli sorulmuyor.
   const anasinifiMi = tip === 'anasinifi' || tip === 'anasinifi_etut'
+  // Açıklamalı formda bölümler arası boşluk dar: yoksa form ikinci sayfaya taşıyor
+  const sikisik = bilgi.kayitAciklamasi
 
   return (
     <div className="space-y-2" style={sonMu ? undefined : { breakAfter: 'page' }}>
@@ -206,7 +255,7 @@ function Form({
           )}
         </div>
 
-        <div className="space-y-5 p-5">
+        <div className={`${sikisik ? 'space-y-3' : 'space-y-5'} p-5`}>
           <div className="border-b border-slate-300 pb-2 text-center text-sm font-semibold">
             {sezonAdi} Eğitim Öğretim Yılı
           </div>
@@ -238,11 +287,17 @@ function Form({
           {!anasinifiMi && (
             <div>
               <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>KAYIT BİLGİLERİ</h3>
-              <p className="text-xs font-semibold text-slate-700">Ödeme Şekli</p>
-              <div className="mt-1 flex gap-12 text-sm">
-                <Kutucuk etiket="Aylıkçı (Taksitli)" />
-                <Kutucuk etiket="Günlükçü (Yemek Başına)" />
-              </div>
+              {bilgi.kayitAciklamasi ? (
+                <KayitTipiAciklamalari />
+              ) : (
+                <>
+                  <p className="text-xs font-semibold text-slate-700">Ödeme Şekli</p>
+                  <div className="mt-1 flex gap-12 text-sm">
+                    <Kutucuk etiket="Aylıkçı (Taksitli)" />
+                    <Kutucuk etiket="Günlükçü (Yemek Başına)" />
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -321,14 +376,15 @@ function Form({
               <p className="text-slate-700">
                 Taksit ödemelerinizi aşağıdaki banka hesabına yapmanızı rica ederiz.
               </p>
-              <p className="mt-1.5 font-bold tracking-wide tabular-nums">
-                IBAN: TR40 0001 0005 3202 6049 0950 02
-              </p>
-              <p className="font-semibold">Alıcı: EKREM BAŞLANTI</p>
+              <p className="mt-1.5 font-bold tracking-wide tabular-nums">IBAN: {bilgi.iban}</p>
+              <p className="font-semibold">Alıcı: {bilgi.alici}</p>
               <p className="mt-2 text-slate-700">
-                <strong>Ecem Can Gıda:</strong> 0551 514 18 46
-                <span className="mx-2 text-slate-400">•</span>
-                <strong>Ayşe Hanım:</strong> 0553 985 67 68
+                {bilgi.iletisim.map((k, i) => (
+                  <span key={k.ad}>
+                    {i > 0 && <span className="mx-2 text-slate-400">•</span>}
+                    <strong>{k.ad}:</strong> {k.tel}
+                  </span>
+                ))}
               </p>
             </div>
           </div>
@@ -337,11 +393,45 @@ function Form({
           <div className="flex justify-end">
             <div className="w-64">
               <p className="text-xs font-semibold text-slate-700">Veli İmza</p>
-              <div className="mt-10 border-b border-slate-500" />
+              <div className={`${sikisik ? 'mt-8' : 'mt-10'} border-b border-slate-500`} />
             </div>
           </div>
         </div>
       </section>
+    </div>
+  )
+}
+
+/**
+ * İki kayıt tipi ve farkları (AHMET MİTHAT). Günlükçü önce: veliye önce en
+ * esnek seçenek anlatılıyor, havale kabul edilmediği açıkça yazıyor.
+ */
+function KayitTipiAciklamalari() {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs leading-snug text-slate-700">
+        Öğrencilerimiz 2 farklı kayıt tipinden birini seçerek yemekhaneden
+        faydalanabilir. Geçmiş dönemlerde uyguladığımız “aybaşlarında öğrencinin
+        bakiyesinin hesaplanıp veliyle iletişime geçilmesi” şeklinde ilerlemeyeceğiz.
+      </p>
+      <div>
+        <Kutucuk etiket="Günlükçü (Yemek Başına)" kalin />
+        <p className="mt-0.5 ml-[1.375rem] text-xs leading-snug text-slate-700">
+          Öğrenci yemeğe katılmak istediği günlerde güncel günlük yemek ücretini nakit
+          veya kredi kartı ile ödeyebilir. <strong>Banka havalesi kabul edilmeyecektir.</strong>{' '}
+          Günlük yemek ücreti Eylül 2026 itibarıyla <strong>240 TL</strong>’dir. 2. dönem
+          başlangıcında fiyat güncellenecektir.
+        </p>
+      </div>
+      <div>
+        <Kutucuk etiket="Aylıkçı (Taksitli)" kalin />
+        <p className="mt-0.5 ml-[1.375rem] text-xs leading-snug text-slate-700">
+          Öğrenci sabit bir yıllık ücretle yemekhaneye kayıt edilecektir. Yıl içinde
+          herhangi bir fiyat revizyonu olmayacaktır. Ücret, ilk taksiti kayıt esnasında
+          olmak üzere dönem başına 2 taksit, toplam <strong>4 eşit taksit</strong> halinde
+          ödenecektir.
+        </p>
+      </div>
     </div>
   )
 }
@@ -366,10 +456,10 @@ function Satir({
   )
 }
 
-function Kutucuk({ etiket }: { etiket: string }) {
+function Kutucuk({ etiket, kalin }: { etiket: string; kalin?: boolean }) {
   return (
-    <span className="flex items-center gap-1.5">
-      <span className="inline-block h-4 w-4 border border-slate-600" />
+    <span className={`flex items-center gap-1.5 ${kalin ? 'text-sm font-bold' : ''}`}>
+      <span className="inline-block h-4 w-4 shrink-0 border border-slate-600" />
       {etiket}
     </span>
   )
