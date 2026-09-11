@@ -6,11 +6,7 @@ import { useMemo, useState, useTransition } from 'react'
 import { aramaEslesir } from '@/lib/arama'
 import { AY_ADLARI } from '@/lib/format'
 
-import {
-  okulYokIsaretle,
-  okulYokKaldir,
-  type OkulsuzGun,
-} from '../okulsuz-actions'
+import { menuGunuAc, menuGunuKapat, type OkulsuzGun } from '../okulsuz-actions'
 
 import { menuKaydet, type MenuDurumu, type MenuGunGirdisi } from './actions'
 
@@ -82,7 +78,7 @@ export function MenuEkrani({
   ay: number
   menu: MenuGunu[]
   havuz: HavuzKaydi[]
-  /** Bu ayın "okul yok" günleri — resmi tatil, gezi */
+  /** Bu menünün bu aydaki kapalı günleri — resmi tatil, bu menüyü yiyen yerlerin gezisi */
   okulsuz: OkulsuzGun[]
 }) {
   const router = useRouter()
@@ -209,7 +205,9 @@ export function MenuEkrani({
   }, [okulsuz])
 
   /**
-   * Bir günü kapatır.
+   * Bir günü kapatır — yalnız bu menüyü yiyen hizmet yerlerinde. Önce bütün
+   * yerler için tek kayıt yazılıyordu: AHMET MİTHAT menüsünde kapatılan ya da
+   * açılan gün GÖKSU'yu da değiştiriyordu.
    *
    * Menü satırı silinmez: yazdığınız yemek dursun ki tatil geri alınırsa
    * yeniden yazmayın. Kapalı gün afişte ve maliyet tablosunda menü yerine
@@ -219,14 +217,24 @@ export function MenuEkrani({
     const sebep = window.prompt('Neden okul yok? (resmi tatil, gezi…)', 'Resmi tatil')
     if (sebep === null) return
     basla(async () => {
-      setDurum(await okulYokIsaretle(tarih, null, sebep))
+      setDurum(await menuGunuKapat(listeId, tarih, sebep))
       router.refresh()
     })
   }
 
-  function okulVar(id: string) {
+  /** Günü bu menüde yeniden açar. Resmi tatilse tatil diğer yerlerde sürer. */
+  function okulVar(kapali: OkulsuzGun) {
+    if (
+      kapali.hizmet_noktasi_id === null &&
+      !window.confirm(
+        `${kapali.sebep || 'Bu gün'} tüm yerlerde kapalı. Yalnız bu menüyü yiyen yerlerde açılacak; ` +
+          'diğer okul ve yerlerde kapalı kalır. Devam edilsin mi?',
+      )
+    ) {
+      return
+    }
     basla(async () => {
-      setDurum(await okulYokKaldir(id))
+      setDurum(await menuGunuAc(listeId, kapali.tarih))
       router.refresh()
     })
   }
@@ -366,6 +374,9 @@ export function MenuEkrani({
                       <td colSpan={ALANLAR.length} className="text-sm text-solgun">
                         <span className="rozet bg-slate-200 text-slate-700">okul yok</span>
                         {kapali.sebep && <span className="ml-2">{kapali.sebep}</span>}
+                        {kapali.hizmet_noktasi_id === null && (
+                          <span className="ml-2 text-xs text-violet-700">tüm yerler</span>
+                        )}
                         {doluMu && (
                           <span className="ml-3 text-xs line-through">
                             {ALANLAR.map((a) => (g[a.anahtar] as string) ?? '')
@@ -377,10 +388,10 @@ export function MenuEkrani({
                       <td className="text-right">
                         <button
                           type="button"
-                          onClick={() => okulVar(kapali.id)}
+                          onClick={() => okulVar(kapali)}
                           disabled={kaydediliyor}
                           className="rounded px-2 py-1 text-xs text-vurgu hover:bg-blue-50"
-                          title="Bu günü yeniden aç"
+                          title="Bu günü bu menüde yeniden aç"
                         >
                           Geri al
                         </button>
@@ -460,7 +471,7 @@ export function MenuEkrani({
                         onClick={() => okulYok(g.tarih)}
                         disabled={kaydediliyor}
                         className="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
-                        title="Resmi tatil / gezi — bu gün tüm hizmet yerlerinde kapalı sayılır"
+                        title="Resmi tatil / gezi — bu gün yalnız bu menüyü yiyen yerlerde kapalı sayılır"
                       >
                         Okul yok
                       </button>
@@ -481,10 +492,11 @@ export function MenuEkrani({
         </p>
         <p className="text-xs text-solgun">
           <strong>Okul yok</strong> resmi tatil ve gezi günleri içindir; kaydet demeye
-          gerek kalmadan hemen işlenir. İşaretli gün <strong>tüm hizmet yerlerinde</strong>{' '}
-          kapalı sayılır: kâr/zarar tablosunda görünmez ve genel giderin bölündüğü iş
-          günü sayısından düşer. Tek bir yerde gezi varsa işareti{' '}
-          <strong>Maliyet → Kâr/Zarar</strong> ekranından o yere koyun.
+          gerek kalmadan hemen işlenir. İşaretli gün <strong>yalnız bu menüyü yiyen</strong>{' '}
+          hizmet yerlerinde kapalı sayılır; diğer menüler ve okullar etkilenmez. Kapalı
+          gün kâr/zarar tablosunda görünmez ve genel giderin bölündüğü iş günü sayısından
+          düşer. <strong>Tüm yerler</strong> yazan resmi tatili burada geri alırsanız
+          yalnız bu menüde açılır, diğer yerlerde tatil sürer.
         </p>
       </div>
     </div>

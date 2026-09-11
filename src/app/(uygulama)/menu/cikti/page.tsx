@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import { YazdirButonu } from '@/components/Yazdir'
 import { AY_ADLARI } from '@/lib/format'
+import { listeKapaliGunleri } from '@/lib/okulsuz'
 import { supabaseServer } from '@/lib/supabase/server'
 
 import { AfisIndir } from './AfisIndir'
@@ -42,7 +43,7 @@ export default async function MenuCiktiPage({
   const bas = `${yil}-${String(ay).padStart(2, '0')}-01`
   const bit = `${yil}-${String(ay).padStart(2, '0')}-${new Date(yil, ay, 0).getDate()}`
 
-  const [{ data }, { data: okulsuzVeri }] = await Promise.all([
+  const [{ data }, okulsuzVeri] = await Promise.all([
     supabase
       .from('menu_gunleri')
       .select('tarih, corba, ana_yemek, yardimci, ek')
@@ -50,21 +51,12 @@ export default async function MenuCiktiPage({
       .gte('tarih', bas)
       .lte('tarih', bit)
       .order('tarih'),
-    supabase
-      .from('okulsuz_gunler')
-      .select('tarih, sebep')
-      .is('hizmet_noktasi_id', null)
-      .gte('tarih', bas)
-      .lte('tarih', bit),
+    // Bu menünün kapalı günleri: başka okulun kapalı günü bu afişe düşmez
+    listeKapaliGunleri(supabase, liste.id, bas, bit),
   ])
 
   // tarih → menü ekranında o güne girilen açıklama; afişte kartın içinde yazar
-  const kapali = new Map(
-    ((okulsuzVeri ?? []) as { tarih: string; sebep: string | null }[]).map((o) => [
-      o.tarih,
-      o.sebep?.trim() || null,
-    ]),
-  )
+  const kapali = new Map(okulsuzVeri.map((o) => [o.tarih, o.sebep?.trim() || null]))
   const gunler = afisGunleri((data ?? []) as AfisGunu[], kapali)
   const dortSatir = (liste.satir_sayisi ?? 4) >= 4
 

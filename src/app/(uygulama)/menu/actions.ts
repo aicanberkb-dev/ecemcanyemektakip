@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 
+import { listeKapaliGunleri } from '@/lib/okulsuz'
 import { supabaseServer } from '@/lib/supabase/server'
 
 export type MenuDurumu = { hata?: string; basari?: string }
@@ -135,15 +136,15 @@ export async function menuKopyala(
   const iki = (n: number) => String(n).padStart(2, '0')
   const gunSayisi = new Date(hedefYil, hedefAy, 0).getDate()
 
-  // Tatil gününe menü yazma: sömestrin ortasına yemek listesi düşmesin
-  const { data: tatilVeri } = await supabase
-    .from('okulsuz_gunler')
-    .select('tarih')
-    .is('hizmet_noktasi_id', null)
-    .gte('tarih', `${hedefYil}-${iki(hedefAy)}-01`)
-    .lte('tarih', `${hedefYil}-${iki(hedefAy)}-${gunSayisi}`)
-
-  const tatiller = new Set(((tatilVeri ?? []) as { tarih: string }[]).map((t) => t.tarih))
+  // Kapalı güne menü yazma: sömestrin ortasına yemek listesi düşmesin. Hedef
+  // listenin kapalı günleri: resmi tatil ya da o listeyi yiyen yerlerde kapalı gün.
+  const tatilVeri = await listeKapaliGunleri(
+    supabase,
+    hedefListeId,
+    `${hedefYil}-${iki(hedefAy)}-01`,
+    `${hedefYil}-${iki(hedefAy)}-${iki(gunSayisi)}`,
+  )
+  const tatiller = new Set(tatilVeri.map((t) => t.tarih))
 
   const ayniAy = kaynakYil === hedefYil && kaynakAy === hedefAy
   if (ayniAy && kaynakListeId === hedefListeId) {

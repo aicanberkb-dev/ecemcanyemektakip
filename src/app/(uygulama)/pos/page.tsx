@@ -1,6 +1,7 @@
 import { aktifOkul } from '@/lib/okul'
 import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { taksitHaritasi } from '@/lib/taksit-sunucu'
+import { okulKapaliGunleri } from '@/lib/okulsuz'
 import { supabaseServer } from '@/lib/supabase/server'
 
 import { PosEkrani } from './PosEkrani'
@@ -26,12 +27,8 @@ export default async function PosPage() {
   ])
 
   // Bugun resmi tatil / ara tatil mi? Yemek kaydi girilebilir ama uyarilir.
-  const { data: tatil } = await supabase
-    .from('okulsuz_gunler')
-    .select('sebep')
-    .is('hizmet_noktasi_id', null)
-    .eq('tarih', bugun)
-    .maybeSingle()
+  // Genel tatil ya da bu okula özel kapalı gün (diğer okulunki değil)
+  const tatil = (await okulKapaliGunleri(supabase, okul.id, bugun, bugun))[0] ?? null
 
   const tarife = data as { taban_gunluk_ucret: number } | null
   const ucretliVarsayilan = Number(tarife?.taban_gunluk_ucret ?? 0)

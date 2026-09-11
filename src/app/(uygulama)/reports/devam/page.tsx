@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import { AY_ADLARI } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
+import { okulKapaliGunleri } from '@/lib/okulsuz'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { DevamSatiri } from '@/lib/types'
 
@@ -27,16 +28,12 @@ export default async function DevamPage({
   const ayBas = `${yil}-${iki(ay)}-01`
   const ayBit = `${yil}-${iki(ay)}-${new Date(yil, ay, 0).getDate()}`
 
-  const [{ data, error }, { data: sinifSatirlari }, { data: tatilVeri }] = await Promise.all([
+  const [{ data, error }, { data: sinifSatirlari }, tatilVeri] = await Promise.all([
     supabase.rpc('devam_cizelgesi', { p_okul_id: okul.id, p_yil: yil, p_ay: ay }),
     supabase.from('students').select('sinif').eq('okul_id', okul.id).not('sinif', 'is', null),
-    // Tatil günleri sayımdan muaf: o gün gelmemek devamsızlık değil
-    supabase
-      .from('okulsuz_gunler')
-      .select('tarih, sebep')
-      .is('hizmet_noktasi_id', null)
-      .gte('tarih', ayBas)
-      .lte('tarih', ayBit),
+    // Tatil günleri sayımdan muaf: o gün gelmemek devamsızlık değil. Genel
+    // tatil ya da bu okula özel kapalı gün.
+    okulKapaliGunleri(supabase, okul.id, ayBas, ayBit),
   ])
 
   // Ay ve yıl sunucudan gelir (veriyi onlar belirler); sınıf ve arama

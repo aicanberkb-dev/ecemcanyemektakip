@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { YazdirButonu } from '@/components/Yazdir'
 import { AY_ADLARI } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
+import { okulKapaliGunleri } from '@/lib/okulsuz'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { StudentBalance } from '@/lib/types'
 
@@ -34,16 +35,15 @@ export default async function YoklamaPage({
 
   // Tatil günleri yoklama kâğıdında da kapalı görünsün; öğretmen o güne
   // yanlışlıkla işaret koymasın.
-  const { data: tatilVeri } = await supabase
-    .from('okulsuz_gunler')
-    .select('tarih')
-    .is('hizmet_noktasi_id', null)
-    .gte('tarih', `${yil}-${iki(ay)}-01`)
-    .lte('tarih', `${yil}-${iki(ay)}-${new Date(yil, ay, 0).getDate()}`)
-
-  const tatilGunleri = new Set(
-    ((tatilVeri ?? []) as { tarih: string }[]).map((t) => Number(t.tarih.slice(8, 10))),
+  // Genel tatil ya da bu okula özel kapalı gün
+  const tatilVeri = await okulKapaliGunleri(
+    supabase,
+    okul.id,
+    `${yil}-${iki(ay)}-01`,
+    `${yil}-${iki(ay)}-${new Date(yil, ay, 0).getDate()}`,
   )
+
+  const tatilGunleri = new Set(tatilVeri.map((t) => Number(t.tarih.slice(8, 10))))
 
   const { data } = await supabase
     .from('student_balances')

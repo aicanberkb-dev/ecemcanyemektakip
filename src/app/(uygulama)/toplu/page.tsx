@@ -1,6 +1,7 @@
 
 import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { aktifOkul } from '@/lib/okul'
+import { okulKapaliGunleri } from '@/lib/okulsuz'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { StudentBalance } from '@/lib/types'
 
@@ -37,7 +38,7 @@ export default async function TopluPage({
 
   const supabase = await supabaseServer()
 
-  const [{ data: ogrenciVeri }, { data: kayitliVeri }, { data: tatil }] = await Promise.all([
+  const [{ data: ogrenciVeri }, { data: kayitliVeri }, tatilListesi] = await Promise.all([
     supabase
       .from('student_balances')
       .select('*')
@@ -51,14 +52,10 @@ export default async function TopluPage({
       .eq('students.okul_id', okul.id)
       .eq('tarih', gun)
       .not('ogun_abone_tipi', 'is', null),
-    // Seçili gün resmi tatil / ara tatil mi?
-    supabase
-      .from('okulsuz_gunler')
-      .select('sebep')
-      .is('hizmet_noktasi_id', null)
-      .eq('tarih', gun)
-      .maybeSingle(),
+    // Seçili gün resmi tatil / ara tatil ya da bu okula özel kapalı gün mü?
+    okulKapaliGunleri(supabase, okul.id, gun, gun),
   ])
+  const tatil = tatilListesi[0] ?? null
 
   const kayitli = new Set(
     ((kayitliVeri ?? []) as { student_id: string }[]).map((k) => k.student_id),

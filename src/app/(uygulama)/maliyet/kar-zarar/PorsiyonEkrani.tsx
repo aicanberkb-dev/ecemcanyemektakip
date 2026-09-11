@@ -359,9 +359,11 @@ export function PorsiyonEkrani({
     })
   }
 
+  // Resmi tatil (genel kayıt) burada geri alınırsa yalnız bu yer açılır;
+  // öbür yerlerde tatil sürer.
   function okulVar(id: string) {
     basla(async () => {
-      setDurum(await okulYokKaldir(id))
+      setDurum(await okulYokKaldir(id, [noktaId]))
       router.refresh()
     })
   }
