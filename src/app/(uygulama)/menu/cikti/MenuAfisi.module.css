@@ -149,9 +149,25 @@
   gap: 0.5cqw;
 }
 
+/* Her kalemin başında yuvarlak nokta: kalemler birbirinden ayrı okunur.
+   Renkli afişte sarı, siyah-beyazda siyah (--accent). Nokta ilk satırın
+   ortasına hizalı; iki satıra taşan yemekte de başta durur. */
 .kart li {
+  position: relative;
+  padding-left: 1.5cqw;
   font: 500 1.38cqw/1.2 var(--fb);
   color: var(--muted);
+}
+
+.kart li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: calc(0.6em - 0.35cqw);
+  width: 0.7cqw;
+  height: 0.7cqw;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .kart li.ana {
