@@ -14,11 +14,14 @@ import {
   type TaksitIstisnaDurumu,
 } from './taksit-actions'
 
+/** Vade sırasına göre taksit adı: 1. Taksit, 2. Taksit… */
+const sirayaGoreAd = (sira: number) => `${sira}. Taksit`
+
 export function TaksitBolumu({
   studentId,
   sezonId,
   sezonAdi,
-  satirlar,
+  satirlar: hamSatirlar,
 }: {
   studentId: string
   sezonId: string
@@ -31,6 +34,11 @@ export function TaksitBolumu({
     ekleEylem,
     {} as TaksitIstisnaDurumu,
   )
+
+  // Taksitler vadeye göre sıralanır ve adını sırası verir. Adlar önce plandan ya
+  // da elle yazılıyordu: bir öğrencide vadeler öne alınınca "2. Taksit" "1.
+  // Taksit"in önüne düşüyor, liste 2-1-3 diye okunuyordu.
+  const satirlar = [...hamSatirlar].sort((a, b) => a.vade_tarihi.localeCompare(b.vade_tarihi))
 
   const toplam = satirlar.reduce((t, s) => t + Number(s.tutar), 0)
   const okulSatirlari = satirlar.filter((s) => !s.ekstra)
@@ -45,6 +53,8 @@ export function TaksitBolumu({
         Okul planı varsayılan gelir. Bir tutarı veya tarihi değiştirirsen{' '}
         <strong className="text-metin">yalnızca o satır</strong> bu öğrenciye özel olur.
         Veliyle daha fazla taksite anlaşıldıysa aşağıdan yeni taksit ekleyebilirsin.
+        Taksitler vade tarihine göre sıralanır ve <strong className="text-metin">numarasını
+        sistem verir</strong>.
       </p>
 
       {satirlar.length === 0 ? (
@@ -65,11 +75,12 @@ export function TaksitBolumu({
               </tr>
             </thead>
             <tbody>
-              {satirlar.map((s) => (
+              {satirlar.map((s, i) => (
                 <TaksitSatiri
                   key={s.taksit_plani_id ?? s.istisna_id}
                   studentId={studentId}
                   satir={s}
+                  ad={sirayaGoreAd(i + 1)}
                 />
               ))}
             </tbody>
@@ -95,11 +106,8 @@ export function TaksitBolumu({
 
       {ekleAcik ? (
         <form action={ekleGonder} className="flex flex-wrap items-end gap-3 rounded-md border border-cizgi bg-slate-50 p-3">
-          <div>
-            <label className="etiket text-xs">Taksit adı</label>
-            <input name="ad" placeholder="ör. 4. Taksit" className="girdi !py-1.5" required />
-            {ekleDurum.alanlar?.ad && <p className="hata">{ekleDurum.alanlar.ad}</p>}
-          </div>
+          {/* Ad elle yazılmaz: kayıtta bir ad gerekiyor, ekranda sırası gösterilir */}
+          <input type="hidden" name="ad" value={sirayaGoreAd(satirlar.length + 1)} />
           <div>
             <label className="etiket text-xs">Vade</label>
             <input type="date" name="vade_tarihi" className="girdi !py-1.5" required />
@@ -136,7 +144,11 @@ export function TaksitBolumu({
           >
             Vazgeç
           </button>
+          {ekleDurum.alanlar?.ad && <p className="hata w-full">{ekleDurum.alanlar.ad}</p>}
           {ekleDurum.hata && <p className="hata w-full">{ekleDurum.hata}</p>}
+          <p className="w-full text-xs text-solgun">
+            Taksit numarası vade tarihine göre otomatik verilir.
+          </p>
         </form>
       ) : (
         <button type="button" onClick={() => setEkleAcik(true)} className="btn-ikincil">
@@ -150,9 +162,12 @@ export function TaksitBolumu({
 function TaksitSatiri({
   studentId,
   satir,
+  ad,
 }: {
   studentId: string
   satir: OgrenciTaksitSatiri
+  /** Vade sırasına göre verilen ad */
+  ad: string
 }) {
   const [duzenle, setDuzenle] = useState(false)
   const [siliniyor, setSiliniyor] = useState(false)
@@ -172,14 +187,9 @@ function TaksitSatiri({
       <tr className="bg-blue-50/40">
         <td colSpan={5} className="px-3 py-3">
           <form action={gonder} className="flex flex-wrap items-end gap-3">
-            {satir.ekstra ? (
-              <div>
-                <label className="etiket text-xs">Taksit adı</label>
-                <input name="ad" defaultValue={satir.ad} className="girdi !py-1.5" />
-              </div>
-            ) : (
-              <div className="font-medium">{satir.ad}</div>
-            )}
+            {/* Ad elle değiştirilmez; numarayı vade sırası verir */}
+            {satir.ekstra && <input type="hidden" name="ad" value={satir.ad || ad} />}
+            <div className="font-medium">{ad}</div>
             <div>
               <label className="etiket text-xs">Vade</label>
               <input
@@ -224,11 +234,10 @@ function TaksitSatiri({
               Vazgeç
             </button>
             {durum.hata && <p className="hata w-full">{durum.hata}</p>}
-            {!satir.ekstra && (
-              <p className="w-full text-xs text-solgun">
-                Okul planındaki değerlerle aynı bırakırsan istisna kaldırılır.
-              </p>
-            )}
+            <p className="w-full text-xs text-solgun">
+              Vadeyi değiştirirsen taksit numaraları yeni sıraya göre güncellenir.
+              {!satir.ekstra && ' Okul planındaki değerlerle aynı bırakırsan istisna kaldırılır.'}
+            </p>
           </form>
         </td>
       </tr>
@@ -238,7 +247,7 @@ function TaksitSatiri({
   return (
     <tr className={ozel || satir.ekstra ? 'bg-amber-50/50' : ''}>
       <td className="font-medium">
-        {satir.ad}
+        {ad}
         {satir.aciklama && (
           <span className="ml-2 text-xs font-normal text-solgun">({satir.aciklama})</span>
         )}
@@ -284,8 +293,8 @@ function TaksitSatiri({
               disabled={siliniyor}
               onClick={async () => {
                 const soru = satir.ekstra
-                  ? `"${satir.ad}" taksiti bu öğrenciden silinsin mi?`
-                  : `"${satir.ad}" okul planına döndürülsün mü?`
+                  ? `"${ad}" bu öğrenciden silinsin mi?`
+                  : `"${ad}" okul planına döndürülsün mü?`
                 if (!confirm(soru)) return
                 setSiliniyor(true)
                 try {
