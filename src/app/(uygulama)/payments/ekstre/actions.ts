@@ -117,7 +117,8 @@ export async function ekstreCozumle(
     mevcutTahsilatlar,
     satirlar: satirlar.map((s) => ({
       ...s,
-      adaylar: adaylariBul(s.gonderen, veliler),
+      // Çift taraflı: veli adı gönderende, öğrenci adı açıklamanın tamamında aranır
+      adaylar: adaylariBul(s.gonderen, s.aciklama, veliler),
       zatenVar: mevcutAnahtar.has(`${s.fisNo}|${s.tarih}|${s.tutar}`),
     })),
   }

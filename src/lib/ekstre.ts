@@ -133,21 +133,33 @@ export function ekstreOku(dosya: Uint8Array): EkstreSatiri[] {
   return sonuc
 }
 
+/**
+ * Önerinin neden yapıldığı:
+ *   veli-ogrenci — gönderen kayıtlı veli ve açıklamada öğrencinin adı geçiyor
+ *   ogrenci      — açıklamada öğrencinin adı geçiyor, gönderen kayıtlı veli değil
+ *   veli         — yalnız veli adı tuttu; velinin başka çocuğu da olabilir
+ */
+export type EslesmeTuru = 'veli-ogrenci' | 'ogrenci' | 'veli'
+
 export type EslesmeAdayi = {
   studentId: string
   ogrenciNo: string
   adSoyad: string
   sinif: string | null
-  /** Hangi alandan eşleşti */
-  kaynak: 'veli' | 'veli2'
+  eslesme: EslesmeTuru
+  /** Veli adı hangi alandan tuttu; yalnız öğrenci adıyla eşleştiyse null */
+  kaynak: 'veli' | 'veli2' | null
+  /** Ana veride kayıtlı, eşleşen veli adı; veli tutmadıysa null */
+  veliAdi: string | null
   /**
-   * Ana veride kayıtlı veli adı.
+   * Ekranda "Gönderen" sütununa yazılacak ad.
    *
    * Bankanın gönderen alanı veli adının ardına öğrenci adını ve 'YEMEK' gibi
-   * açıklamaları ekliyor. Ekranda bu karışık metni değil, sistemde kayıtlı
-   * temiz adı göstermek için taşınıyor.
+   * açıklamaları ekliyor. Veli tuttuysa kayıtlı temiz veli adı; tutmadıysa
+   * gönderen metninden öğrencinin adı çıkarılmış hâli — çocuğun adı gönderen
+   * sütununda görünmesin.
    */
-  veliAdi: string
+  gonderenAdi: string
 }
 
 export type VeliKaydi = {
@@ -159,61 +171,156 @@ export type VeliKaydi = {
   veli2Adi: string | null
 }
 
+const kelimeler = (normal: string) => normal.split(' ').filter(Boolean)
+
 /**
- * Gönderen adını öğrenci listesiyle eşleştirir.
- *
- * Ayıklanan gönderen adı çoğu zaman veli adından uzundur: ekstrede veli adının
- * hemen ardından öğrenci adı da büyük harfle yazılabiliyor ("FATMA SOKUR KAĞAN
- * SOKUR"). Bu yüzden karşılaştırma veli adının gönderen metnini kapsamasına
- * değil, gönderen metninin veli adıyla başlamasına bakar.
- *
- * Üç kademe, ilk dolu olan döner:
- *   1. birebir aynı
- *   2. gönderen, veli adıyla başlıyor (veli adı en az iki kelime olmalı —
- *      tek kelimelik ad yanlış eşleşme üretir)
- *   3. veli adının tüm kelimeleri gönderen metninde geçiyor (sıra önemsiz)
- *
- * Birden fazla aday çıkarsa hepsi döner; seçimi kullanıcı yapar.
+ * Veli adının gönderenle ne kadar tuttuğu: 3 birebir, 2 gönderen veli adıyla
+ * başlıyor, 1 veli adının tüm kelimeleri gönderende geçiyor, 0 tutmuyor.
+ * Tek kelimelik veli adı 3 dışında sayılmaz — yanlış eşleşme üretir.
  */
-export function adaylariBul(gonderen: string, ogrenciler: VeliKaydi[]): EslesmeAdayi[] {
-  const hedef = adNormalle(gonderen)
-  if (!hedef) return []
-  const hedefKelimeler = hedef.split(' ').filter(Boolean)
+function veliDerecesi(veliNormal: string, gonderenNormal: string, metin: string): number {
+  if (!veliNormal) return 0
+  if (veliNormal === gonderenNormal) return 3
+  const k = kelimeler(veliNormal)
+  if (k.length < 2) return 0
+  if (gonderenNormal.startsWith(veliNormal + ' ') || metin.startsWith(veliNormal + ' ')) return 2
+  const g = kelimeler(gonderenNormal)
+  if (k.every((p) => g.includes(p))) return 1
+  return 0
+}
 
-  const tam: EslesmeAdayi[] = []
-  const baslangic: EslesmeAdayi[] = []
-  const kismi: EslesmeAdayi[] = []
+/**
+ * Öğrencinin adı açıklamada geçiyor mu? Adın tamamı ya da ilk ve son kelimesi
+ * (ikinci ad yazılmamış olabilir: "Eymen Demir") geçmeli.
+ */
+function ogrenciAdiGeciyor(adSoyad: string, metin: string): boolean {
+  const k = kelimeler(adNormalle(adSoyad))
+  if (k.length < 2) return false
+  const m = ` ${metin} `
+  if (m.includes(` ${k.join(' ')} `)) return true
+  return m.includes(` ${k[0]} `) && m.includes(` ${k[k.length - 1]} `)
+}
 
-  for (const o of ogrenciler) {
-    for (const [alan, ad] of [
-      ['veli', o.veliAdi],
-      ['veli2', o.veli2Adi],
-    ] as const) {
-      if (!ad) continue
-      const n = adNormalle(ad)
-      if (!n) continue
-      const nKelimeler = n.split(' ').filter(Boolean)
+/**
+ * Gönderen metninden öğrencinin adını çıkarır.
+ *
+ * Yalnız adın art arda geçtiği yer silinir (tam ad ya da ad + soyad). Tek
+ * başına soyad silinmez: dede "HASAN DEMİR" gönderdiğinde çocuğun soyadı
+ * aynı diye gönderen "HASAN"a düşmesin.
+ */
+function ogrenciAdiniCikar(gonderen: string, adSoyad: string): string {
+  const ham = gonderen.split(/\s+/).filter(Boolean)
+  const normal = ham.map((k) => adNormalle(k))
+  const ad = kelimeler(adNormalle(adSoyad))
+  if (ad.length < 2) return gonderen
 
-      const aday: EslesmeAdayi = {
-        studentId: o.studentId,
-        ogrenciNo: o.ogrenciNo,
-        adSoyad: o.adSoyad,
-        sinif: o.sinif,
-        kaynak: alan,
-        veliAdi: ad,
-      }
-
-      if (n === hedef) {
-        tam.push(aday)
-      } else if (nKelimeler.length > 1 && hedef.startsWith(n + ' ')) {
-        baslangic.push(aday)
-      } else if (nKelimeler.length > 1 && nKelimeler.every((p) => hedefKelimeler.includes(p))) {
-        kismi.push(aday)
+  const aranan = [ad, [ad[0], ad[ad.length - 1]]]
+  for (const dizi of aranan) {
+    for (let i = 0; i + dizi.length <= normal.length; i++) {
+      if (dizi.every((k, j) => normal[i + j] === k)) {
+        const kalan = [...ham.slice(0, i), ...ham.slice(i + dizi.length)].join(' ')
+        return kalan || gonderen
       }
     }
   }
+  return gonderen
+}
 
-  if (tam.length > 0) return tam
-  if (baslangic.length > 0) return baslangic
-  return kismi
+/**
+ * Ödemeyi öğrencilerle eşleştirir — çift taraflı.
+ *
+ * Açıklamada genelde hem veli hem çocuk adı yazıyor ("ÖZGÜR SARIKAYA ENES
+ * SARIKAYA", "UFUK GÜL Çisem gül yemek ücreti"). Önce yalnız veli adına
+ * bakılıyordu: aynı velinin iki çocuğu ayırt edilemiyor, gönderen metnindeki
+ * çocuk adı veli sanılabiliyordu. Artık iki taraf da kontrol edilir ve en
+ * güçlü kademe döner:
+ *   1. veli adı tuttu VE açıklamada öğrencinin adı geçiyor
+ *   2. açıklamada öğrencinin adı geçiyor (gönderen kayıtlı veli değil: amca,
+ *      dede, başka hesap)
+ *   3. yalnız veli adı tuttu (en iyi veli derecesindekiler)
+ *
+ * Aynı kademede birden çok öğrenci dönebilir: bir veli iki çocuğu için tek
+ * havale gönderip ikisinin adını yazmışsa ikisi de önerilir.
+ *
+ * Öğrenci adı aranırken tutan veli adları açıklamadan çıkarılır: velinin
+ * adıyla aynı adı taşıyan başka bir öğrenci yanlışlıkla "adı geçiyor"
+ * sayılmasın.
+ */
+export function adaylariBul(
+  gonderen: string,
+  aciklama: string,
+  ogrenciler: VeliKaydi[],
+): EslesmeAdayi[] {
+  const gonderenNormal = adNormalle(gonderen)
+  const metinHam = adNormalle(aciklama).replace(/^gond /, '')
+  if (!gonderenNormal && !metinHam) return []
+
+  // 1. tur: her öğrencinin en iyi veli eşleşmesi
+  const veliler = ogrenciler.map((o) => {
+    let derece = 0
+    let kaynak: 'veli' | 'veli2' | null = null
+    let ad: string | null = null
+    for (const [alan, veliAdi] of [
+      ['veli', o.veliAdi],
+      ['veli2', o.veli2Adi],
+    ] as const) {
+      if (!veliAdi) continue
+      const d = veliDerecesi(adNormalle(veliAdi), gonderenNormal, metinHam)
+      if (d > derece) {
+        derece = d
+        kaynak = alan
+        ad = veliAdi
+      }
+    }
+    return { derece, kaynak, ad }
+  })
+
+  // Tutan veli adlarını açıklamadan birer kez çıkar
+  let metin = ` ${metinHam} `
+  for (const v of new Set(veliler.filter((v) => v.derece >= 2).map((v) => adNormalle(v.ad!)))) {
+    metin = metin.replace(` ${v} `, ' ')
+  }
+  metin = metin.trim()
+
+  // 2. tur: adaylar
+  const adaylar: (EslesmeAdayi & { veliDerece: number })[] = []
+  ogrenciler.forEach((o, i) => {
+    const v = veliler[i]
+    const adGeciyor = ogrenciAdiGeciyor(o.adSoyad, metin)
+    if (v.derece === 0 && !adGeciyor) return
+
+    adaylar.push({
+      studentId: o.studentId,
+      ogrenciNo: o.ogrenciNo,
+      adSoyad: o.adSoyad,
+      sinif: o.sinif,
+      eslesme: adGeciyor && v.derece > 0 ? 'veli-ogrenci' : adGeciyor ? 'ogrenci' : 'veli',
+      kaynak: v.kaynak,
+      veliAdi: v.ad,
+      gonderenAdi: v.ad ?? ogrenciAdiniCikar(gonderen, o.adSoyad),
+      veliDerece: v.derece,
+    })
+  })
+
+  // Sıralama için tutulan veli derecesi dışarı verilmez
+  const temizle = (liste: typeof adaylar): EslesmeAdayi[] =>
+    liste.map((a) => ({
+      studentId: a.studentId,
+      ogrenciNo: a.ogrenciNo,
+      adSoyad: a.adSoyad,
+      sinif: a.sinif,
+      eslesme: a.eslesme,
+      kaynak: a.kaynak,
+      veliAdi: a.veliAdi,
+      gonderenAdi: a.gonderenAdi,
+    }))
+
+  const ikisi = adaylar.filter((a) => a.eslesme === 'veli-ogrenci')
+  if (ikisi.length > 0) return temizle(ikisi)
+
+  const adla = adaylar.filter((a) => a.eslesme === 'ogrenci')
+  if (adla.length > 0) return temizle(adla)
+
+  const enIyi = Math.max(0, ...adaylar.map((a) => a.veliDerece))
+  return temizle(adaylar.filter((a) => a.veliDerece === enIyi))
 }

@@ -13,10 +13,12 @@ export default async function EkstrePage() {
   if (!okul) return null
 
   const supabase = await supabaseServer()
-  // kalan: bölüştürme yaparken hangi kardeşin ne kadar borcu olduğu görünsün
+  // kalan: bölüştürme yaparken hangi kardeşin ne kadar borcu olduğu görünsün.
+  // Veli adları: kardeş bağı kurulmamış ama aynı veliye kayıtlı çocuklar da
+  // "kardeşi" diye gösterilsin.
   const { data } = await supabase
     .from('student_balances')
-    .select('student_id, ogrenci_no, ad_soyad, sinif, kardes_grup_id, kalan')
+    .select('student_id, ogrenci_no, ad_soyad, sinif, kardes_grup_id, kalan, veli_adi, veli2_adi')
     .eq('okul_id', okul.id)
     .eq('aktif', true)
     .order('ogrenci_no')
@@ -29,6 +31,8 @@ export default async function EkstrePage() {
       sinif: string | null
       kardes_grup_id: string | null
       kalan: number | string
+      veli_adi: string | null
+      veli2_adi: string | null
     }[]
   ).map((o) => ({
     id: o.student_id,
@@ -37,6 +41,8 @@ export default async function EkstrePage() {
     sinif: o.sinif,
     kardes_grup_id: o.kardes_grup_id,
     kalan: Number(o.kalan),
+    veli_adi: o.veli_adi,
+    veli2_adi: o.veli2_adi,
   }))
 
   const gecmis = await aktarimGecmisi(okul.id)
