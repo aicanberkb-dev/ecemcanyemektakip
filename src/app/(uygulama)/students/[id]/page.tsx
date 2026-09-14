@@ -27,10 +27,10 @@ export default async function OgrenciDetayPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ sezon?: string }>
+  searchParams: Promise<{ sezon?: string; yeni?: string; onizleme?: string }>
 }) {
   const { id } = await params
-  const { sezon: sezonQ } = await searchParams
+  const { sezon: sezonQ, yeni, onizleme } = await searchParams
   const supabase = await supabaseServer()
   const okulId = await aktifOkulId()
 
@@ -107,6 +107,27 @@ export default async function OgrenciDetayPage({
       <Link href="/students" className="text-sm text-vurgu hover:underline">
         ← Öğrenciler
       </Link>
+
+      {/* Yeni kayıttan sonra: kesin numara. Formdaki numara tahmindi; aynı
+          anda başka bilgisayarda kayıt yapıldıysa o numarayı öbür kayıt almıştır. */}
+      {yeni === '1' &&
+        (onizleme && onizleme !== ozet.ogrenci_no ? (
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
+            <p className="text-base font-bold">
+              Öğrenci <span className="tabular-nums">{ozet.ogrenci_no}</span> numarasıyla
+              kaydedildi — formda görünen {onizleme} değil.
+            </p>
+            <p className="mt-1 text-sm">
+              {onizleme} numarasını aynı anda başka bir bilgisayardan yapılan kayıt aldı.
+              Kâğıda numara yazdıysanız <strong>{ozet.ogrenci_no}</strong> olarak düzeltin.
+            </p>
+          </div>
+        ) : (
+          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-base text-emerald-900">
+            Öğrenci <strong className="tabular-nums">{ozet.ogrenci_no}</strong> numarasıyla
+            kaydedildi.
+          </p>
+        ))}
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>

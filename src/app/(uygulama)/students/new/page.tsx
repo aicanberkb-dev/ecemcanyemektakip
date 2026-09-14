@@ -28,9 +28,10 @@ export default async function YeniOgrenciPage() {
         <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
       </div>
       <p className="text-sm text-solgun">
-        Öğrenci <strong>{okul.ad}</strong> kaydına{' '}
-        <strong className="tabular-nums">{sonrakiNo ?? '—'}</strong> numarasıyla
-        eklenecek. Farklı okula eklemek için üst bardan okulu değiştirin.
+        Öğrenci <strong>{okul.ad}</strong> kaydına eklenecek. Sıradaki numara şu an{' '}
+        <strong className="tabular-nums">{sonrakiNo ?? '—'}</strong>; kesin numara
+        kaydedince verilir ve öğrenci sayfasında yazar. Farklı okula eklemek için üst
+        bardan okulu değiştirin.
       </p>
       <OgrenciFormu
         eylem={ogrenciEkle}

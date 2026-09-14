@@ -37,14 +37,22 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
   return (
     <form key={durum.deneme ?? 0} action={gonder} className="kart space-y-5 p-6">
       <div className="grid gap-4 sm:grid-cols-2">
-        {/* Numarayı sistem verir; elle değiştirilemez ki numara düzeni bozulmasın */}
+        {/* Numarayı sistem verir; elle değiştirilemez ki numara düzeni bozulmasın.
+            Yeni kayıtta gösterilen numara tahmin: kesin numara kayıt anında verilir.
+            İki bilgisayar aynı anda kayıt açınca ikisi de aynı tahmini görür;
+            ikincisi bir sonraki numarayı alır, öğrenci sayfası bunu söyler. */}
         <Alan ad="ogrenci_no_gosterim" etiket="Öğrenci No">
           <div className="girdi flex items-center justify-between bg-slate-100 text-slate-600">
             <span className="font-medium tabular-nums">
               {ogrenci?.ogrenci_no ?? sonrakiNo ?? '—'}
             </span>
-            <span className="text-xs">otomatik</span>
+            <span className="text-xs">
+              {ogrenci ? 'otomatik' : 'tahmini · kaydedince kesinleşir'}
+            </span>
           </div>
+          {!ogrenci && sonrakiNo && (
+            <input type="hidden" name="onizleme_no" value={sonrakiNo} />
+          )}
         </Alan>
 
         <Alan ad="ad_soyad" etiket="Ad Soyad *" hata={h.ad_soyad}>

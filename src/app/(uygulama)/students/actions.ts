@@ -179,7 +179,12 @@ export async function ogrenciEkle(
   if (error) return girilenle(onceki, formData, { hata: hataMesaji(error.message) })
 
   revalidatePath('/students')
-  redirect(`/students/${(data as { id: string }).id}`)
+  // Öğrenci sayfası verilen numarayı öne çıkarır; formda başka numara
+  // görünüyorduysa (aynı anda başka bilgisayarda kayıt) uyarır.
+  const onizleme = String(formData.get('onizleme_no') ?? '').replace(/\D/g, '')
+  redirect(
+    `/students/${(data as { id: string }).id}?yeni=1${onizleme ? `&onizleme=${onizleme}` : ''}`,
+  )
 }
 
 export async function ogrenciGuncelle(
