@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import { AboneRozeti } from '@/components/Rozetler'
+import { AboneRozeti, DenemeRozeti } from '@/components/Rozetler'
 import { para, tarih as tarihBicim, tarihSaat } from '@/lib/format'
 import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { aktifOkul } from '@/lib/okul'
@@ -9,7 +9,9 @@ import type { GunSonu, SerbestOgun, Transaction } from '@/lib/types'
 
 export const metadata = { title: 'Gün Sonu — Yemek Takip' }
 
-type Yiyen = Transaction & { students: { ad_soyad: string; ogrenci_no: string; sinif: string | null } | null }
+type Yiyen = Transaction & {
+  students: { ad_soyad: string; ogrenci_no: string; sinif: string | null; deneme: boolean } | null
+}
 
 export default async function GunSonuPage({
   searchParams,
@@ -28,7 +30,7 @@ export default async function GunSonuPage({
     supabase.rpc('gun_sonu', { p_okul_id: okul.id, p_tarih: gun }),
     supabase
       .from('transactions')
-      .select('*, students!inner(ad_soyad, ogrenci_no, sinif, okul_id)')
+      .select('*, students!inner(ad_soyad, ogrenci_no, sinif, deneme, okul_id)')
       .eq('students.okul_id', okul.id)
       .eq('tarih', gun)
       .not('ogun_abone_tipi', 'is', null)
@@ -153,6 +155,7 @@ export default async function GunSonuPage({
                     >
                       {y.students?.ad_soyad ?? '—'}
                     </Link>
+                    <DenemeRozeti deneme={y.students?.deneme} />
                   </td>
                   <td>{y.students?.sinif ?? '—'}</td>
                   <td>{y.ogun_abone_tipi && <AboneRozeti tip={y.ogun_abone_tipi} />}</td>

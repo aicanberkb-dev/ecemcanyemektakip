@@ -60,6 +60,22 @@ export function OgrenciTipiRozeti({
   )
 }
 
+/**
+ * Deneme öğrencisi rozeti. Yalnız işaretliyse görünür; öğrencilerin çoğu
+ * deneme değil, her satıra rozet koymak ekranı kalabalıklaştırır.
+ */
+export function DenemeRozeti({ deneme }: { deneme: boolean | null | undefined }) {
+  if (!deneme) return null
+  return (
+    <span
+      className="rozet ml-1 bg-orange-100 text-orange-800"
+      title="Deneme öğrencisi — öğrenci ana verisinde işaretli"
+    >
+      Deneme
+    </span>
+  )
+}
+
 export function DurumRozeti({ aktif }: { aktif: boolean }) {
   return aktif ? (
     <span className="rozet bg-emerald-100 text-emerald-800">Aktif</span>

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
 import { AramaKutusu } from '@/components/AramaKutusu'
+import { DenemeRozeti } from '@/components/Rozetler'
 import { aramaEslesir } from '@/lib/arama'
 import { para } from '@/lib/format'
 
@@ -17,6 +18,8 @@ export type BorcluSatiri = {
   veli_telefon: string | null
   gunluk_ucret: number
   borc: number
+  /** Deneme öğrencisi: adın yanında rozet */
+  deneme: boolean
 }
 
 export function BorcluListesi({
@@ -142,6 +145,7 @@ export function BorcluListesi({
                   >
                     {o.ad_soyad}
                   </Link>
+                  <DenemeRozeti deneme={o.deneme} />
                 </td>
                 <td>{o.sinif ?? '—'}</td>
                 <td>{o.veli_adi ?? '—'}</td>

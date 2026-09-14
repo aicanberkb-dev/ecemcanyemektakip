@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
 import { AramaKutusu } from '@/components/AramaKutusu'
-import { Bakiye, DurumRozeti, OgrenciTipiRozeti } from '@/components/Rozetler'
+import { Bakiye, DenemeRozeti, DurumRozeti, OgrenciTipiRozeti } from '@/components/Rozetler'
 import { TaksitRozeti, type TaksitBilgisi } from '@/components/TaksitRozeti'
 import { aramaEslesir } from '@/lib/arama'
 import { para } from '@/lib/format'
@@ -30,6 +30,8 @@ export type OgrenciSatiri = {
   abone_tipi: AboneTipi
   ogrenci_tipi: OgrenciTipi
   aktif: boolean
+  /** Deneme öğrencisi: adın yanında rozet */
+  deneme: boolean
   alinan_para: number
   harcanan: number
   kalan: number
@@ -239,6 +241,7 @@ function AdHucresi({
       >
         {ogrenci.ad_soyad}
       </Link>
+      <DenemeRozeti deneme={ogrenci.deneme} />
       {grup && (
         <span
           className="rozet ml-2 bg-violet-100 text-violet-800"

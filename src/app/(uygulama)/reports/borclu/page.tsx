@@ -47,6 +47,7 @@ export default async function BorcluPage() {
     veli_telefon: o.veli_telefon,
     gunluk_ucret: Number(o.gunluk_ucret),
     borc: Math.abs(Number(o.kalan)),
+    deneme: o.deneme,
   }))
 
   const siniflar = [

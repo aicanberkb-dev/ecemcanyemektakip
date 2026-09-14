@@ -4,6 +4,7 @@ import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { CiktiBasligi } from '@/components/CiktiBasligi'
 import { SezonUyarisi } from '@/components/SezonUyarisi'
 import { YazdirButonu } from '@/components/Yazdir'
+import { denemeIdleri } from '@/lib/deneme-sunucu'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
 import { sezonSec } from '@/lib/sezon'
@@ -192,7 +193,7 @@ export default async function TaksitPage({
             hesaplama o öğrencinin kendi planı üzerinden yapılır.
           </p>
 
-          <TaksitListesi satirlar={satirlar} />
+          <TaksitListesi satirlar={satirlar} denemeIdleri={await denemeIdleri(okul.id)} />
 
           <p className="yazdirma-gizle text-xs text-solgun">
             Kümülatif hesap: vadesi gelen taksitlerin toplamı, yıl içinde yapılan tüm

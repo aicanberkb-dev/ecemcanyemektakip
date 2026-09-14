@@ -79,6 +79,15 @@ const ogrenciSemasi = z.object({
     message: 'Öğrenci tipi seçin.',
   }),
   aktif: trBoolean,
+  // Onay kutusu işaretsizse formda hiç gönderilmez: yokluğu "hayır" demek.
+  deneme: z
+    .string()
+    .optional()
+    .transform((d) => d === 'true'),
+  ozel_not: z
+    .string()
+    .optional()
+    .transform((d) => (d?.trim() ? d.trim() : null)),
 })
 
 /**
@@ -174,6 +183,8 @@ export async function ogrenciEkle(
     p_veli2_adi: g.veli2_adi,
     p_veli2_telefon: g.veli2_telefon,
     p_ogrenci_tipi: g.ogrenci_tipi,
+    p_deneme: g.deneme,
+    p_ozel_not: g.ozel_not,
   })
 
   if (error) return girilenle(onceki, formData, { hata: hataMesaji(error.message) })
@@ -235,7 +246,7 @@ export async function ogrenciGuncelle(
 
   revalidatePath('/students')
   revalidatePath(`/students/${id}`)
-  revalidatePath('/reports')
+  revalidatePath('/reports', 'layout')
   redirect(`/students/${id}`)
 }
 

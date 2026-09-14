@@ -4,12 +4,20 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
 import { AramaKutusu } from '@/components/AramaKutusu'
-import { OgrenciTipiRozeti } from '@/components/Rozetler'
+import { DenemeRozeti, OgrenciTipiRozeti } from '@/components/Rozetler'
 import { aramaEslesir } from '@/lib/arama'
 import { para } from '@/lib/format'
 import { OGRENCI_TIPI_ADLARI, type OgrenciTipi, type TaksitDurumu } from '@/lib/types'
 
-export function TaksitListesi({ satirlar }: { satirlar: TaksitDurumu[] }) {
+export function TaksitListesi({
+  satirlar,
+  denemeIdleri = [],
+}: {
+  satirlar: TaksitDurumu[]
+  /** Deneme öğrencilerinin id'leri: adın yanında rozet */
+  denemeIdleri?: string[]
+}) {
+  const denemeler = useMemo(() => new Set(denemeIdleri), [denemeIdleri])
   const [arama, setArama] = useState('')
   const [seciliId, setSeciliId] = useState<string | null>(null)
   const [tip, setTip] = useState<OgrenciTipi | ''>('')
@@ -136,6 +144,7 @@ export function TaksitListesi({ satirlar }: { satirlar: TaksitDurumu[] }) {
                   >
                     {s.ad_soyad}
                   </Link>
+                  <DenemeRozeti deneme={denemeler.has(s.student_id)} />
                   {s.ozel_plan && (
                     <span
                       className="rozet ml-2 bg-amber-100 text-amber-800"

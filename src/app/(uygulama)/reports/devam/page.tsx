@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { AY_ADLARI } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
 import { okulKapaliGunleri } from '@/lib/okulsuz'
+import { denemeIdleri } from '@/lib/deneme-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { DevamSatiri } from '@/lib/types'
 
@@ -108,6 +109,7 @@ export default async function DevamPage({
 
       <DevamTablosu
         satirlar={satirlar}
+        denemeIdleri={await denemeIdleri(okul.id)}
         siniflar={siniflar}
         yil={yil}
         gunler={gunler}

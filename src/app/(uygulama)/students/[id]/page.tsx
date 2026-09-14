@@ -2,7 +2,13 @@ import Link from 'next/link'
 import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { notFound } from 'next/navigation'
 
-import { AboneRozeti, Bakiye, DurumRozeti, OgrenciTipiRozeti } from '@/components/Rozetler'
+import {
+  AboneRozeti,
+  Bakiye,
+  DenemeRozeti,
+  DurumRozeti,
+  OgrenciTipiRozeti,
+} from '@/components/Rozetler'
 import { para } from '@/lib/format'
 import { aktifOkulId } from '@/lib/okul'
 import { sezonSec } from '@/lib/sezon'
@@ -138,6 +144,7 @@ export default async function OgrenciDetayPage({
             <AboneRozeti tip={ozet.abone_tipi} />
             <OgrenciTipiRozeti tip={ozet.ogrenci_tipi} sinif={ozet.sinif} />
             <DurumRozeti aktif={ozet.aktif} />
+            <DenemeRozeti deneme={ozet.deneme} />
           </p>
         </div>
         <div className="flex gap-2">
@@ -149,6 +156,16 @@ export default async function OgrenciDetayPage({
           </form>
         </div>
       </div>
+
+      {/* Özel not: ana veride serbest metin; satır sonları korunur */}
+      {ozet.ozel_not && (
+        <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3">
+          <p className="text-xs font-semibold tracking-wide text-yellow-900 uppercase">
+            Özel Not
+          </p>
+          <p className="mt-1 text-sm whitespace-pre-wrap text-metin">{ozet.ozel_not}</p>
+        </div>
+      )}
 
       {/* Cari özet */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

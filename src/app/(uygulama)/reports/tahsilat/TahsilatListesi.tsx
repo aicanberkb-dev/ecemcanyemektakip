@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
 import { AramaKutusu } from '@/components/AramaKutusu'
+import { DenemeRozeti } from '@/components/Rozetler'
 import { aramaEslesir } from '@/lib/arama'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import { ODEME_YONTEMI_ADLARI, type OdemeYontemi } from '@/lib/types'
@@ -18,6 +19,8 @@ export type TahsilatSatiri = {
   ad_soyad: string
   ogrenci_no: string
   sinif: string | null
+  /** Deneme öğrencisi: adın yanında rozet */
+  deneme: boolean
 }
 
 export function TahsilatListesi({ kayitlar }: { kayitlar: TahsilatSatiri[] }) {
@@ -147,6 +150,7 @@ export function TahsilatListesi({ kayitlar }: { kayitlar: TahsilatSatiri[] }) {
                     >
                       {k.ad_soyad}
                     </Link>
+                    <DenemeRozeti deneme={k.deneme} />
                   </td>
                   <td>{k.sinif ?? '—'}</td>
                   <td>

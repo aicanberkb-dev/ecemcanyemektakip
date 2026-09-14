@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
 import { AramaKutusu } from '@/components/AramaKutusu'
+import { DenemeRozeti } from '@/components/Rozetler'
 import { aramaEslesir } from '@/lib/arama'
 import { para } from '@/lib/format'
 import type { DevamSatiri } from '@/lib/types'
@@ -22,12 +23,15 @@ type Ipucu = {
 
 export function DevamTablosu({
   satirlar,
+  denemeIdleri = [],
   siniflar,
   yil,
   gunler,
   kapaliGunler,
 }: {
   satirlar: DevamSatiri[]
+  /** Deneme öğrencilerinin id'leri: adın yanında rozet */
+  denemeIdleri?: string[]
   siniflar: string[]
   yil: number
   gunler: number[]
@@ -39,6 +43,7 @@ export function DevamTablosu({
   const [ipucu, setIpucu] = useState<Ipucu | null>(null)
 
   const kapali = useMemo(() => new Set(kapaliGunler), [kapaliGunler])
+  const denemeler = useMemo(() => new Set(denemeIdleri), [denemeIdleri])
 
   const suzulmus = useMemo(
     () =>
@@ -142,6 +147,7 @@ export function DevamTablosu({
                     >
                       {s.ad_soyad}
                     </Link>
+                    <DenemeRozeti deneme={denemeler.has(s.student_id)} />
                     <span className="ml-2 text-xs text-solgun">{s.sinif ?? ''}</span>
                   </td>
                   {gunler.map((g) => {

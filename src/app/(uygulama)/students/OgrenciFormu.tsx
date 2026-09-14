@@ -165,6 +165,39 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
         </Alan>
       </div>
 
+      {/* Deneme işareti ve özel not. İşaret varsayılan olarak kapalı: kullanıcı
+          bilerek işaretler. Hata sonrası form yeniden kurulurken girilen değer
+          korunur; işaretsiz kutu formda gönderilmediği için girilen değerlerde
+          yokluğu "hayır" demek. */}
+      <div className="grid gap-4 border-t border-cizgi pt-5 sm:grid-cols-[auto_1fr]">
+        <label className="flex h-fit cursor-pointer items-start gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2.5">
+          <input
+            type="checkbox"
+            name="deneme"
+            value="true"
+            defaultChecked={g ? g.deneme === 'true' : (ogrenci?.deneme ?? false)}
+            className="mt-0.5 size-4 accent-orange-600"
+          />
+          <span className="leading-tight">
+            <span className="block text-sm font-semibold text-orange-900">Deneme öğrencisi</span>
+            <span className="block text-xs text-orange-800">
+              İşaretlenirse raporlarda &quot;Deneme&quot; rozetiyle görünür.
+            </span>
+          </span>
+        </label>
+
+        <Alan ad="ozel_not" etiket="Özel Not" hata={h.ozel_not}>
+          <textarea
+            id="ozel_not"
+            name="ozel_not"
+            rows={3}
+            defaultValue={ilk('ozel_not', metin(ogrenci?.ozel_not))}
+            placeholder="Bu öğrenciyle ilgili hatırlanması gereken her şey: alerji, veliyle yapılan anlaşma, özel durum…"
+            className="girdi resize-y"
+          />
+        </Alan>
+      </div>
+
       {benzerler.length > 0 && <MukerrerUyarisi benzerler={benzerler} />}
 
       {durum.hata && (

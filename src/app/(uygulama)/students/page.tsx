@@ -41,6 +41,7 @@ export default async function StudentsPage() {
     abone_tipi: o.abone_tipi,
     ogrenci_tipi: o.ogrenci_tipi,
     aktif: o.aktif,
+    deneme: o.deneme,
     alinan_para: Number(o.alinan_para),
     harcanan: Number(o.harcanan),
     kalan: Number(o.kalan),

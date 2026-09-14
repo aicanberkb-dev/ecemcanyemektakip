@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-import { AboneRozeti, OgrenciTipiRozeti } from '@/components/Rozetler'
+import { AboneRozeti, DenemeRozeti, OgrenciTipiRozeti } from '@/components/Rozetler'
 import { AY_ADLARI, GUN_KISALTMA } from '@/lib/format'
 import { aktifOkulId } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
@@ -67,6 +67,7 @@ export default async function DevamOgrenciPage({
             {ogrenci.sinif && <span>· {ogrenci.sinif}</span>}
             <AboneRozeti tip={ogrenci.abone_tipi} />
             <OgrenciTipiRozeti tip={ogrenci.ogrenci_tipi} sinif={ogrenci.sinif} />
+            <DenemeRozeti deneme={ogrenci.deneme} />
           </p>
         </div>
         <form className="flex items-end gap-2">

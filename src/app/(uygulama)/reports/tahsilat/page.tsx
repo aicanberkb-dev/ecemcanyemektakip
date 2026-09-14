@@ -14,7 +14,7 @@ type Ham = {
   tutar: number | string
   aciklama: string | null
   odeme_yontemi: OdemeYontemi | null
-  students: { ad_soyad: string; ogrenci_no: string; sinif: string | null } | null
+  students: { ad_soyad: string; ogrenci_no: string; sinif: string | null; deneme: boolean } | null
 }
 
 export default async function TahsilatPage({
@@ -33,7 +33,7 @@ export default async function TahsilatPage({
 
   const { data, error } = await supabase
     .from('transactions')
-    .select('id, student_id, tarih, tutar, aciklama, odeme_yontemi, students!inner(ad_soyad, ogrenci_no, sinif, okul_id)')
+    .select('id, student_id, tarih, tutar, aciklama, odeme_yontemi, students!inner(ad_soyad, ogrenci_no, sinif, deneme, okul_id)')
     .eq('students.okul_id', okul.id)
     .eq('tip', 'tahsilat')
     .gte('tarih', bas)
@@ -53,6 +53,7 @@ export default async function TahsilatPage({
     ad_soyad: k.students?.ad_soyad ?? '—',
     ogrenci_no: k.students?.ogrenci_no ?? '',
     sinif: k.students?.sinif ?? null,
+    deneme: k.students?.deneme ?? false,
   }))
 
   return (

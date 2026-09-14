@@ -71,11 +71,19 @@ export type Student = {
   abone_tipi: AboneTipi
   ogrenci_tipi: OgrenciTipi
   aktif: boolean
+  /** Deneme süresindeki öğrenci; raporlarda rozetle görünür */
+  deneme: boolean
+  /** Serbest metin özel not */
+  ozel_not: string | null
   created_at: string
   updated_at: string
 }
 
 export type StudentBalance = {
+  /** Deneme süresindeki öğrenci; raporlarda rozetle görünür */
+  deneme: boolean
+  /** Serbest metin özel not */
+  ozel_not: string | null
   student_id: string
   okul_id: string
   ogrenci_no: string

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { CiktiBasligi } from '@/components/CiktiBasligi'
+import { DenemeRozeti } from '@/components/Rozetler'
 import { TarihAraligi } from '@/components/TarihAraligi'
 import { YazdirButonu } from '@/components/Yazdir'
 import { para, tarih as tarihBicim } from '@/lib/format'
@@ -15,7 +16,7 @@ type Iade = {
   tarih: string
   tutar: number | string
   aciklama: string | null
-  students: { ad_soyad: string; ogrenci_no: string; abone_tipi: string } | null
+  students: { ad_soyad: string; ogrenci_no: string; abone_tipi: string; deneme: boolean } | null
 }
 
 /**
@@ -52,7 +53,7 @@ export default async function IadelerPage({
 
   const { data, error } = await supabase
     .from('transactions')
-    .select('id, tarih, tutar, aciklama, students!inner(ad_soyad, ogrenci_no, abone_tipi, okul_id)')
+    .select('id, tarih, tutar, aciklama, students!inner(ad_soyad, ogrenci_no, abone_tipi, deneme, okul_id)')
     .eq('tip', 'iade')
     .eq('students.okul_id', okul.id)
     .gte('tarih', bas)
@@ -113,7 +114,10 @@ export default async function IadelerPage({
               <tr key={i.id}>
                 <td className="whitespace-nowrap">{tarihBicim(i.tarih)}</td>
                 <td className="tabular-nums text-solgun">{i.students?.ogrenci_no ?? '—'}</td>
-                <td className="font-medium">{i.students?.ad_soyad ?? '—'}</td>
+                <td className="font-medium">
+                  {i.students?.ad_soyad ?? '—'}
+                  <DenemeRozeti deneme={i.students?.deneme} />
+                </td>
                 <td className="text-solgun">
                   {i.students?.abone_tipi === 'aylik' ? 'Aylıkçı' : 'Günlükçü'}
                 </td>

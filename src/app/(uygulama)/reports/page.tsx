@@ -1,8 +1,9 @@
 import Link from 'next/link'
 
-import { AboneRozeti, Bakiye, OgrenciTipiRozeti } from '@/components/Rozetler'
+import { AboneRozeti, Bakiye, DenemeRozeti, OgrenciTipiRozeti } from '@/components/Rozetler'
 import { TaksitRozeti } from '@/components/TaksitRozeti'
 import { TarihAraligi } from '@/components/TarihAraligi'
+import { denemeIdleri } from '@/lib/deneme-sunucu'
 import { ayBasiISO, para } from '@/lib/format'
 import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { aktifOkul } from '@/lib/okul'
@@ -25,12 +26,15 @@ export default async function ReportsPage({
   const okul = await aktifOkul()
   if (!okul) return null
 
-  const [{ data, error }, { data: sinifSatirlari }, taksitler] = await Promise.all([
+  const [{ data, error }, { data: sinifSatirlari }, taksitler, denemeListesi] = await Promise.all([
     supabase.rpc('gelen_giden_raporu', { p_okul_id: okul.id, p_bas: bas, p_bit: bit }),
     supabase.from('students').select('sinif').eq('okul_id', okul.id).not('sinif', 'is', null),
     // Aylıkçının bakiyesi ödeme durumunu göstermez; ölçü taksit planı
     taksitHaritasi(okul.id),
+    // Deneme öğrencileri adın yanında rozetle görünür
+    denemeIdleri(okul.id),
   ])
+  const denemeler = new Set(denemeListesi)
 
   let satirlar = (data ?? []) as GelenGidenSatiri[]
   if (sinif) satirlar = satirlar.filter((s) => s.sinif === sinif)
@@ -131,6 +135,7 @@ export default async function ReportsPage({
                   >
                     {s.ad_soyad}
                   </Link>
+                  <DenemeRozeti deneme={denemeler.has(s.student_id)} />
                 </td>
                 <td>{s.sinif ?? '—'}</td>
                 <td className="whitespace-nowrap">
