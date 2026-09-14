@@ -11,15 +11,22 @@ export async function genelModu(): Promise<boolean> {
   return (await cookies()).get(OKUL_CEREZI)?.value === GENEL
 }
 
-/** Tüm okullar, sıra numarasına göre. */
+/**
+ * Tüm okullar, sıra numarasına göre.
+ *
+ * Sorgu hata verirse boş liste dönmez, hata fırlatır: boş liste "okul tanımlı
+ * değil" ekranını açıyordu, oysa okullar duruyordu, yalnız veritabanına o an
+ * ulaşılamamıştı.
+ */
 export async function okullar(): Promise<Okul[]> {
   const supabase = await supabaseServer()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('okullar')
     .select('*')
     .eq('aktif', true)
     .order('sira')
     .order('ad')
+  if (error) throw new Error(`Veritabanına ulaşılamadı: ${error.message}`)
   return (data ?? []) as Okul[]
 }
 

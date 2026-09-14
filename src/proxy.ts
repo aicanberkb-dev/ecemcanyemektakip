@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 import { GENEL, genelYolMu, OKUL_CEREZI } from '@/lib/okul-sabitler'
+import { dayanikliFetch } from '@/lib/supabase/dayanikli-fetch'
 
 const HERKESE_ACIK = ['/login', '/auth']
 
@@ -12,6 +13,8 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // Oturum kontrolü (GET /auth/v1/user) ara ara düşüp giriş ekranına atıyordu
+      global: { fetch: dayanikliFetch },
       cookies: {
         getAll() {
           return request.cookies.getAll()

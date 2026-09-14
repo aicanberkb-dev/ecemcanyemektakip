@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
+import { dayanikliFetch } from './dayanikli-fetch'
+
 export async function supabaseServer() {
   const cookieStore = await cookies()
 
@@ -8,6 +10,8 @@ export async function supabaseServer() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // Ara ara düşen okuma isteklerini tekrar dener (bkz. dayanikli-fetch)
+      global: { fetch: dayanikliFetch },
       cookies: {
         getAll() {
           return cookieStore.getAll()
