@@ -51,6 +51,14 @@ export function adNormalle(metin: string): string {
  * öğrenci adı/açıklaması karışık yazımdadır.
  */
 export function gonderenAyikla(aciklama: string): string {
+  // Ziraat içi havalede düzen ters: önce açıklama (çoğu zaman çocuğun adı),
+  // gönderen en sonda — "Emir Yusuf Mimir 5/A yemekhane ucreti EBRU BAYSAL
+  // MİMİR Ziraat Mobil Havale". Baştan okununca çocuğun adı gönderen sanılıyordu.
+  if (!/^\s*Gönd\s*:/i.test(aciklama) && /\sZiraat\b/i.test(aciklama)) {
+    const sondaki = sondakiBuyukHarfliAd(aciklama.replace(/\s+Ziraat\b[\s\S]*$/i, ''))
+    if (sondaki) return sondaki
+  }
+
   const bas = aciklama.replace(/^\s*Gönd\s*:\s*/i, '')
   // Banka kodu (0067-...) ve sonrasını at
   const bankasiz = bas.split(/\s\d{4}-/)[0] ?? bas
@@ -178,12 +186,39 @@ const kelimeler = (normal: string) => normal.split(' ').filter(Boolean)
  * başlıyor, 1 veli adının tüm kelimeleri gönderende geçiyor, 0 tutmuyor.
  * Tek kelimelik veli adı 3 dışında sayılmaz — yanlış eşleşme üretir.
  */
+/**
+ * Metnin sonundaki tamamı büyük harfli kelimeler (en çok 4): Ziraat içi
+ * havalede gönderenin adı. İki kelimeden kısaysa ad sayılmaz. Banka adı iki
+ * kez yazabiliyor ("ŞERMİN OFLUOĞLU ŞERMİN OFLUOĞLU"); tekrar bir kez alınır.
+ */
+function sondakiBuyukHarfliAd(metin: string): string {
+  const parcalar = metin.trim().split(/\s+/)
+  const ad: string[] = []
+  for (let i = parcalar.length - 1; i >= 0 && ad.length < 4; i--) {
+    const harfli = parcalar[i].replace(/[^\p{L}]/gu, '')
+    if (!harfli || harfli !== harfli.toLocaleUpperCase('tr')) break
+    ad.unshift(harfli)
+  }
+  if (ad.length < 2) return ''
+  const yari = ad.length / 2
+  if (
+    ad.length % 2 === 0 &&
+    ad.slice(0, yari).every((k, j) => adNormalle(k) === adNormalle(ad[yari + j]))
+  ) {
+    return ad.slice(0, yari).join(' ')
+  }
+  return ad.join(' ')
+}
+
 function veliDerecesi(veliNormal: string, gonderenNormal: string, metin: string): number {
   if (!veliNormal) return 0
   if (veliNormal === gonderenNormal) return 3
   const k = kelimeler(veliNormal)
   if (k.length < 2) return 0
   if (gonderenNormal.startsWith(veliNormal + ' ') || metin.startsWith(veliNormal + ' ')) return 2
+  // Kayıtlı veli adı açıklamanın herhangi bir yerinde tam olarak geçiyor
+  // (Ziraat içi havalede gönderen sonda yazıyor)
+  if (` ${metin} `.includes(` ${veliNormal} `)) return 2
   const g = kelimeler(gonderenNormal)
   if (k.every((p) => g.includes(p))) return 1
   return 0
