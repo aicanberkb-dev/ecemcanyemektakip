@@ -7,6 +7,8 @@ import { okulKapaliGunleri } from '@/lib/okulsuz'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { StudentBalance } from '@/lib/types'
 
+import { YoklamaKagidi, YoklamaSayfaAyari } from './YoklamaKagidi'
+
 export const metadata = { title: '1. Sınıf Yoklama Çizelgesi — Yemek Takip' }
 
 /**
@@ -67,13 +69,6 @@ export default async function YoklamaPage({
     subeler.set(anahtar, liste)
   }
   const sirali = [...subeler.entries()].sort((a, b) => a[0].localeCompare(b[0], 'tr'))
-
-  const gunSayisi = new Date(yil, ay, 0).getDate()
-  const gunler = Array.from({ length: gunSayisi }, (_, i) => i + 1)
-  const kapali = (gun: number) => {
-    const g = new Date(yil, ay - 1, gun).getDay()
-    return g === 0 || g === 6 || tatilGunleri.has(gun)
-  }
 
   return (
     <div className="space-y-4">
@@ -138,74 +133,22 @@ export default async function YoklamaPage({
         )}
       </div>
 
-      {sirali.map(([sube, liste], i) => (
-        <section
-          key={sube}
-          className="kart p-4"
-          style={i === sirali.length - 1 ? undefined : { breakAfter: 'page' }}
-        >
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-3 border-b border-slate-400 pb-2">
-            <div className="flex items-baseline gap-3">
-              <span className="text-2xl font-black">{sube}</span>
-              <span className="text-sm font-semibold">YEMEK YOKLAMA ÇİZELGESİ</span>
-            </div>
-            <div className="text-right text-sm">
-              <div className="font-semibold">{okul.ad}</div>
-              <div>
-                {AY_ADLARI[ay - 1]} {yil} · {liste.length} öğrenci
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr>
-                  <th className="border border-slate-400 bg-slate-100 px-2 py-1 text-left">
-                    Öğrenci
-                  </th>
-                  {gunler.map((g) => (
-                    <th
-                      key={g}
-                      className={`w-6 border border-slate-400 px-0 py-1 text-center tabular-nums ${
-                        kapali(g) ? 'bg-slate-300 text-slate-500' : 'bg-slate-100'
-                      }`}
-                    >
-                      {g}
-                    </th>
-                  ))}
-                  <th className="border border-slate-400 bg-slate-100 px-2 py-1 text-center">
-                    Toplam
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {liste.map((o) => (
-                  <tr key={o.student_id}>
-                    <td className="border border-slate-400 px-2 py-1.5 whitespace-nowrap">
-                      {o.ad_soyad}
-                    </td>
-                    {gunler.map((g) => (
-                      <td
-                        key={g}
-                        className={`h-7 border border-slate-400 ${
-                          kapali(g) ? 'bg-slate-200' : ''
-                        }`}
-                      />
-                    ))}
-                    <td className="border border-slate-400" />
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-3 flex justify-between text-xs text-slate-600">
-            <span>Hafta sonları koyu renkli sütunlardır.</span>
-            <span>Görevli imza: ____________________</span>
-          </div>
-        </section>
-      ))}
+      {/* Yatay A4, her şube tek sayfa; ekranda da basıldığı boyutta görünür */}
+      <YoklamaSayfaAyari />
+      <div className="space-y-6 overflow-x-auto print:space-y-0 print:overflow-visible">
+        {sirali.map(([sube, liste], i) => (
+          <YoklamaKagidi
+            key={sube}
+            sube={sube}
+            okulAdi={okul.ad}
+            yil={yil}
+            ay={ay}
+            ogrenciler={liste}
+            kapaliGunler={[...tatilGunleri]}
+            sonMu={i === sirali.length - 1}
+          />
+        ))}
+      </div>
     </div>
   )
 }
