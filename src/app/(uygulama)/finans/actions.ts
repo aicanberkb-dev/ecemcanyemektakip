@@ -885,3 +885,42 @@ export async function giderSil(id: string): Promise<FinansDurumu> {
   tazele()
   return { basari: 'Gider silindi.' }
 }
+
+// ---------------------------------------------------------------------------
+// Artı / Eksi defteri
+// ---------------------------------------------------------------------------
+
+const artiEksiSemasi = z.object({
+  yon: z.enum(['arti', 'eksi']),
+  tarih: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih gerekli.'),
+  tutar: trSayi({ min: 0 }).refine((t) => t > 0, 'Tutar girin.'),
+  yontem: z.enum(['nakit', 'havale'], { message: 'Nakit ya da havale seçin.' }),
+  aciklama: bosNull,
+})
+
+/** id verilirse satırı günceller, verilmezse yeni satır ekler. */
+export async function artiEksiKaydet(
+  id: string | null,
+  veri: Record<string, string>,
+): Promise<FinansDurumu> {
+  const sonuc = artiEksiSemasi.safeParse(veri)
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const supabase = await supabaseServer()
+  const { error } = id
+    ? await supabase.from('arti_eksi').update(sonuc.data).eq('id', id)
+    : await supabase.from('arti_eksi').insert(sonuc.data)
+  if (error) return { hata: error.message }
+
+  revalidatePath('/finans/arti-eksi')
+  return { basari: id ? 'Kaydedildi.' : 'Eklendi.' }
+}
+
+export async function artiEksiSil(id: string): Promise<FinansDurumu> {
+  const supabase = await supabaseServer()
+  const { error } = await supabase.from('arti_eksi').delete().eq('id', id)
+  if (error) return { hata: error.message }
+
+  revalidatePath('/finans/arti-eksi')
+  return { basari: 'Silindi.' }
+}
