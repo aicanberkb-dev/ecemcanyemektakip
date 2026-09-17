@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useActionState, useEffect, useMemo, useState } from 'react'
 
-import { useBugun } from '@/components/BugunSaglayici'
+import { useBugun, useBugunTarihi } from '@/components/BugunSaglayici'
 import { OdemeYontemiSecici } from '@/components/OdemeYontemiSecici'
 import { OgrenciSecici, type SeciliOgrenci } from '@/components/OgrenciSecici'
 import { TaksitRozeti, type TaksitBilgisi } from '@/components/TaksitRozeti'
@@ -34,8 +34,10 @@ export function IslemFormu({
 
   const [ogrenci, setOgrenci] = useState<SeciliOgrenci | null>(baslangic)
   const [yontem, setYontem] = useState<OdemeYontemi | null>(null)
-  // Mükerrer kontrolü için tarih ve tutar kontrollü tutulur
-  const [tarih, setTarih] = useState(useBugun())
+  // Mükerrer kontrolü için tarih ve tutar kontrollü tutulur. Tarih bugünle
+  // gelir; sekme gece açık kalsa da ertesi gün kendiliğinden bugüne geçer.
+  const bugun = useBugun()
+  const [tarih, setTarih] = useBugunTarihi()
   const [tutar, setTutar] = useState('')
   const [durum, gonder, bekliyor] = useActionState(tahsilatEkle, {} as IslemDurumu)
 
@@ -79,6 +81,9 @@ export function IslemFormu({
       setOgrenci({ ...ogrenci, kalan: durum.yeniBakiye })
     }
     setTutar('')
+    // Her kayıttan sonra tarih yeniden bugün: elle değiştirilen tarih
+    // sonraki tahsilata taşınmasın
+    setTarih(bugun)
   }
   useEffect(() => {
     if (durum.zaman) router.refresh()

@@ -53,7 +53,7 @@ export default async function UygulamaLayout({
   const gorunum = gorunumCozumle((await cookies()).get(GORUNUM_CEREZI)?.value)
 
   return (
-    <BugunSaglayici bugun={bugun}>
+    <BugunSaglayici bugun={bugun} simulasyon={!!simulasyon}>
       <div data-tema={tema ?? undefined} data-orta={gorunum} className="contents">
         <YanSeritler tema={tema} okulAdi={aktif?.ad ?? ''} />
         {simulasyon && (

@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 
-import { useBugun } from '@/components/BugunSaglayici'
+import { useBugun, useBugunTarihi } from '@/components/BugunSaglayici'
 import { para, tarih as tarihBicim } from '@/lib/format'
 
 import { artiEksiKaydet, artiEksiSil, type FinansDurumu } from '../actions'
@@ -252,8 +252,17 @@ function YeniSatir({ yon }: { yon: Yon }) {
   const bugun = useBugun()
   const router = useRouter()
   const [bekliyor, baslat] = useTransition()
-  const bos: Taslak = { tarih: bugun, tutar: '', yontem: 'nakit', aciklama: '' }
-  const [taslak, setTaslak] = useState<Taslak>(bos)
+  const [tarih, setTarih] = useBugunTarihi()
+  const [kalan, setKalan] = useState<Omit<Taslak, 'tarih'>>({
+    tutar: '',
+    yontem: 'nakit',
+    aciklama: '',
+  })
+  const taslak: Taslak = { ...kalan, tarih }
+  const setTaslak = ({ tarih: yeniTarih, ...digerleri }: Taslak) => {
+    setTarih(yeniTarih)
+    setKalan(digerleri)
+  }
   const [durum, setDurum] = useState<FinansDurumu>({})
 
   function ekle(e: React.FormEvent) {
@@ -262,8 +271,8 @@ function YeniSatir({ yon }: { yon: Yon }) {
       const sonuc = await artiEksiKaydet(null, { yon, ...taslak })
       setDurum(sonuc)
       if (sonuc.basari) {
-        // Tarih ve yöntem kalsın: aynı günün satırları art arda girilir
-        setTaslak({ ...taslak, tutar: '', aciklama: '' })
+        // Tarih yeniden bugün, yöntem kalsın
+        setTaslak({ ...taslak, tarih: bugun, tutar: '', aciklama: '' })
         router.refresh()
       }
     })
