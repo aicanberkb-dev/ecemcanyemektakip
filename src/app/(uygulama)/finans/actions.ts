@@ -924,3 +924,44 @@ export async function artiEksiSil(id: string): Promise<FinansDurumu> {
   revalidatePath('/finans/arti-eksi')
   return { basari: 'Silindi.' }
 }
+
+// ---------------------------------------------------------------------------
+// Günlük defter — alışverişler, günlük gelen nakit; firma bazlı
+// ---------------------------------------------------------------------------
+
+const defterSemasi = z.object({
+  yon: z.enum(['arti', 'eksi']),
+  tarih: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih gerekli.'),
+  tutar: trSayi({ min: 0 }).refine((t) => t > 0, 'Tutar girin.'),
+  // Aynı firma farklı yazılışla ikiye bölünmesin: boşluklar sadeleşir,
+  // büyük harfe çevrilir
+  firma: bosNull.transform((f) => (f ? f.replace(/\s+/g, ' ').toLocaleUpperCase('tr') : null)),
+  aciklama: bosNull,
+})
+
+/** id verilirse satırı günceller, verilmezse yeni satır ekler. */
+export async function defterKaydet(
+  id: string | null,
+  veri: Record<string, string>,
+): Promise<FinansDurumu> {
+  const sonuc = defterSemasi.safeParse(veri)
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const supabase = await supabaseServer()
+  const { error } = id
+    ? await supabase.from('gunluk_defter').update(sonuc.data).eq('id', id)
+    : await supabase.from('gunluk_defter').insert(sonuc.data)
+  if (error) return { hata: error.message }
+
+  revalidatePath('/finans/defter')
+  return { basari: id ? 'Kaydedildi.' : 'Eklendi.' }
+}
+
+export async function defterSil(id: string): Promise<FinansDurumu> {
+  const supabase = await supabaseServer()
+  const { error } = await supabase.from('gunluk_defter').delete().eq('id', id)
+  if (error) return { hata: error.message }
+
+  revalidatePath('/finans/defter')
+  return { basari: 'Silindi.' }
+}
