@@ -20,13 +20,39 @@ export default async function UsersPage() {
     )
   }
 
-  const admin = supabaseAdmin()
+  // Kullanıcı listesi service_role anahtarını ister. Anahtar tanımsızsa
+  // istemci kurulurken hata fırlıyor ve ekran genel "Bağlantı kurulamadı"ya
+  // düşüyordu; sebebi burada açıkça yazmak gerekiyor.
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return (
+      <div className="kart space-y-2 p-6">
+        <h1 className="baslik">Kullanıcılar</h1>
+        <p className="text-sm text-red-700">
+          Kullanıcı yönetimi kapalı: sunucuda <strong>SUPABASE_SERVICE_ROLE_KEY</strong>{' '}
+          tanımlı değil.
+        </p>
+        <p className="text-sm text-solgun">
+          Vercel → Settings → Environment Variables bölümüne bu anahtarı ekleyip yeniden
+          yayınlamak gerekiyor. Anahtar Supabase → Project Settings → API Keys sayfasındaki{' '}
+          <em>service_role</em> değeri; gizlidir, kimseyle paylaşılmamalı.
+        </p>
+      </div>
+    )
+  }
+
   const supabase = await supabaseServer()
 
-  const [{ data: authVeri, error }, { data: profilVeri }] = await Promise.all([
-    admin.auth.admin.listUsers({ perPage: 200 }),
+  const [authSonuc, { data: profilVeri }] = await Promise.all([
+    supabaseAdmin()
+      .auth.admin.listUsers({ perPage: 200 })
+      .catch((e: unknown) => ({
+        data: null,
+        error: { message: e instanceof Error ? e.message : String(e) },
+      })),
     supabase.from('profiles').select('*'),
   ])
+  const authVeri = authSonuc.data
+  const error = authSonuc.error
 
   const profiller = new Map(
     ((profilVeri ?? []) as Profile[]).map((p) => [p.id, p]),
