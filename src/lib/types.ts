@@ -189,6 +189,7 @@ export type TaksitPlani = {
 export type Profile = {
   id: string
   rol: KullaniciRolu
+  okul_id: string | null
   ad_soyad: string | null
   created_at: string
   updated_at: string

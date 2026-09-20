@@ -45,15 +45,17 @@ export async function kullaniciEkle(
     sifre: z.string().min(8, 'Şifre en az 8 karakter olmalı.'),
     ad_soyad: z.string().trim().min(2, 'Ad soyad gerekli.'),
     rol: z.enum(['admin', 'personel']),
+    // Boş = kısıt yok: kullanıcı bütün okulları görür
+    okul_id: z.string().optional().transform((o) => (o ? o : null)),
   })
 
   const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
-  const { email, sifre, ad_soyad, rol } = sonuc.data
+  const { email, sifre, ad_soyad, rol, okul_id } = sonuc.data
   const admin = supabaseAdmin()
 
-  const { error } = await admin.auth.admin.createUser({
+  const { data: yeni, error } = await admin.auth.admin.createUser({
     email,
     password: sifre,
     email_confirm: true,
@@ -65,6 +67,17 @@ export async function kullaniciEkle(
       hata: error.message.includes('already been registered')
         ? 'Bu e-posta zaten kayıtlı.'
         : error.message,
+    }
+  }
+
+  // Profil satırını tetikleyici açıyor; okul bağı ayrıca yazılır
+  if (okul_id && yeni.user) {
+    const { error: okulHatasi } = await supabaseAdmin()
+      .from('profiles')
+      .update({ okul_id })
+      .eq('id', yeni.user.id)
+    if (okulHatasi) {
+      return { hata: `Kullanıcı açıldı ama okul bağlanamadı: ${okulHatasi.message}` }
     }
   }
 
@@ -83,6 +96,8 @@ export async function rolGuncelle(
   const sema = z.object({
     rol: z.enum(['admin', 'personel']),
     ad_soyad: z.string().trim().min(2, 'Ad soyad gerekli.'),
+    // Boş = kısıt yok: kullanıcı bütün okulları görür
+    okul_id: z.string().optional().transform((o) => (o ? o : null)),
   })
 
   const sonuc = sema.safeParse(Object.fromEntries(formData.entries()))
@@ -93,9 +108,11 @@ export async function rolGuncelle(
   const { error } = await supabase.from('profiles').update(sonuc.data).eq('id', userId)
   if (error) return { hata: error.message }
 
-  // auth metadata'yı da eşitle
+  // auth metadata'yı da eşitle (okul bağı yalnız profiles'ta durur)
   const admin = supabaseAdmin()
-  await admin.auth.admin.updateUserById(userId, { user_metadata: sonuc.data })
+  await admin.auth.admin.updateUserById(userId, {
+    user_metadata: { rol: sonuc.data.rol, ad_soyad: sonuc.data.ad_soyad },
+  })
 
   revalidatePath('/admin/users')
   return { basari: 'Kullanıcı güncellendi.' }

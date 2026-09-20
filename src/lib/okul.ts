@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { GENEL, OKUL_CEREZI } from '@/lib/okul-sabitler'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { Okul } from '@/lib/types'
+import { kisitliOkulId } from '@/lib/yetki'
 
 export { GENEL, GENEL_YOLLAR, genelYolMu, OKUL_CEREZI } from '@/lib/okul-sabitler'
 
@@ -20,14 +21,16 @@ export async function genelModu(): Promise<boolean> {
  */
 export async function okullar(): Promise<Okul[]> {
   const supabase = await supabaseServer()
-  const { data, error } = await supabase
-    .from('okullar')
-    .select('*')
-    .eq('aktif', true)
-    .order('sira')
-    .order('ad')
+  const [{ data, error }, kisit] = await Promise.all([
+    supabase.from('okullar').select('*').eq('aktif', true).order('sira').order('ad'),
+    kisitliOkulId(),
+  ])
   if (error) throw new Error(`Veritabanına ulaşılamadı: ${error.message}`)
-  return (data ?? []) as Okul[]
+
+  const liste = (data ?? []) as Okul[]
+  // Okula bağlı kullanıcı yalnız kendi okulunu görür: üst bardaki seçiciden
+  // öbür okula geçemesin. Veritabanı kuralları da aynı kısıtı uyguluyor.
+  return kisit ? liste.filter((o) => o.id === kisit) : liste
 }
 
 /**

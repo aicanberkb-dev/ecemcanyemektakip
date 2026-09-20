@@ -42,7 +42,7 @@ export default async function UsersPage() {
 
   const supabase = await supabaseServer()
 
-  const [authSonuc, { data: profilVeri }] = await Promise.all([
+  const [authSonuc, { data: profilVeri }, { data: okulVeri }] = await Promise.all([
     supabaseAdmin()
       .auth.admin.listUsers({ perPage: 200 })
       .catch((e: unknown) => ({
@@ -50,7 +50,9 @@ export default async function UsersPage() {
         error: { message: e instanceof Error ? e.message : String(e) },
       })),
     supabase.from('profiles').select('*'),
+    supabase.from('okullar').select('id, ad').eq('aktif', true).order('sira').order('ad'),
   ])
+  const okullar = (okulVeri ?? []) as { id: string; ad: string }[]
   const authVeri = authSonuc.data
   const error = authSonuc.error
 
@@ -69,6 +71,7 @@ export default async function UsersPage() {
         u.email ??
         '—',
       rol: profil?.rol ?? 'personel',
+      okulId: profil?.okul_id ?? null,
       sonGiris: u.last_sign_in_at ?? null,
       olusturma: u.created_at,
     }
@@ -87,7 +90,7 @@ export default async function UsersPage() {
               : 'Rol ayrımı kapalı — giriş yapan herkes her şeyi yapabilir. Rol bilgisi ileride kullanılmak üzere saklanıyor.'}
           </p>
         </div>
-        <YeniKullaniciFormu />
+        <YeniKullaniciFormu okullar={okullar} />
       </div>
 
       {error && (
@@ -101,6 +104,7 @@ export default async function UsersPage() {
               <th>Ad Soyad</th>
               <th>E-posta</th>
               <th>Rol</th>
+              <th>Okul</th>
               <th>Son Giriş</th>
               <th>Kayıt</th>
               <th className="text-right">İşlem</th>
@@ -111,12 +115,13 @@ export default async function UsersPage() {
               <KullaniciSatiri
                 key={k.id}
                 kullanici={k}
+                okullar={okullar}
                 kendisiMi={k.id === oturum?.userId}
               />
             ))}
             {kullanicilar.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-solgun">
+                <td colSpan={7} className="py-8 text-center text-solgun">
                   Kullanıcı bulunamadı.
                 </td>
               </tr>

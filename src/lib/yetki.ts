@@ -1,3 +1,5 @@
+import { cache } from 'react'
+
 import { supabaseServer } from '@/lib/supabase/server'
 import type { KullaniciRolu } from '@/lib/types'
 
@@ -13,6 +15,26 @@ export type OturumBilgisi = {
   email: string | null
   adSoyad: string | null
   rol: KullaniciRolu
+  /** Kullanıcı tek bir okula bağlıysa o okulun id'si, değilse null */
+  okulId: string | null
+}
+
+/**
+ * Kullanıcının bağlı olduğu okul — yoksa null.
+ *
+ * Veritabanındaki `yetkili_okul()` ile aynı kaynak: kurallar orada da aynı
+ * değere bakıyor, ekranla veri katmanı ayrışmasın. `cache` sayesinde bir
+ * isteğin içinde bir kez sorulur.
+ */
+export const kisitliOkulId = cache(async (): Promise<string | null> => {
+  const supabase = await supabaseServer()
+  const { data } = await supabase.rpc('yetkili_okul')
+  return (data as string | null) ?? null
+})
+
+/** Okula bağlı kullanıcı mı? Finans, maliyet ve ayarlar ekranları ona kapalı. */
+export async function okulaBagliMi(): Promise<boolean> {
+  return (await kisitliOkulId()) !== null
 }
 
 /** Oturumu ve profil bilgisini döner; oturum yoksa null. */
@@ -25,7 +47,7 @@ export async function oturumBilgisi(): Promise<OturumBilgisi | null> {
 
   const { data: profil } = await supabase
     .from('profiles')
-    .select('rol, ad_soyad')
+    .select('rol, ad_soyad, okul_id')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -34,6 +56,7 @@ export async function oturumBilgisi(): Promise<OturumBilgisi | null> {
     email: user.email ?? null,
     adSoyad: profil?.ad_soyad ?? null,
     rol: (profil?.rol as KullaniciRolu) ?? 'personel',
+    okulId: (profil?.okul_id as string | null) ?? null,
   }
 }
 

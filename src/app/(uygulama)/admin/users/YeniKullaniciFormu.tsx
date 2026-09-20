@@ -4,7 +4,7 @@ import { useActionState, useState } from 'react'
 
 import { kullaniciEkle, type KullaniciDurumu } from './actions'
 
-export function YeniKullaniciFormu() {
+export function YeniKullaniciFormu({ okullar }: { okullar: { id: string; ad: string }[] }) {
   const [acik, setAcik] = useState(false)
   const [durum, gonder, bekliyor] = useActionState(kullaniciEkle, {} as KullaniciDurumu)
 
@@ -62,6 +62,24 @@ export function YeniKullaniciFormu() {
           </select>
           <p className="mt-1 text-xs text-solgun">
             Rol ayrımı şu an kapalı — giriş yapan herkes her şeyi yapabilir.
+          </p>
+        </div>
+
+        <div>
+          <label className="etiket" htmlFor="okul_id">
+            Okul
+          </label>
+          <select id="okul_id" name="okul_id" defaultValue="" className="girdi">
+            <option value="">Tüm okullar</option>
+            {okullar.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.ad}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-solgun">
+            Bir okul seçilirse kullanıcı yalnız o okulun günlük işlerini görür; Finans,
+            Maliyet, Ayarlar ve Yedek ona kapanır.
           </p>
         </div>
       </div>

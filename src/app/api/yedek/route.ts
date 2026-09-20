@@ -56,6 +56,10 @@ export async function GET() {
   if (!oturum) {
     return NextResponse.json({ hata: 'Oturum gerekli.' }, { status: 401 })
   }
+  // Yedek bütün okulların verisini içerir; tek okula bağlı kullanıcıya kapalı
+  if (oturum.okulId) {
+    return NextResponse.json({ hata: 'Bu işlem için yetkiniz yok.' }, { status: 403 })
+  }
 
   const supabase = await supabaseServer()
   const veri: Record<string, unknown[]> = {}

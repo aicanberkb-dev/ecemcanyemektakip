@@ -12,15 +12,18 @@ export type KullaniciSatir = {
   email: string
   adSoyad: string
   rol: KullaniciRolu
+  okulId: string | null
   sonGiris: string | null
   olusturma: string
 }
 
 export function KullaniciSatiri({
   kullanici,
+  okullar,
   kendisiMi,
 }: {
   kullanici: KullaniciSatir
+  okullar: { id: string; ad: string }[]
   kendisiMi: boolean
 }) {
   const [mod, setMod] = useState<'goster' | 'duzenle' | 'sifre'>('goster')
@@ -39,7 +42,7 @@ export function KullaniciSatiri({
   if (mod === 'duzenle') {
     return (
       <tr className="bg-blue-50/40">
-        <td colSpan={6} className="px-3 py-3">
+        <td colSpan={7} className="px-3 py-3">
           <form action={rolGonder} className="flex flex-wrap items-end gap-3">
             <div className="min-w-40 flex-1">
               <label className="etiket text-xs">Ad Soyad</label>
@@ -50,6 +53,21 @@ export function KullaniciSatiri({
               <select name="rol" defaultValue={kullanici.rol} className="girdi !py-1.5">
                 <option value="personel">Personel</option>
                 <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className="etiket text-xs">Okul</label>
+              <select
+                name="okul_id"
+                defaultValue={kullanici.okulId ?? ''}
+                className="girdi !py-1.5"
+              >
+                <option value="">Tüm okullar</option>
+                {okullar.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.ad}
+                  </option>
+                ))}
               </select>
             </div>
             <button className="btn-birincil !py-1.5" disabled={rolBekliyor}>
@@ -68,7 +86,7 @@ export function KullaniciSatiri({
   if (mod === 'sifre') {
     return (
       <tr className="bg-amber-50/50">
-        <td colSpan={6} className="px-3 py-3">
+        <td colSpan={7} className="px-3 py-3">
           <form action={sifreGonder} className="flex flex-wrap items-end gap-3">
             <div className="min-w-56 flex-1">
               <label className="etiket text-xs">
@@ -110,6 +128,15 @@ export function KullaniciSatiri({
           <span className="rozet bg-purple-100 text-purple-800">Admin</span>
         ) : (
           <span className="rozet bg-slate-100 text-slate-700">Personel</span>
+        )}
+      </td>
+      <td>
+        {kullanici.okulId ? (
+          <span className="rozet bg-amber-100 text-amber-800">
+            {okullar.find((o) => o.id === kullanici.okulId)?.ad ?? 'Tek okul'}
+          </span>
+        ) : (
+          <span className="text-solgun">Tüm okullar</span>
         )}
       </td>
       <td className="whitespace-nowrap text-solgun">{tarihSaat(kullanici.sonGiris)}</td>

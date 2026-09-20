@@ -67,12 +67,15 @@ export function UstMenu({
   okullar,
   aktifOkulId,
   genel,
+  kisitli = false,
 }: {
   kullanici: string
   okullar: Okul[]
   aktifOkulId: string
   /** Genel mod: okul ekranları yerine yönetim ekranları gösterilir */
   genel: boolean
+  /** Tek okula bağlı kullanıcı: Ayarlar, Finans, Maliyet ve Yedek kapalı */
+  kisitli?: boolean
 }) {
   const yol = usePathname()
   const [acikMenu, setAcikMenu] = useState(false)
@@ -84,17 +87,27 @@ export function UstMenu({
         ? yol.startsWith('/admin')
         : yol === hedef || yol.startsWith(`${hedef}/`)
 
-  const menu = genel ? GENEL_BAGLANTILAR : BAGLANTILAR
+  // Okula bağlı kullanıcıda Ayarlar hiç görünmez; Genel'de yalnız yemek
+  // listesi kalır (finans ve maliyet ona kapalı)
+  const menu = genel
+    ? kisitli
+      ? GENEL_BAGLANTILAR.filter((b) => b.yol === '/menu')
+      : GENEL_BAGLANTILAR
+    : kisitli
+      ? BAGLANTILAR.filter((b) => b.yol !== '/admin/settings')
+      : BAGLANTILAR
 
   const altMenu = yol.startsWith('/reports')
     ? RAPOR_ALT
-    : yol.startsWith('/admin')
-      ? AYAR_ALT
-      : yol.startsWith('/maliyet')
-        ? MALIYET_ALT
-        : yol.startsWith('/finans')
-          ? FINANS_ALT
-          : null
+    : kisitli
+      ? null
+      : yol.startsWith('/admin')
+        ? AYAR_ALT
+        : yol.startsWith('/maliyet')
+          ? MALIYET_ALT
+          : yol.startsWith('/finans')
+            ? FINANS_ALT
+            : null
 
   return (
     // relative z-10: geniş ekrandaki sabit yan şeritler menünün altında kalsın
@@ -152,8 +165,12 @@ export function UstMenu({
       {acikMenu && (
         <nav className="flex flex-col border-t border-cizgi px-4 py-2 md:hidden">
           {(genel
-            ? [...GENEL_BAGLANTILAR, ...MALIYET_ALT.slice(1), ...FINANS_ALT.slice(1)]
-            : [...BAGLANTILAR, ...RAPOR_ALT.slice(1), ...AYAR_ALT.slice(1)]
+            ? kisitli
+              ? menu
+              : [...GENEL_BAGLANTILAR, ...MALIYET_ALT.slice(1), ...FINANS_ALT.slice(1)]
+            : kisitli
+              ? [...menu, ...RAPOR_ALT.slice(1)]
+              : [...BAGLANTILAR, ...RAPOR_ALT.slice(1), ...AYAR_ALT.slice(1)]
           ).map((b) => (
             <Link
               key={b.yol}

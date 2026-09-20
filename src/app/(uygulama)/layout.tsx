@@ -64,6 +64,7 @@ export default async function UygulamaLayout({
           okullar={liste}
           aktifOkulId={genel ? GENEL : aktif!.id}
           genel={genel}
+          kisitli={!!oturum.okulId}
         />
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">{children}</main>
       </div>
