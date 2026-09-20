@@ -169,62 +169,70 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
           bilerek işaretler. Hata sonrası form yeniden kurulurken girilen değer
           korunur; işaretsiz kutu formda gönderilmediği için girilen değerlerde
           yokluğu "hayır" demek. */}
-      <div className="grid gap-4 border-t border-cizgi pt-5 sm:grid-cols-[auto_1fr]">
-        <label className="flex h-fit cursor-pointer items-start gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2.5">
-          <input
-            type="checkbox"
-            name="deneme"
-            value="true"
-            defaultChecked={g ? g.deneme === 'true' : (ogrenci?.deneme ?? false)}
-            className="mt-0.5 size-4 accent-orange-600"
-          />
-          <span className="leading-tight">
-            <span className="block text-sm font-semibold text-orange-900">Deneme öğrencisi</span>
-            <span className="block text-xs text-orange-800">
-              İşaretlenirse raporlarda &quot;Deneme&quot; rozetiyle görünür.
+      {/* İki eş sütun: solda deneme + özel not, sağda fatura + fatura bilgisi.
+          Her sütunda önce onay kutusu, altında ona ait metin alanı. */}
+      <div className="grid gap-4 border-t border-cizgi pt-5 sm:grid-cols-2">
+        <div className="space-y-2">
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2.5">
+            <input
+              type="checkbox"
+              name="deneme"
+              value="true"
+              defaultChecked={g ? g.deneme === 'true' : (ogrenci?.deneme ?? false)}
+              className="mt-0.5 size-4 accent-orange-600"
+            />
+            <span className="leading-tight">
+              <span className="block text-sm font-semibold text-orange-900">
+                Deneme öğrencisi
+              </span>
+              <span className="block text-xs text-orange-800">
+                İşaretlenirse raporlarda &quot;Deneme&quot; rozetiyle görünür.
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
 
-        <label className="flex h-fit cursor-pointer items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5 sm:col-start-1">
-          <input
-            type="checkbox"
-            name="fatura_istiyor"
-            value="true"
-            defaultChecked={
-              g ? g.fatura_istiyor === 'true' : (ogrenci?.fatura_istiyor ?? false)
-            }
-            className="mt-0.5 size-4 accent-sky-600"
-          />
-          <span className="leading-tight">
-            <span className="block text-sm font-semibold text-sky-900">Fatura istiyor</span>
-            <span className="block text-xs text-sky-800">
-              Raporlar → Fatura İstenenler listesinde çıkar.
+          <Alan ad="ozel_not" etiket="Özel Not" hata={h.ozel_not}>
+            <textarea
+              id="ozel_not"
+              name="ozel_not"
+              rows={4}
+              defaultValue={ilk('ozel_not', metin(ogrenci?.ozel_not))}
+              placeholder="Bu öğrenciyle ilgili hatırlanması gereken her şey: alerji, veliyle yapılan anlaşma, özel durum…"
+              className="girdi resize-y"
+            />
+          </Alan>
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5">
+            <input
+              type="checkbox"
+              name="fatura_istiyor"
+              value="true"
+              defaultChecked={
+                g ? g.fatura_istiyor === 'true' : (ogrenci?.fatura_istiyor ?? false)
+              }
+              className="mt-0.5 size-4 accent-sky-600"
+            />
+            <span className="leading-tight">
+              <span className="block text-sm font-semibold text-sky-900">Fatura istiyor</span>
+              <span className="block text-xs text-sky-800">
+                Raporlar → Fatura İstenenler listesinde çıkar.
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
 
-        <Alan ad="fatura_bilgisi" etiket="Fatura Bilgileri" hata={h.fatura_bilgisi}>
-          <textarea
-            id="fatura_bilgisi"
-            name="fatura_bilgisi"
-            rows={3}
-            defaultValue={ilk('fatura_bilgisi', metin(ogrenci?.fatura_bilgisi))}
-            placeholder="Firma unvanı, adres, vergi dairesi ve vergi no…"
-            className="girdi resize-y"
-          />
-        </Alan>
-
-        <Alan ad="ozel_not" etiket="Özel Not" hata={h.ozel_not}>
-          <textarea
-            id="ozel_not"
-            name="ozel_not"
-            rows={3}
-            defaultValue={ilk('ozel_not', metin(ogrenci?.ozel_not))}
-            placeholder="Bu öğrenciyle ilgili hatırlanması gereken her şey: alerji, veliyle yapılan anlaşma, özel durum…"
-            className="girdi resize-y"
-          />
-        </Alan>
+          <Alan ad="fatura_bilgisi" etiket="Fatura Bilgileri" hata={h.fatura_bilgisi}>
+            <textarea
+              id="fatura_bilgisi"
+              name="fatura_bilgisi"
+              rows={4}
+              defaultValue={ilk('fatura_bilgisi', metin(ogrenci?.fatura_bilgisi))}
+              placeholder="Firma unvanı, adres, vergi dairesi ve vergi no…"
+              className="girdi resize-y"
+            />
+          </Alan>
+        </div>
       </div>
 
       {benzerler.length > 0 && <MukerrerUyarisi benzerler={benzerler} />}
