@@ -81,7 +81,44 @@ function okulBilgisi(okulAdi: string): OkulBilgisi {
  */
 const BASLIK_ALT: Partial<Record<OgrenciTipi, string>> = {
   anasinifi: 'ANASINIFI',
-  anasinifi_etut: 'ANASINIFI + ETÜT',
+  anasinifi_etut: 'Anasınıfı Etüt Yemeği',
+}
+
+/**
+ * Etüt formunda yalnız etüt yemeğinin taksitleri yazılır.
+ *
+ * Plandaki etüt satırları öğle yemeğiyle birleşik tutuluyor (aralık ve şubat
+ * taksitleri 20.000 ₺: 13.000 yemek + 7.000 etüt). Formda etüt payı ayrı
+ * görünmeli ama velinin o gün ödeyeceği toplam da kaybolmamalı. Etüt payı,
+ * aynı vadeli anasınıfı (yemek) taksitinden çıkarılarak bulunuyor; rakam
+ * forma elle yazılmıyor ki fiyat değişince çıktı da doğru kalsın.
+ */
+type EtutSatiri = {
+  id: string
+  ad: string
+  vade_tarihi: string
+  tutar: number
+  /** O vadede yemek taksitiyle birlikte ödenecek toplam */
+  birlikte: number | null
+}
+
+function etutSatirlari(etutPlani: TaksitPlani[], yemekPlani: TaksitPlani[]): EtutSatiri[] {
+  return etutPlani
+    .map((t) => {
+      const yemek = yemekPlani.find((y) => y.vade_tarihi === t.vade_tarihi)
+      const birlesik = Number(t.tutar)
+      const etut = birlesik - Number(yemek?.tutar ?? 0)
+      return {
+        id: t.id,
+        ad: t.ad,
+        vade_tarihi: t.vade_tarihi,
+        tutar: etut,
+        birlikte: yemek ? birlesik : null,
+      }
+    })
+    // Yalnız yemeğe ait satır (etüt payı sıfır) etüt formunda yer almaz
+    .filter((s) => s.tutar > 0)
+    .map((s, i) => ({ ...s, ad: `${i + 1}. Taksit` }))
 }
 
 /**
@@ -212,6 +249,9 @@ export function KayitFormuCiktisi({
           taksitler={plan
             .filter((p) => p.ogrenci_tipi === planTipi(tip))
             .sort((a, b) => a.vade_tarihi.localeCompare(b.vade_tarihi))}
+          yemekPlani={plan
+            .filter((p) => p.ogrenci_tipi === 'anasinifi')
+            .sort((a, b) => a.vade_tarihi.localeCompare(b.vade_tarihi))}
           sonMu={i === yazdirilacak.length - 1}
         />
       ))}
@@ -224,17 +264,30 @@ function Form({
   okulAdi,
   sezonAdi,
   taksitler,
+  yemekPlani,
   sonMu,
 }: {
   tip: OgrenciTipi
   okulAdi: string
   sezonAdi: string
   taksitler: TaksitPlani[]
+  /** Anasınıfı (öğle yemeği) planı — etüt payını ayırmak için */
+  yemekPlani: TaksitPlani[]
   sonMu: boolean
 }) {
   const g = TIP_GORUNUM[tip]
   const bilgi = okulBilgisi(okulAdi)
-  const toplam = taksitler.reduce((t, x) => t + Number(x.tutar), 0)
+  const etutMu = tip === 'anasinifi_etut' && yemekPlani.length > 0
+  const satirlar: EtutSatiri[] = etutMu
+    ? etutSatirlari(taksitler, yemekPlani)
+    : taksitler.map((t) => ({
+        id: t.id,
+        ad: t.ad,
+        vade_tarihi: t.vade_tarihi,
+        tutar: Number(t.tutar),
+        birlikte: null,
+      }))
+  const toplam = satirlar.reduce((t, x) => t + x.tutar, 0)
   // Anasınıfında günlükçü diye bir şey yok; ödeme şekli sorulmuyor.
   const anasinifiMi = tip === 'anasinifi' || tip === 'anasinifi_etut'
   // Açıklamalı formda bölümler arası boşluk dar: yoksa form ikinci sayfaya taşıyor
@@ -274,15 +327,25 @@ function Form({
           {/* Veli */}
           <div>
             <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>VELİ BİLGİLERİ</h3>
-            {/* Üçüncü sütun T.C. no: fatura kesilirken gereken tek alan bu */}
-            <div className="grid grid-cols-3 gap-x-6 gap-y-3">
-              <Satir etiket="1. Veli Adı Soyadı" />
-              <Satir etiket="1. Veli Telefon" />
-              <Satir etiket="Fatura için TC Kimlik No" />
-              <Satir etiket="2. Veli Adı Soyadı" />
-              <Satir etiket="2. Veli Telefon" />
-              <Satir etiket="Fatura için TC Kimlik No" />
-            </div>
+            {/* Üçüncü sütun T.C. no: fatura kesilirken gereken tek alan bu.
+                Etüt formunda veli bilgisi asıl anasınıfı formunda zaten
+                alınıyor; burada yalnız ad soyad soruluyor. */}
+            {etutMu ? (
+              <div className="grid grid-cols-3 gap-x-6">
+                <div className="col-span-2">
+                  <Satir etiket="1. Veli Adı Soyadı" />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-x-6 gap-y-3">
+                <Satir etiket="1. Veli Adı Soyadı" />
+                <Satir etiket="1. Veli Telefon" />
+                <Satir etiket="Fatura için TC Kimlik No" />
+                <Satir etiket="2. Veli Adı Soyadı" />
+                <Satir etiket="2. Veli Telefon" />
+                <Satir etiket="Fatura için TC Kimlik No" />
+              </div>
+            )}
           </div>
 
           {/* Abone tipi — anasınıfında seçenek yok, hepsi taksitli */}
@@ -306,14 +369,16 @@ function Form({
           {/* Taksit planı */}
           <div>
             <h3 className={`mb-2 text-sm font-bold ${g.yazi}`}>
-              {OGRENCI_TIPI_ADLARI[tip].toLocaleUpperCase('tr')} TAKSİT PLANI
+              {etutMu
+                ? 'Etüt Yemeği Taksit Planı'
+                : `${OGRENCI_TIPI_ADLARI[tip].toLocaleUpperCase('tr')} TAKSİT PLANI`}
               {tip === 'birinci_sinif' && (
                 <span className="ml-2 text-xs font-normal text-slate-600">
                   (standart ücret tarifesi)
                 </span>
               )}
             </h3>
-            {taksitler.length === 0 ? (
+            {satirlar.length === 0 ? (
               <p className="rounded border border-dashed border-slate-400 px-3 py-4 text-center text-sm text-slate-600">
                 Bu tip için {sezonAdi} sezonunda taksit tanımlı değil.
               </p>
@@ -333,7 +398,7 @@ function Form({
                   </tr>
                 </thead>
                 <tbody>
-                  {taksitler.map((t, i) => {
+                  {satirlar.map((t, i) => {
                     const etiket = vadeEtiketi(t.vade_tarihi, i)
                     // İlk taksit kayıt anında alınıyor; tarih yazmak kafa karıştırır.
                     const tarihGoster = i > 0
@@ -350,6 +415,17 @@ function Form({
                         </td>
                         <td className="border border-slate-400 px-2 py-1.5 text-right font-medium tabular-nums">
                           {para(t.tutar)}
+                          {t.birlikte !== null && (
+                            <span className="mt-1 block rounded border border-violet-400 bg-violet-100 px-1.5 py-1 text-xs leading-tight font-bold text-violet-900">
+                              Anasınıfı Öğle Yemeği taksitiyle
+                              <br />
+                              birlikte {para(t.birlikte)} ödenir
+                              <span className="mt-0.5 block font-semibold">
+                                ({para(t.birlikte - t.tutar)} Öğle Yemeği {i + 1}. taksit +{' '}
+                                {para(t.tutar)} Etüt Yemeği {i + 1}. taksit)
+                              </span>
+                            </span>
+                          )}
                         </td>
                       </tr>
                     )
@@ -358,7 +434,8 @@ function Form({
                 <tfoot>
                   <tr className={`${g.zemin} font-bold`}>
                     <td className="border border-slate-400 px-2 py-1.5" colSpan={2}>
-                      YILLIK TOPLAM ({taksitler.length} Taksit)
+                      {etutMu ? 'Etüt Yemeği Yıllık Toplam' : 'YILLIK TOPLAM'} (
+                      {satirlar.length} Taksit)
                     </td>
                     <td className="border border-slate-400 px-2 py-1.5 text-right tabular-nums">
                       {para(toplam)}
