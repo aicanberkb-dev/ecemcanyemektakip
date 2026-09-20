@@ -7,6 +7,7 @@ import {
   Bakiye,
   DenemeRozeti,
   DurumRozeti,
+  FaturaRozeti,
   OgrenciTipiRozeti,
 } from '@/components/Rozetler'
 import { para } from '@/lib/format'
@@ -145,6 +146,7 @@ export default async function OgrenciDetayPage({
             <OgrenciTipiRozeti tip={ozet.ogrenci_tipi} sinif={ozet.sinif} />
             <DurumRozeti aktif={ozet.aktif} />
             <DenemeRozeti deneme={ozet.deneme} />
+            <FaturaRozeti istiyor={ozet.fatura_istiyor} />
           </p>
         </div>
         <div className="flex gap-2">
@@ -156,6 +158,20 @@ export default async function OgrenciDetayPage({
           </form>
         </div>
       </div>
+
+      {/* Fatura bilgisi: ana veride serbest metin */}
+      {(ozet.fatura_istiyor || ozet.fatura_bilgisi) && (
+        <div className="rounded-md border border-sky-300 bg-sky-50 px-4 py-3">
+          <p className="text-xs font-semibold tracking-wide text-sky-900 uppercase">
+            Fatura {ozet.fatura_istiyor ? 'isteniyor' : 'bilgisi'}
+          </p>
+          {ozet.fatura_bilgisi ? (
+            <p className="mt-1 text-sm whitespace-pre-wrap text-metin">{ozet.fatura_bilgisi}</p>
+          ) : (
+            <p className="mt-1 text-sm text-solgun">Fatura bilgisi girilmemiş.</p>
+          )}
+        </div>
+      )}
 
       {/* Özel not: ana veride serbest metin; satır sonları korunur */}
       {ozet.ozel_not && (

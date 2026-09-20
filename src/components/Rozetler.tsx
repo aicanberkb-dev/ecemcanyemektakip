@@ -76,6 +76,19 @@ export function DenemeRozeti({ deneme }: { deneme: boolean | null | undefined })
   )
 }
 
+/** Veli fatura istiyor — ana veride işaretli. */
+export function FaturaRozeti({ istiyor }: { istiyor: boolean | null | undefined }) {
+  if (!istiyor) return null
+  return (
+    <span
+      className="rozet ml-1 bg-sky-100 text-sky-800"
+      title="Fatura isteniyor — öğrenci ana verisinde işaretli"
+    >
+      Fatura
+    </span>
+  )
+}
+
 export function DurumRozeti({ aktif }: { aktif: boolean }) {
   return aktif ? (
     <span className="rozet bg-emerald-100 text-emerald-800">Aktif</span>

@@ -75,6 +75,10 @@ export type Student = {
   deneme: boolean
   /** Serbest metin özel not */
   ozel_not: string | null
+  /** Veli fatura istiyor; Raporlar → Fatura İstenenler listesinde çıkar */
+  fatura_istiyor: boolean
+  /** Serbest metin fatura / firma bilgileri */
+  fatura_bilgisi: string | null
   created_at: string
   updated_at: string
 }
@@ -84,6 +88,10 @@ export type StudentBalance = {
   deneme: boolean
   /** Serbest metin özel not */
   ozel_not: string | null
+  /** Veli fatura istiyor; Raporlar → Fatura İstenenler listesinde çıkar */
+  fatura_istiyor: boolean
+  /** Serbest metin fatura / firma bilgileri */
+  fatura_bilgisi: string | null
   student_id: string
   okul_id: string
   ogrenci_no: string

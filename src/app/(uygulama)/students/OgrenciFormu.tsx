@@ -186,6 +186,35 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
           </span>
         </label>
 
+        <label className="flex h-fit cursor-pointer items-start gap-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2.5 sm:col-start-1">
+          <input
+            type="checkbox"
+            name="fatura_istiyor"
+            value="true"
+            defaultChecked={
+              g ? g.fatura_istiyor === 'true' : (ogrenci?.fatura_istiyor ?? false)
+            }
+            className="mt-0.5 size-4 accent-sky-600"
+          />
+          <span className="leading-tight">
+            <span className="block text-sm font-semibold text-sky-900">Fatura istiyor</span>
+            <span className="block text-xs text-sky-800">
+              Raporlar → Fatura İstenenler listesinde çıkar.
+            </span>
+          </span>
+        </label>
+
+        <Alan ad="fatura_bilgisi" etiket="Fatura Bilgileri" hata={h.fatura_bilgisi}>
+          <textarea
+            id="fatura_bilgisi"
+            name="fatura_bilgisi"
+            rows={3}
+            defaultValue={ilk('fatura_bilgisi', metin(ogrenci?.fatura_bilgisi))}
+            placeholder="Firma unvanı, adres, vergi dairesi ve vergi no…"
+            className="girdi resize-y"
+          />
+        </Alan>
+
         <Alan ad="ozel_not" etiket="Özel Not" hata={h.ozel_not}>
           <textarea
             id="ozel_not"

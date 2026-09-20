@@ -88,6 +88,14 @@ const ogrenciSemasi = z.object({
     .string()
     .optional()
     .transform((d) => (d?.trim() ? d.trim() : null)),
+  fatura_istiyor: z
+    .string()
+    .optional()
+    .transform((d) => d === 'true'),
+  fatura_bilgisi: z
+    .string()
+    .optional()
+    .transform((d) => (d?.trim() ? d.trim() : null)),
 })
 
 /**
@@ -185,6 +193,8 @@ export async function ogrenciEkle(
     p_ogrenci_tipi: g.ogrenci_tipi,
     p_deneme: g.deneme,
     p_ozel_not: g.ozel_not,
+    p_fatura_istiyor: g.fatura_istiyor,
+    p_fatura_bilgisi: g.fatura_bilgisi,
   })
 
   if (error) return girilenle(onceki, formData, { hata: hataMesaji(error.message) })
