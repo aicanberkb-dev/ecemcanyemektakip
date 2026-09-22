@@ -113,11 +113,22 @@ export function YoklamaKagidi({
         className="flex items-end justify-between"
         style={{ height: `${BASLIK_YUK}mm`, borderBottom: '0.6mm solid #000', paddingBottom: '1.5mm' }}
       >
-        <div className="flex items-baseline" style={{ gap: '4mm' }}>
+        <div className="flex items-end" style={{ gap: '4mm' }}>
+          {/* Logo: çizelge sınıfta asılı kalıyor, kimin olduğu belli olsun.
+              Siyah-beyaz sürüm — yoklama her zaman düz yazıcıdan çıkıyor. */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- vektör logo */}
+          <img
+            src="/logo/logo-siyah-beyaz.svg"
+            alt=""
+            style={{ height: '11mm', width: 'auto' }}
+          />
           <span className="font-black" style={{ fontSize: '11mm', lineHeight: 1 }}>
             {sube}
           </span>
-          <span className="font-bold" style={{ fontSize: '4.6mm', letterSpacing: '0.04em' }}>
+          <span
+            className="font-bold"
+            style={{ fontSize: '4.6mm', letterSpacing: '0.04em', paddingBottom: '1mm' }}
+          >
             YEMEK YOKLAMA ÇİZELGESİ
           </span>
         </div>
@@ -127,6 +138,9 @@ export function YoklamaKagidi({
           </div>
           <div style={{ fontSize: '3.6mm' }}>
             {AY_ADLARI[ay - 1]} {yil} · {ogrenciler.length} öğrenci
+          </div>
+          <div style={{ fontSize: '2.8mm', letterSpacing: '0.1em' }}>
+            EKREM BAŞLANTI - ECEM CAN GIDA
           </div>
         </div>
       </header>
