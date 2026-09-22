@@ -30,6 +30,10 @@ export default async function LoginPage({
           alt="Ecem Can Gıda"
           className="w-[min(420px,82vw)] drop-shadow-[0_18px_22px_rgb(0_0_0/0.5)]"
         />
+        {/* Kişi adı üstte ve küçük: yan şeritlerle aynı düzen */}
+        <span className="-mb-2 text-[11px] font-semibold tracking-[0.22em] text-[#d8a7aa]">
+          EKREM BAŞLANTI
+        </span>
         <span className={`${slab.className} text-base tracking-[0.3em] text-[#f0c9cb]`}>
           ECEM CAN GIDA
         </span>

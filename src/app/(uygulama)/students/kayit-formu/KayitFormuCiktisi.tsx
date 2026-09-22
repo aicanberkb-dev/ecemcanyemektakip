@@ -15,13 +15,14 @@ function planTipi(tip: OgrenciTipi): OgrenciTipi {
  * hangi okulun formu olduğunu görmeli. Sistemdeki okul adı kısaltma ("GÖKSU"),
  * bu yüzden burada eşleniyor; tanımsız bir okul için makul bir başlık üretilir.
  */
-const FORM_BASLIKLARI: Record<string, string> = {
-  GÖKSU: 'Göksu Şehit Er Ersin Güner Okulu Yemekhane Kayıt Formu',
-  'AHMET MİTHAT': 'Beykoz Ahmet Mithat Efendi Okulu Kayıt Formu',
+/** Başlık iki satır: üstte okulun adı, altında formun adı. Satırlar kırılmaz. */
+const FORM_BASLIKLARI: Record<string, [string, string]> = {
+  GÖKSU: ['Göksu Şehit Er Ersin Güner Okulu', 'Yemekhane Kayıt Formu'],
+  'AHMET MİTHAT': ['Beykoz Ahmet Mithat Efendi Okulu', 'Kayıt Formu'],
 }
 
-function formBasligi(okulAdi: string): string {
-  return FORM_BASLIKLARI[okulAdi.trim()] ?? `${okulAdi} Okulu Yemekhane Kayıt Formu`
+function formBasligi(okulAdi: string): [string, string] {
+  return FORM_BASLIKLARI[okulAdi.trim()] ?? [`${okulAdi} Okulu`, 'Yemekhane Kayıt Formu']
 }
 
 /**
@@ -296,10 +297,22 @@ function Form({
   return (
     <div className="space-y-2" style={sonMu ? undefined : { breakAfter: 'page' }}>
       <section className={`kart kayit-formu-kagit border-2 p-0 ${g.kenar}`}>
-        {/* Okul başlığı kâğıdın en üstünde; renk şeridi tipleri ayırt ettiriyor */}
-        <div className={`${g.serit} px-5 py-4 text-center text-white`}>
-          <span className="text-xl font-black tracking-wide">
-            {formBasligi(okulAdi)}
+        {/* Okul başlığı kâğıdın en üstünde; renk şeridi tipleri ayırt ettiriyor.
+            Logo solda: veli kâğıdı kimin verdiğini görsün. */}
+        <div className={`${g.serit} flex items-center gap-3 px-4 py-3 text-white`}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- vektör logo */}
+          <img
+            src="/logo/logo-kirmizi-beyaz.svg"
+            alt=""
+            className="h-24 w-auto max-w-[24%] shrink-0 object-contain drop-shadow-[0_3px_6px_rgb(0_0_0/0.45)]"
+          />
+          <div className="min-w-0 flex-1 text-center">
+          {/* İki satır: üstte okul, altında formun adı; ikisi de kırılmaz */}
+          <span className="block text-lg leading-tight font-black tracking-wide whitespace-nowrap">
+            {formBasligi(okulAdi)[0]}
+          </span>
+          <span className="block text-lg leading-tight font-black tracking-wide whitespace-nowrap">
+            {formBasligi(okulAdi)[1]}
           </span>
           {BASLIK_ALT[tip] && (
             <div className="mt-2">
@@ -308,6 +321,18 @@ function Form({
               </span>
             </div>
           )}
+          {/* Tek satır: dar ekranda "GIDA" alta düşüyordu */}
+          <div className="mt-1 text-xs font-semibold tracking-[0.12em] whitespace-nowrap opacity-90">
+            EKREM BAŞLANTI - ECEM CAN GIDA
+          </div>
+          </div>
+          {/* Sağda ikinci logo: başlık iki logonun ortasında kalır */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- vektör logo */}
+          <img
+            src="/logo/logo-kirmizi-beyaz.svg"
+            alt=""
+            className="h-24 w-auto max-w-[24%] shrink-0 object-contain drop-shadow-[0_3px_6px_rgb(0_0_0/0.45)]"
+          />
         </div>
 
         <div className={`${sikisik ? 'space-y-3' : 'space-y-5'} p-5`}>

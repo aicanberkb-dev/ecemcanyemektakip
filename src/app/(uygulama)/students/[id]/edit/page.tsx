@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-import { aktifOkulId } from '@/lib/okul'
+import { aktifOkul, aktifOkulId } from '@/lib/okul'
+import { anasinifiVarMi } from '@/lib/sinif'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { Student } from '@/lib/types'
 
@@ -26,6 +27,7 @@ export default async function OgrenciDuzenlePage({
 
   if (!data) notFound()
   const ogrenci = data as Student
+  const okul = await aktifOkul()
 
   const eylem = ogrenciGuncelle.bind(null, id)
 
@@ -35,7 +37,12 @@ export default async function OgrenciDuzenlePage({
         ← {ogrenci.ad_soyad}
       </Link>
       <h1 className="baslik">Öğrenci Düzenle</h1>
-      <OgrenciFormu eylem={eylem} ogrenci={ogrenci} iptalYolu={`/students/${id}`} />
+      <OgrenciFormu
+        eylem={eylem}
+        ogrenci={ogrenci}
+        iptalYolu={`/students/${id}`}
+        anasinifiVar={anasinifiVarMi(okul?.ad)}
+      />
     </div>
   )
 }

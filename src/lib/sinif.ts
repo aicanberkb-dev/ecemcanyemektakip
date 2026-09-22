@@ -52,3 +52,18 @@ export function birinciSinifMi(sinif: string | null | undefined): boolean {
 export function anasinifiMi(sinif: string | null | undefined): boolean {
   return sinifCozumle(sinif).sinif === ANASINIFI
 }
+
+/**
+ * Okulda anasınıfı var mı?
+ *
+ * AHMET MİTHAT'ta anasınıfı yok: orada her öğrenci standart tarifeye tabi.
+ * Listede anasınıfı görünürse yanlış plan seçilip ay sonunda fark ediliyor.
+ */
+export function anasinifiVarMi(okulAdi: string | null | undefined): boolean {
+  return !(okulAdi ?? '').toLocaleUpperCase('tr').includes('AHMET MİTHAT')
+}
+
+/** Anasınıfı tipleri taksitli: günlükçü seçilemez. */
+export function aylikZorunluMu(tip: string | null | undefined): boolean {
+  return tip === 'anasinifi' || tip === 'anasinifi_etut'
+}

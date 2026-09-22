@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import { aktifOkul } from '@/lib/okul'
+import { anasinifiVarMi } from '@/lib/sinif'
 import { supabaseServer } from '@/lib/supabase/server'
 
 import { ogrenciEkle } from '../actions'
@@ -37,6 +38,7 @@ export default async function YeniOgrenciPage() {
         eylem={ogrenciEkle}
         iptalYolu="/students"
         sonrakiNo={(sonrakiNo as string) ?? undefined}
+        anasinifiVar={anasinifiVarMi(okul.ad)}
       />
     </div>
   )

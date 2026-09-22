@@ -154,7 +154,7 @@ export function MenuAfisi({
           ))}
         </div>
 
-        <footer className={s.alt}>Ecem Can Gıda</footer>
+        <footer className={s.alt}>Ekrem Başlantı - Ecem Can Gıda</footer>
       </div>
     </article>
   )

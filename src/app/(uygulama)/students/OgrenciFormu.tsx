@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 
 import { SinifTipSecici } from '@/components/SinifSecici'
+import { aylikZorunluMu } from '@/lib/sinif'
 import type { Student } from '@/lib/types'
 
 import type { BenzerOgrenci, FormDurumu } from './actions'
@@ -14,10 +15,22 @@ type Props = {
   iptalYolu: string
   /** Yeni kayıtta atanacak numara (önizleme) */
   sonrakiNo?: string
+  /** Okulda anasınıfı var mı? Yoksa tip hep standart olur */
+  anasinifiVar?: boolean
 }
 
-export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
+export function OgrenciFormu({
+  eylem,
+  ogrenci,
+  iptalYolu,
+  sonrakiNo,
+  anasinifiVar = true,
+}: Props) {
   const [durum, gonder, bekliyor] = useActionState(eylem, {} as FormDurumu)
+  // Seçili öğrenci tipi: abone tipi alanı buna bakıyor
+  const [tip, setTip] = useState<string>(
+    (durum.girilen?.ogrenci_tipi as string) ?? ogrenci?.ogrenci_tipi ?? '',
+  )
   const h = durum.alanlar ?? {}
   const benzerler = durum.benzerler ?? []
 
@@ -70,6 +83,8 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
           baslangicSinif={g?.sinif ?? ogrenci?.sinif}
           baslangicTip={(g?.ogrenci_tipi as Student['ogrenci_tipi']) ?? ogrenci?.ogrenci_tipi}
           tipHatasi={h.ogrenci_tipi}
+          anasinifiVar={anasinifiVar}
+          onTip={setTip}
         />
       </div>
 
@@ -113,17 +128,28 @@ export function OgrenciFormu({ eylem, ogrenci, iptalYolu, sonrakiNo }: Props) {
       <div className="grid gap-4 border-t border-cizgi pt-5 sm:grid-cols-3">
         {/* Varsayılan yok: seçilmeden kaydedilirse öğrenci yanlış tarifeye
             düşer ve hatayı ancak ay sonunda fark ederiz. */}
+        {/* Anasınıfı ve anasınıfı + etüt taksitli: günlükçü seçilemez */}
         <Alan ad="abone_tipi" etiket="Abone Tipi *" hata={h.abone_tipi}>
-          <select
-            name="abone_tipi"
-            defaultValue={ilk('abone_tipi', ogrenci?.abone_tipi ?? '')}
-            className="girdi"
-            required
-          >
-            <option value="">Seçiniz</option>
-            <option value="gunluk">Günlükçü (yemek başına düşer)</option>
-            <option value="aylik">Aylıkçı (taksitten tahsil edilir)</option>
-          </select>
+          {aylikZorunluMu(tip) ? (
+            <>
+              <input type="hidden" name="abone_tipi" value="aylik" />
+              <div className="girdi flex items-center justify-between bg-slate-100 text-slate-600">
+                <span className="font-medium">Aylıkçı</span>
+                <span className="text-xs">anasınıfında zorunlu</span>
+              </div>
+            </>
+          ) : (
+            <select
+              name="abone_tipi"
+              defaultValue={ilk('abone_tipi', ogrenci?.abone_tipi ?? '')}
+              className="girdi"
+              required
+            >
+              <option value="">Seçiniz</option>
+              <option value="gunluk">Günlükçü (yemek başına düşer)</option>
+              <option value="aylik">Aylıkçı (taksitten tahsil edilir)</option>
+            </select>
+          )}
         </Alan>
 
         <Alan ad="aktif" etiket="Durum" hata={h.aktif}>

@@ -16,6 +16,10 @@ export function YanSeritler({ tema, okulAdi }: { tema: OkulTema | null; okulAdi:
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- vektör logo */}
       <img src="/logo/logo-kirmizi-beyaz.svg" alt="" className="yan-serit-logo w-[78%] max-w-[260px]" />
+      {/* Kişi adı üstte ve küçük, altında büyük marka */}
+      <span className="-mb-3 text-[11px] font-semibold tracking-[0.22em] opacity-90">
+        EKREM BAŞLANTI
+      </span>
       <span className="font-serif text-lg font-bold tracking-[0.18em]">ECEM CAN GIDA</span>
       <span className="text-xs font-semibold tracking-[0.3em] uppercase opacity-80">{okulAdi}</span>
     </aside>

@@ -32,10 +32,16 @@ export function SinifTipSecici({
   baslangicSinif,
   baslangicTip,
   tipHatasi,
+  anasinifiVar = true,
+  onTip,
 }: {
   baslangicSinif?: string | null
   baslangicTip?: OgrenciTipi | null
   tipHatasi?: string
+  /** Okulda anasınıfı yoksa (AHMET MİTHAT) sınıf ve tip listesinde çıkmaz */
+  anasinifiVar?: boolean
+  /** Seçilen tip dışarı bildirilir: abone tipi buna göre kilitleniyor */
+  onTip?: (tip: string) => void
 }) {
   const ilk = sinifCozumle(baslangicSinif)
   const [sinif, setSinif] = useState(ilk.sinif)
@@ -45,14 +51,22 @@ export function SinifTipSecici({
     baslangicTip && baslangicTip !== 'birinci_sinif' ? baslangicTip : '',
   )
 
-  const anasinifi = sinif === ANASINIFI
-  const numarali = sinif !== '' && !anasinifi
+  const anasinifi = anasinifiVar && sinif === ANASINIFI
+  // Anasınıfı olmayan okulda tip her zaman standart
+  const numarali = !anasinifiVar || (sinif !== '' && !anasinifi)
 
   const subeler = anasinifi ? ANASINIFI_SUBELERI : SUBELER.map((s) => ({ kod: s, ad: s }))
   const sinifDegeri = sinif && sube ? `${sinif}-${sube}` : ''
   // Numaralı sınıflarda tip sorulmaz: hepsi standart tarifeye tabi.
   const tipDegeri = numarali ? 'standart' : tip
   const tipSecenekleri = anasinifi ? ANASINIFI_TIPLERI : SERBEST_TIPLER
+
+  // Abone tipi alanı tipe bakıyor: her değişimde dışarı bildirilir
+  const [bildirilen, setBildirilen] = useState(tipDegeri)
+  if (bildirilen !== tipDegeri) {
+    setBildirilen(tipDegeri)
+    onTip?.(tipDegeri)
+  }
 
   function sinifDegistir(yeni: string) {
     setSinif(yeni)
@@ -80,7 +94,7 @@ export function SinifTipSecici({
             aria-label="Sınıf"
           >
             <option value="">Sınıf</option>
-            <option value={ANASINIFI}>{ANASINIFI}</option>
+            {anasinifiVar && <option value={ANASINIFI}>{ANASINIFI}</option>}
             {SINIFLAR.map((s) => (
               <option key={s} value={s}>
                 {s}. sınıf
@@ -113,7 +127,9 @@ export function SinifTipSecici({
             <input type="hidden" name="ogrenci_tipi" value="standart" />
             <div className="girdi flex items-center justify-between bg-slate-100 text-slate-600">
               <span className="font-medium">Standart</span>
-              <span className="text-xs">{sinif}. sınıf → standart plan</span>
+              <span className="text-xs">
+                {anasinifiVar ? `${sinif}. sınıf → standart plan` : 'bu okulda tek tarife'}
+              </span>
             </div>
           </>
         ) : (

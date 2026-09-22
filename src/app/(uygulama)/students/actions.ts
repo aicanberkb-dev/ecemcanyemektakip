@@ -5,7 +5,8 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 
 import { benzerAdlar } from '@/lib/ad-benzerlik'
-import { aktifOkulId } from '@/lib/okul'
+import { aktifOkul, aktifOkulId } from '@/lib/okul'
+import { anasinifiVarMi, aylikZorunluMu } from '@/lib/sinif'
 import { supabaseServer } from '@/lib/supabase/server'
 import { bosNull, trBoolean, trSayi } from '@/lib/zod-tr'
 
@@ -99,6 +100,23 @@ const ogrenciSemasi = z.object({
 })
 
 /**
+ * Ekranın koyduğu kurallar sunucuda da geçerli: anasınıfı tipleri taksitli,
+ * anasınıfı olmayan okulda (AHMET MİTHAT) tip standart olmalı.
+ */
+async function tipKurallari(
+  g: { ogrenci_tipi: string; abone_tipi: string },
+  okulAdi: string | null | undefined,
+): Promise<Record<string, string> | null> {
+  if (aylikZorunluMu(g.ogrenci_tipi) && g.abone_tipi !== 'aylik') {
+    return { abone_tipi: 'Anasınıfı öğrencisi aylıkçı olmak zorunda.' }
+  }
+  if (!anasinifiVarMi(okulAdi) && aylikZorunluMu(g.ogrenci_tipi)) {
+    return { ogrenci_tipi: 'Bu okulda anasınıfı yok; öğrenci tipi standart olmalı.' }
+  }
+  return null
+}
+
+/**
  * Aynı ya da birkaç harf farklı adla kayıtlı öğrenci var mı?
  *
  * Kayıt masasında iki kişi aynı anda çalışıyor; aynı öğrenci iki kez
@@ -167,6 +185,9 @@ export async function ogrenciEkle(
   const okulId = await aktifOkulId()
   const g = sonuc.data
 
+  const kuralHatasi = await tipKurallari(g, (await aktifOkul())?.ad)
+  if (kuralHatasi) return girilenle(onceki, formData, { alanlar: kuralHatasi })
+
   // "Yine de kaydet" denmediyse önce mükerrer kaydı sor.
   if (formData.get('benzerlik_onayi') !== '1') {
     const benzerler = await benzerleriBul(g.ad_soyad, okulId)
@@ -219,6 +240,9 @@ export async function ogrenciGuncelle(
 
   const supabase = await supabaseServer()
   const okulId = await aktifOkulId()
+
+  const kuralHatasi = await tipKurallari(sonuc.data, (await aktifOkul())?.ad)
+  if (kuralHatasi) return girilenle(oncekiDurum, formData, { alanlar: kuralHatasi })
 
   // Ad değiştirilirken de mükerrer kayda düşülebilir; kendisi hariç tutulur.
   if (formData.get('benzerlik_onayi') !== '1') {
