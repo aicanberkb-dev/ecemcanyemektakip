@@ -1,8 +1,12 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useActionState, useEffect, useState } from 'react'
+import { useActionState, useEffect, useState, useTransition } from 'react'
 
+import {
+  OgrenciArama,
+  type AramaOgrencisi,
+} from '@/app/(uygulama)/payments/ekstre/OgrenciArama'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import type { OgrenciTaksitSatiri } from '@/lib/types'
 
@@ -12,6 +16,7 @@ import {
   ogrenciTaksitEkstraSil,
   ogrenciTaksitGuncelle,
   ogrenciTaksitVarsayilana,
+  taksitPlaniKopyala,
   type TaksitIstisnaDurumu,
 } from './taksit-actions'
 
@@ -23,14 +28,21 @@ export function TaksitBolumu({
   sezonId,
   sezonAdi,
   satirlar: hamSatirlar,
+  adaylar = [],
 }: {
   studentId: string
   sezonId: string
   sezonAdi: string
   satirlar: OgrenciTaksitSatiri[]
+  /** Planı kopyalanabilecek diğer öğrenciler (aynı okul) */
+  adaylar?: AramaOgrencisi[]
 }) {
   const router = useRouter()
   const [ekleAcik, setEkleAcik] = useState(false)
+  const [kopyaAcik, setKopyaAcik] = useState(false)
+  const [kaynak, setKaynak] = useState('')
+  const [kopyaDurum, setKopyaDurum] = useState<TaksitIstisnaDurumu>({})
+  const [kopyalaniyor, kopyala] = useTransition()
   const ekleEylem = ogrenciTaksitEkstraEkle.bind(null, studentId, sezonId)
   const [ekleDurum, ekleGonder, ekleBekliyor] = useActionState(
     ekleEylem,
@@ -171,9 +183,77 @@ export function TaksitBolumu({
           </p>
         </form>
       ) : (
-        <button type="button" onClick={() => setEkleAcik(true)} className="btn-ikincil">
-          + Bu öğrenciye taksit ekle
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button type="button" onClick={() => setEkleAcik(true)} className="btn-ikincil">
+            + Bu öğrenciye taksit ekle
+          </button>
+          {adaylar.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setKopyaAcik(true)}
+              className="btn-ikincil"
+            >
+              Başka öğrenciden planı kopyala
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Aynı anlaşmayı ikinci kez elle girmemek için: kaynağın gördüğü
+          tutar ve vadeler bu öğrenciye aynen yazılır. */}
+      {kopyaAcik && (
+        <div className="space-y-2 rounded-md border border-cizgi bg-slate-50 p-3">
+          <p className="text-sm font-medium">Taksit planını kopyala</p>
+          <p className="text-xs text-solgun">
+            Seçtiğin öğrencinin taksitleri (tutar ve vade) bu öğrenciye aynen yazılır.
+            Bu öğrencinin şu anki özel taksitleri silinir.
+          </p>
+          <OgrenciArama
+            secili={kaynak}
+            ogrenciler={adaylar}
+            oneriler={[]}
+            onSec={setKaynak}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn-birincil !py-1.5"
+              disabled={!kaynak || kopyalaniyor}
+              onClick={() => {
+                const ad = adaylar.find((a) => a.id === kaynak)?.ad_soyad ?? 'Seçilen öğrenci'
+                if (
+                  !confirm(
+                    `${ad} öğrencisinin taksit planı buraya kopyalansın mı?\n\n` +
+                      'Bu öğrencinin mevcut özel taksitleri silinecek.',
+                  )
+                )
+                  return
+                kopyala(async () => {
+                  const sonuc = await taksitPlaniKopyala(studentId, sezonId, kaynak)
+                  setKopyaDurum(sonuc)
+                  if (sonuc.basari) {
+                    setKopyaAcik(false)
+                    setKaynak('')
+                    router.refresh()
+                  }
+                })
+              }}
+            >
+              {kopyalaniyor ? 'Kopyalanıyor…' : 'Kopyala'}
+            </button>
+            <button
+              type="button"
+              className="btn-ikincil !py-1.5"
+              onClick={() => {
+                setKopyaAcik(false)
+                setKopyaDurum({})
+              }}
+            >
+              Vazgeç
+            </button>
+            {kopyaDurum.hata && <span className="text-sm text-red-600">{kopyaDurum.hata}</span>}
+          </div>
+        </div>
       )}
     </div>
   )

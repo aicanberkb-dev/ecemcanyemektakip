@@ -1,5 +1,6 @@
 import { TarihAraligi } from '@/components/TarihAraligi'
 import { aktifOkul } from '@/lib/okul'
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { OdemeYontemi } from '@/lib/types'
 
@@ -23,9 +24,11 @@ export default async function TahsilatPage({
   searchParams: Promise<{ bas?: string; bit?: string }>
 }) {
   const q = await searchParams
-  const yil = new Date().getFullYear()
-  const bas = q.bas || `${yil}-01-01`
-  const bit = q.bit || `${yil}-12-31`
+  // Varsayılan bugün: ekran en çok "bugün ne tahsil ettik" için açılıyor.
+  // Geçmişe bakmak için aralık elle genişletilir.
+  const bugun = await bugunSunucu()
+  const bas = q.bas || bugun
+  const bit = q.bit || bugun
 
   const supabase = await supabaseServer()
   const okul = await aktifOkul()

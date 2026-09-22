@@ -385,8 +385,20 @@ function YeniSatir({ yon, secilenFirma }: { yon: Yon; secilenFirma: string }) {
     <form onSubmit={ekle} className="space-y-2 border-b border-cizgi p-4">
       <Kutular taslak={taslak} degistir={setTaslak} alanlar={durum.alanlar} kimlik={`yeni-${yon}`} />
       <div className="flex items-center gap-3">
-        <button className="btn-birincil !py-1.5" disabled={bekliyor}>
-          {bekliyor ? 'Ekleniyor…' : yon === 'arti' ? '+ Artı ekle' : '− Eksi ekle'}
+        {/* Buton sütunun adını ve rengini taşır: kırmızı alınan mal, yeşil ödeme */}
+        <button
+          className={`btn-birincil !py-1.5 ${
+            yon === 'arti'
+              ? '!bg-red-600 hover:!bg-red-700'
+              : '!bg-emerald-600 hover:!bg-emerald-700'
+          }`}
+          disabled={bekliyor}
+        >
+          {bekliyor
+            ? 'Ekleniyor…'
+            : yon === 'arti'
+              ? '+ Alınan Mal Tutarı Ekle'
+              : '+ Ödenen Ekle'}
         </button>
         {durum.hata && <span className="text-sm text-red-600">{durum.hata}</span>}
         {durum.basari && !bekliyor && (

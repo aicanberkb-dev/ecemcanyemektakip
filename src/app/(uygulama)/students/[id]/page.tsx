@@ -235,6 +235,15 @@ export default async function OgrenciDetayPage({
               sezonId={sezon.id}
               sezonAdi={sezon.ad}
               satirlar={taksitSatirlari}
+              // Kardeşler de kaynak olabilir: en sık aynı plan onlarda
+              adaylar={tumOgrenciler
+                .filter((o) => o.student_id !== id)
+                .map((o) => ({
+                  id: o.student_id,
+                  ogrenci_no: o.ogrenci_no,
+                  ad_soyad: o.ad_soyad,
+                  sinif: o.sinif,
+                }))}
             />
           ) : (
             <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">

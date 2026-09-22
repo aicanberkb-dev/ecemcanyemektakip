@@ -205,3 +205,90 @@ export async function ogrenciTaksitEkstraSil(studentId: string, istisnaId: strin
   revalidatePath(`/students/${studentId}`)
   revalidatePath('/reports/taksit')
 }
+
+/**
+ * Bir öğrencinin taksit planını başka bir öğrenciye aynen kopyalar.
+ *
+ * Veliyle yapılan anlaşma çoğu zaman tek tek aynı: kardeşe ya da benzer
+ * durumdaki öğrenciye aynı plan elle giriliyordu. Kopyada kaynağın gördüğü
+ * tutar ve vadeler hedefe yazılır; hedefin kendi okul planı satırları varsa
+ * onlar istisnaya çevrilir, fazlası ek taksit olarak eklenir.
+ *
+ * Hedefin eski özel satırları silinir: "aynen aktar" denildiğinde ikisinin
+ * karışımı değil, kaynağın planı kalmalı.
+ */
+export async function taksitPlaniKopyala(
+  hedefId: string,
+  sezonId: string,
+  kaynakId: string,
+): Promise<TaksitIstisnaDurumu> {
+  if (hedefId === kaynakId) return { hata: 'Kaynak ve hedef aynı öğrenci.' }
+  if (!(await ogrenciOkuldaMi(hedefId)) || !(await ogrenciOkuldaMi(kaynakId))) {
+    return { hata: 'Öğrenci seçili okulda bulunamadı.' }
+  }
+
+  const supabase = await supabaseServer()
+
+  // Kaynağın gördüğü plan (okul planı + ona özel satırlar)
+  const { data: kaynakVeri, error: kaynakHata } = await supabase.rpc('ogrenci_taksit_plani', {
+    p_student_id: kaynakId,
+    p_sezon_id: sezonId,
+  })
+  if (kaynakHata) return { hata: kaynakHata.message }
+
+  const kaynak = ((kaynakVeri ?? []) as { tutar: number; vade_tarihi: string }[])
+    .map((s) => ({ tutar: Number(s.tutar), vade_tarihi: s.vade_tarihi }))
+    .sort((a, b) => a.vade_tarihi.localeCompare(b.vade_tarihi))
+
+  if (kaynak.length === 0) return { hata: 'Kaynak öğrencinin bu sezonda taksiti yok.' }
+
+  // Hedefin kendi tipinin okul planı: satırlar sırayla eşleştirilir
+  const { data: hedefPlanVeri, error: planHata } = await supabase.rpc('ogrenci_taksit_plani', {
+    p_student_id: hedefId,
+    p_sezon_id: sezonId,
+  })
+  if (planHata) return { hata: planHata.message }
+
+  const hedefPlan = ((hedefPlanVeri ?? []) as { taksit_plani_id: string | null }[])
+    .filter((s) => s.taksit_plani_id)
+    .map((s) => s.taksit_plani_id as string)
+
+  // Hedefin eski özel satırları temizlenir
+  const { error: silHata } = await supabase
+    .from('ogrenci_taksit')
+    .delete()
+    .eq('student_id', hedefId)
+    .eq('sezon_id', sezonId)
+  if (silHata) return { hata: silHata.message }
+
+  const satirlar = kaynak.map((s, i) => ({
+    student_id: hedefId,
+    sezon_id: sezonId,
+    taksit_plani_id: hedefPlan[i] ?? null,
+    ad: hedefPlan[i] ? null : `${i + 1}. Taksit`,
+    tutar: s.tutar,
+    vade_tarihi: s.vade_tarihi,
+    aciklama: 'Başka öğrenciden kopyalandı',
+  }))
+
+  // Hedefin planında kaynaktan fazla satır varsa onlar sıfırlanır; yoksa
+  // kopyalanan planın üstüne okul planından artık taksitler eklenirdi.
+  for (const planId of hedefPlan.slice(kaynak.length)) {
+    satirlar.push({
+      student_id: hedefId,
+      sezon_id: sezonId,
+      taksit_plani_id: planId,
+      ad: null,
+      tutar: 0,
+      vade_tarihi: kaynak[kaynak.length - 1].vade_tarihi,
+      aciklama: 'Kopyalanan planda yok',
+    })
+  }
+
+  const { error } = await supabase.from('ogrenci_taksit').insert(satirlar)
+  if (error) return { hata: error.message }
+
+  revalidatePath(`/students/${hedefId}`)
+  revalidatePath('/reports/taksit')
+  return { basari: `${kaynak.length} taksit kopyalandı.` }
+}
