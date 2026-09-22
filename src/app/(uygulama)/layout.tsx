@@ -47,15 +47,18 @@ export default async function UygulamaLayout({
     )
   }
 
-  // Okulun rengi: menü, okul düğmesi ve geniş ekranda yan şeritler
-  const tema = genel ? null : okulTemasi(aktif?.ad)
+  // Okulun rengi: menü, okul düğmesi ve geniş ekranda yan şeritler.
+  // Genel modun kendi bronz teması var: okul ekranlarından ayrışsın.
+  const tema = genel ? 'genel' : okulTemasi(aktif?.ad)
   // Orta alan görünümü: Ayarlar'dan seçilir, bu cihazın çerezinde
-  const gorunum = gorunumCozumle((await cookies()).get(GORUNUM_CEREZI)?.value)
+  // Genel modda görünüm sabit: bronz yalnız yan şeritlerde, çalışma alanı
+  // açık kalsın. Ayarlardaki görünüm seçimi okul ekranları için.
+  const gorunum = genel ? '1' : gorunumCozumle((await cookies()).get(GORUNUM_CEREZI)?.value)
 
   return (
     <BugunSaglayici bugun={bugun} simulasyon={!!simulasyon}>
       <div data-tema={tema ?? undefined} data-orta={gorunum} className="contents">
-        <YanSeritler tema={tema} okulAdi={aktif?.ad ?? ''} />
+        <YanSeritler tema={tema} okulAdi={genel ? 'GENEL' : (aktif?.ad ?? '')} />
         {simulasyon && (
           <SimulasyonSeridi tarih={simulasyon} gercekTarih={gercekBugun()} />
         )}

@@ -5,7 +5,8 @@
  *
  * Renkler globals.css'te `[data-tema]` altında.
  */
-export type OkulTema = 'goksu' | 'ahmet-mithat'
+/** 'genel' okula bağlı olmayan yönetim ekranlarının bronz teması */
+export type OkulTema = 'goksu' | 'ahmet-mithat' | 'genel'
 
 /** Okul adından tema. Tanınmayan okul ve genel mod bugünkü görünümde kalır. */
 export function okulTemasi(ad: string | null | undefined): OkulTema | null {

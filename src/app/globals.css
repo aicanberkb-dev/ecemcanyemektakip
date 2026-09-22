@@ -150,6 +150,35 @@ body {
   --yan-logo-golge: drop-shadow(0 0 1px #ffffff) drop-shadow(0 10px 18px rgb(40 0 4 / 0.55));
 }
 
+/* GENEL: fırçalanmış bronz — okula bağlı olmayan yönetim ekranları.
+   Şeritteki ince çizgiler fırçalanmış metal dokusu; okul renklerinden
+   (kırmızı, sarı) net ayrışsın diye kahve-bronz aile seçildi. */
+[data-tema='genel'] {
+  --menu-zemin: #4a3218;
+  --menu-marka: #deb173;
+  --menu-yazi: #e8d8bd;
+  --menu-ustune-zemin: #5c4020;
+  --menu-ustune-yazi: #ffffff;
+  --menu-aktif-zemin: #c79552;
+  --menu-aktif-yazi: #2a1c0a;
+  --menu-solgun: #c2ab8a;
+  --menu-serit: #a97538;
+  --cikis-zemin: #3a2712;
+  --cikis-yazi: #f0dfc3;
+  --cikis-kenar: #6b4a22;
+  --cikis-ustune: #5c4020;
+  --okul-zemin: #a97538;
+  --okul-yazi: #ffffff;
+  --okul-kenar: #a97538;
+  --okul-ustune: #8a5f2c;
+  --okul-nokta: #ffffff;
+  --yan-zemin:
+    repeating-linear-gradient(105deg, #b9884a 0px, #d3a35f 2px, #a97538 4px, #c79552 6px),
+    linear-gradient(160deg, #c79552, #7a5228);
+  --yan-yazi: #fff3e0;
+  --yan-logo-golge: drop-shadow(0 8px 16px rgb(45 25 0 / 0.55));
+}
+
 /* AHMET MİTHAT: sarı-siyah */
 [data-tema='ahmet-mithat'] {
   --menu-zemin: #0b0b0b;
@@ -257,6 +286,14 @@ body {
   --koyu-zemin: radial-gradient(ellipse at 50% 30%, #3a0d12 0%, #140507 75%);
   --dolu-yazi: #ffffff;
   --dolu-yazi-soluk: rgb(255 255 255 / 0.8);
+}
+
+[data-tema='genel'] {
+  --acik-zemin: #f7f1e7;
+  --duz: #c79552;
+  --koyu-zemin: radial-gradient(ellipse at 50% 30%, #3a2a16 0%, #16100a 75%);
+  --dolu-yazi: #2a1c0a;
+  --dolu-yazi-soluk: #5a4523;
 }
 
 [data-tema='ahmet-mithat'] {
