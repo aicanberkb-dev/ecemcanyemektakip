@@ -1009,3 +1009,40 @@ export async function ciroSil(id: string): Promise<FinansDurumu> {
   revalidatePath('/finans/ciro')
   return { basari: 'Silindi.' }
 }
+
+// ---------------------------------------------------------------------------
+// Günlük gider — gün gün serbest gider notu
+// ---------------------------------------------------------------------------
+
+const giderSemasi = z.object({
+  tarih: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih gerekli.'),
+  tutar: trSayi({ min: 0 }),
+  aciklama: bosNull,
+})
+
+/** id verilirse satırı günceller, verilmezse yeni satır ekler. */
+export async function gunlukGiderKaydet(
+  id: string | null,
+  veri: Record<string, string>,
+): Promise<FinansDurumu> {
+  const sonuc = giderSemasi.safeParse(veri)
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const supabase = await supabaseServer()
+  const { error } = id
+    ? await supabase.from('gunluk_gider').update(sonuc.data).eq('id', id)
+    : await supabase.from('gunluk_gider').insert(sonuc.data)
+  if (error) return { hata: error.message }
+
+  revalidatePath('/finans/gider')
+  return { basari: id ? 'Kaydedildi.' : 'Eklendi.' }
+}
+
+export async function gunlukGiderSil(id: string): Promise<FinansDurumu> {
+  const supabase = await supabaseServer()
+  const { error } = await supabase.from('gunluk_gider').delete().eq('id', id)
+  if (error) return { hata: error.message }
+
+  revalidatePath('/finans/gider')
+  return { basari: 'Silindi.' }
+}
