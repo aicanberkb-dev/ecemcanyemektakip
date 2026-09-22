@@ -32,9 +32,9 @@ const FINANS_ALT = [
   { yol: '/finans/tahsil-edilmemis', ad: 'Tahsil Edilmemiş' },
   { yol: '/finans/maaslar', ad: 'Maaşlar' },
   { yol: '/finans/arti-eksi', ad: 'Artı / Eksi' },
-  { yol: '/finans/defter', ad: 'Günlük Defter' },
+  { yol: '/finans/defter', ad: 'Tedarikçi Girdi-Çıktı' },
   { yol: '/finans/ciro', ad: 'Günlük Ciro' },
-  { yol: '/finans/gider', ad: 'Günlük Gider' },
+  { yol: '/finans/gider', ad: 'Ekrem Günlük Masraf' },
 ]
 
 const MALIYET_ALT = [

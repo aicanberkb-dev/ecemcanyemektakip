@@ -2,24 +2,27 @@ import { supabaseServer } from '@/lib/supabase/server'
 
 import { GiderEkrani, type GiderSatiri } from './GiderEkrani'
 
-export const metadata = { title: 'Günlük Gider — Yemek Takip' }
+export const metadata = { title: 'Ekrem Günlük Masraf — Yemek Takip' }
 
 export default async function GunlukGiderPage() {
   const supabase = await supabaseServer()
+  // Görünüm iki defteri birleştirir: buraya yazılan masraflar ve Tedarikçi
+  // Girdi-Çıktı ekranındaki ödemeler
   const { data, error } = await supabase
-    .from('gunluk_gider')
-    .select('id, tarih, tutar, aciklama')
+    .from('masraf_defteri')
+    .select('id, kaynak, tarih, tutar, masraf_noktasi, aciklama')
     .order('tarih', { ascending: false })
     .order('created_at')
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="baslik">Günlük Gider</h1>
+        <h1 className="baslik">Ekrem Günlük Masraf</h1>
         <p className="text-sm text-solgun">
-          O gün ne harcandıysa satır satır buraya. Tarih bugünle gelir, tutarı ve ne
-          olduğunu yaz, ekle. Satırlar güne göre gruplanır; her günün ve seçili aralığın
-          toplamı altta görünür.
+          O gün ne harcandıysa satır satır buraya: masraf noktasını yaz (daha önce
+          yazdıkların listeden gelir), tutarı gir, gerekirse açıklama ekle. Tedarikçi
+          Girdi-Çıktı defterindeki <strong>ödenen</strong> satırları da bu listede
+          görünür; onlar kendi ekranından düzenlenir.
         </p>
       </div>
 

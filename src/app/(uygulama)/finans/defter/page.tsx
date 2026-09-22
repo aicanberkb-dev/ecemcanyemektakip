@@ -2,7 +2,7 @@ import { supabaseServer } from '@/lib/supabase/server'
 
 import { DefterEkrani, type DefterSatiri } from './DefterEkrani'
 
-export const metadata = { title: 'Günlük Defter — Yemek Takip' }
+export const metadata = { title: 'Tedarikçi Girdi-Çıktı — Yemek Takip' }
 
 export default async function DefterPage() {
   const supabase = await supabaseServer()
@@ -15,9 +15,10 @@ export default async function DefterPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="baslik">Günlük Defter</h1>
+        <h1 className="baslik">Tedarikçi Girdi-Çıktı</h1>
         <p className="text-sm text-solgun">
-          Alınan mallar ve firmalara yapılan ödemeler. Her satıra firma yazabilirsin; bir kez
+          Tedarikçilerden alınan mallar ve onlara yapılan ödemeler. Buradaki ödemeler Ekrem
+          Günlük Masraf listesinde de görünür. Her satıra firma yazabilirsin; bir kez
           yazılan firma sonra listeden seçilir. Firma özetinde her firmadan ne kadar mal
           alındığı ve ne kadar ödendiği görünür; firmaya tıklayınca yalnız onun satırları
           kalır.

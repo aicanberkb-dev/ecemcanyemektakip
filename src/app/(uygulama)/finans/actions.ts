@@ -1017,6 +1017,12 @@ export async function ciroSil(id: string): Promise<FinansDurumu> {
 const giderSemasi = z.object({
   tarih: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih gerekli.'),
   tutar: trSayi({ min: 0 }),
+  // Aynı yer iki türlü yazılıp listede ikiye bölünmesin
+  masraf_noktasi: z
+    .string()
+    .trim()
+    .min(1, 'Masraf noktası gerekli.')
+    .transform((m) => m.replace(/\s+/g, ' ').toLocaleUpperCase('tr')),
   aciklama: bosNull,
 })
 
