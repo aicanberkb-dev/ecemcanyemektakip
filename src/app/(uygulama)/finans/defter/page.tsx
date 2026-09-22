@@ -17,9 +17,10 @@ export default async function DefterPage() {
       <div>
         <h1 className="baslik">Günlük Defter</h1>
         <p className="text-sm text-solgun">
-          Alışverişler, günlük gelen nakit… Her satıra firma yazabilirsin; bir kez
-          yazılan firma sonra listeden seçilir. Firma özetinde her firmaya ne kadar
-          artı ve eksi yazıldığı görünür; firmaya tıklayınca yalnız onun satırları kalır.
+          Alınan mallar ve firmalara yapılan ödemeler. Her satıra firma yazabilirsin; bir kez
+          yazılan firma sonra listeden seçilir. Firma özetinde her firmadan ne kadar mal
+          alındığı ve ne kadar ödendiği görünür; firmaya tıklayınca yalnız onun satırları
+          kalır.
         </p>
       </div>
 

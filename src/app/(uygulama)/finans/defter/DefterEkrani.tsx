@@ -137,12 +137,12 @@ export function DefterEkrani({ satirlar }: { satirlar: DefterSatiri[] }) {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="kart bg-emerald-50 p-4 text-emerald-800">
-          <p className="text-xs font-semibold tracking-wide uppercase opacity-80">Artılar</p>
+          <p className="text-xs font-semibold tracking-wide uppercase opacity-80">Alınan Mal</p>
           <p className="mt-1 text-2xl font-bold tabular-nums">{para(topla(artilar))}</p>
           <p className="mt-0.5 text-xs opacity-75">{artilar.length} satır</p>
         </div>
         <div className="kart bg-red-50 p-4 text-red-800">
-          <p className="text-xs font-semibold tracking-wide uppercase opacity-80">Eksiler</p>
+          <p className="text-xs font-semibold tracking-wide uppercase opacity-80">Ödenen</p>
           <p className="mt-1 text-2xl font-bold tabular-nums">{para(topla(eksiler))}</p>
           <p className="mt-0.5 text-xs opacity-75">{eksiler.length} satır</p>
         </div>
@@ -150,7 +150,7 @@ export function DefterEkrani({ satirlar }: { satirlar: DefterSatiri[] }) {
           className={`kart p-4 ${fark >= 0 ? 'bg-slate-100 text-slate-900' : 'bg-red-100 text-red-900'}`}
         >
           <p className="text-xs font-semibold tracking-wide uppercase opacity-80">
-            Fark (artı − eksi)
+            Kalan (alınan − ödenen)
           </p>
           <p className="mt-1 text-2xl font-bold tabular-nums">{para(fark)}</p>
           <p className="mt-0.5 text-xs opacity-75">{firma || 'Tüm firmalar'}</p>
@@ -164,9 +164,9 @@ export function DefterEkrani({ satirlar }: { satirlar: DefterSatiri[] }) {
             <thead>
               <tr>
                 <th>Firma</th>
-                <th className="text-right">Artı</th>
-                <th className="text-right">Eksi</th>
-                <th className="text-right">Fark</th>
+                <th className="text-right">Alınan Mal</th>
+                <th className="text-right">Ödenen</th>
+                <th className="text-right">Kalan</th>
                 <th className="text-right">Satır</th>
               </tr>
             </thead>
@@ -228,7 +228,7 @@ function Sutun({
           arti ? 'bg-emerald-50' : 'bg-red-50'
         }`}
       >
-        <h2 className={`font-semibold ${renk}`}>{arti ? 'Artılar' : 'Eksiler'}</h2>
+        <h2 className={`font-semibold ${renk}`}>{arti ? 'Alınan Mal Tutarı' : 'Ödenen'}</h2>
         <span className={`font-bold tabular-nums ${renk}`}>{para(toplam)}</span>
       </div>
 

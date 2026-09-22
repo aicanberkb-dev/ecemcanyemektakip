@@ -12,10 +12,13 @@ import { OGRENCI_TIPI_ADLARI, type OgrenciTipi, type TaksitDurumu } from '@/lib/
 export function TaksitListesi({
   satirlar,
   denemeIdleri = [],
+  notlar = {},
 }: {
   satirlar: TaksitDurumu[]
   /** Deneme öğrencilerinin id'leri: adın yanında rozet */
   denemeIdleri?: string[]
+  /** öğrenci id → ana verideki özel not; satırın altında gösterilir */
+  notlar?: Record<string, string>
 }) {
   const denemeler = useMemo(() => new Set(denemeIdleri), [denemeIdleri])
   const [arama, setArama] = useState('')
@@ -152,6 +155,13 @@ export function TaksitListesi({
                     >
                       özel plan
                     </span>
+                  )}
+                  {/* Ana veriye düşülen özel not: veliyle yapılan anlaşma
+                      çoğu zaman burada yazıyor, tahsilat ararken lazım */}
+                  {notlar[s.student_id] && (
+                    <p className="mt-0.5 max-w-96 text-xs whitespace-pre-wrap text-amber-800">
+                      {notlar[s.student_id]}
+                    </p>
                   )}
                 </td>
                 <td>{s.sinif ?? '—'}</td>

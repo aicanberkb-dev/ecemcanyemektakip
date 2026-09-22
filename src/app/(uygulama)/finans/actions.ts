@@ -965,3 +965,47 @@ export async function defterSil(id: string): Promise<FinansDurumu> {
   revalidatePath('/finans/defter')
   return { basari: 'Silindi.' }
 }
+
+// ---------------------------------------------------------------------------
+// Günlük ciro — yer bazlı (GÖKSU, AKBABA, TORİK…)
+// ---------------------------------------------------------------------------
+
+const ciroSemasi = z.object({
+  tarih: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih gerekli.'),
+  yer: z
+    .string()
+    .trim()
+    .min(1, 'Yer gerekli.')
+    .transform((y) => y.replace(/\s+/g, ' ').toLocaleUpperCase('tr')),
+  tutar: trSayi({ min: 0 }),
+  aciklama: bosNull,
+})
+
+/**
+ * Bir yerin bir günkü cirosunu yazar.
+ *
+ * Aynı gün ve yer için ikinci giriş öncekini günceller: aynı günü iki kez
+ * girmek toplamı şişiriyordu.
+ */
+export async function ciroKaydet(veri: Record<string, string>): Promise<FinansDurumu> {
+  const sonuc = ciroSemasi.safeParse(veri)
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase
+    .from('gunluk_ciro')
+    .upsert(sonuc.data, { onConflict: 'tarih,yer' })
+  if (error) return { hata: error.message }
+
+  revalidatePath('/finans/ciro')
+  return { basari: 'Kaydedildi.' }
+}
+
+export async function ciroSil(id: string): Promise<FinansDurumu> {
+  const supabase = await supabaseServer()
+  const { error } = await supabase.from('gunluk_ciro').delete().eq('id', id)
+  if (error) return { hata: error.message }
+
+  revalidatePath('/finans/ciro')
+  return { basari: 'Silindi.' }
+}

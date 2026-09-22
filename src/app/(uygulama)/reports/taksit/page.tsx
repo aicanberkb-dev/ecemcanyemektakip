@@ -51,13 +51,19 @@ export default async function TaksitPage({
     )
   }
 
-  const [{ data, error }, { data: planVeri }] = await Promise.all([
+  const [{ data, error }, { data: planVeri }, { data: notVeri }] = await Promise.all([
     supabase.rpc('taksit_durumu', { p_sezon_id: sezon.id, p_tarih: await bugunSunucu() }),
     supabase
       .from('taksit_plani')
       .select('*')
       .eq('sezon_id', sezon.id)
       .order('vade_tarihi'),
+    // Ana veriye düşülen özel notlar listede adın altında görünür
+    supabase
+      .from('students')
+      .select('id, ozel_not')
+      .eq('okul_id', okul.id)
+      .not('ozel_not', 'is', null),
   ])
 
   const satirlar = (data ?? []) as TaksitDurumu[]
@@ -193,7 +199,15 @@ export default async function TaksitPage({
             hesaplama o öğrencinin kendi planı üzerinden yapılır.
           </p>
 
-          <TaksitListesi satirlar={satirlar} denemeIdleri={await denemeIdleri(okul.id)} />
+          <TaksitListesi
+            satirlar={satirlar}
+            denemeIdleri={await denemeIdleri(okul.id)}
+            notlar={Object.fromEntries(
+              ((notVeri ?? []) as { id: string; ozel_not: string | null }[])
+                .filter((n) => n.ozel_not?.trim())
+                .map((n) => [n.id, n.ozel_not!.trim()]),
+            )}
+          />
 
           <p className="yazdirma-gizle text-xs text-solgun">
             Kümülatif hesap: vadesi gelen taksitlerin toplamı, yıl içinde yapılan tüm

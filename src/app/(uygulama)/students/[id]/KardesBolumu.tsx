@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useActionState, useState, useTransition } from 'react'
 
+import { OgrenciArama } from '@/app/(uygulama)/payments/ekstre/OgrenciArama'
 import { para } from '@/lib/format'
 
 import { kardesCikar, kardesEkle, type KardesDurumu } from '../kardes-actions'
@@ -26,6 +27,7 @@ export function KardesBolumu({
   adaylar: KardesKaydi[]
 }) {
   const [acik, setAcik] = useState(false)
+  const [secilenKardes, setSecilenKardes] = useState('')
   const eylem = kardesEkle.bind(null, studentId)
   const [durum, gonder, bekliyor] = useActionState(eylem, {} as KardesDurumu)
   const [cikariliyor, basla] = useTransition()
@@ -69,19 +71,22 @@ export function KardesBolumu({
       <div className="mt-3 border-t border-cizgi pt-3">
         {acik ? (
           <form action={gonder} className="space-y-2">
-            <select name="kardes_id" className="girdi !py-1.5" required defaultValue="">
-              <option value="" disabled>
-                Kardeşi seçin…
-              </option>
-              {adaylar.map((a) => (
-                <option key={a.student_id} value={a.student_id}>
-                  {a.ogrenci_no} · {a.ad_soyad}
-                  {a.sinif ? ` (${a.sinif})` : ''}
-                </option>
-              ))}
-            </select>
+            {/* Uzun listede gözle aramak yerine yazarak: ada, numaraya ve
+                sınıfa göre süzülür. Seçilen id gizli alanla gönderilir. */}
+            <input type="hidden" name="kardes_id" value={secilenKardes} />
+            <OgrenciArama
+              secili={secilenKardes}
+              ogrenciler={adaylar.map((a) => ({
+                id: a.student_id,
+                ogrenci_no: a.ogrenci_no,
+                ad_soyad: a.ad_soyad,
+                sinif: a.sinif,
+              }))}
+              oneriler={[]}
+              onSec={setSecilenKardes}
+            />
             <div className="flex gap-2">
-              <button className="btn-birincil !py-1.5" disabled={bekliyor}>
+              <button className="btn-birincil !py-1.5" disabled={bekliyor || !secilenKardes}>
                 {bekliyor ? 'Bağlanıyor…' : 'Bağla'}
               </button>
               <button

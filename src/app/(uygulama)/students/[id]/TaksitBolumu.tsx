@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useActionState, useEffect, useState } from 'react'
 
 import { para, tarih as tarihBicim } from '@/lib/format'
 import type { OgrenciTaksitSatiri } from '@/lib/types'
@@ -28,12 +29,19 @@ export function TaksitBolumu({
   sezonAdi: string
   satirlar: OgrenciTaksitSatiri[]
 }) {
+  const router = useRouter()
   const [ekleAcik, setEkleAcik] = useState(false)
   const ekleEylem = ogrenciTaksitEkstraEkle.bind(null, studentId, sezonId)
   const [ekleDurum, ekleGonder, ekleBekliyor] = useActionState(
     ekleEylem,
     {} as TaksitIstisnaDurumu,
   )
+
+  // Kaydın ardından listeyi tazele: sunucu tarafı yenilense de bu istemci
+  // bileşeni eski satırlarla kalıyordu, kullanıcı sayfayı elle yeniliyordu.
+  useEffect(() => {
+    if (ekleDurum.basari) router.refresh()
+  }, [ekleDurum.basari, router])
 
   // Taksitler vadeye göre sıralanır ve adını sırası verir. Adlar önce plandan ya
   // da elle yazılıyordu: bir öğrencide vadeler öne alınınca "2. Taksit" "1.
@@ -106,8 +114,20 @@ export function TaksitBolumu({
 
       {ekleAcik ? (
         <form action={ekleGonder} className="flex flex-wrap items-end gap-3 rounded-md border border-cizgi bg-slate-50 p-3">
-          {/* Ad elle yazılmaz: kayıtta bir ad gerekiyor, ekranda sırası gösterilir */}
-          <input type="hidden" name="ad" value={sirayaGoreAd(satirlar.length + 1)} />
+          {/* Kaçıncı taksit olduğu seçilir; liste yine vade sırasına göre
+              dizilir ve numaralar 1'den artarak yeniden verilir. */}
+          <div>
+            <label className="etiket text-xs">Taksit</label>
+            <select name="ad" className="girdi !py-1.5" defaultValue={sirayaGoreAd(satirlar.length + 1)}>
+              {Array.from({ length: satirlar.length + 1 }, (_, i) => sirayaGoreAd(i + 1)).map(
+                (a) => (
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
+                ),
+              )}
+            </select>
+          </div>
           <div>
             <label className="etiket text-xs">Vade</label>
             <input type="date" name="vade_tarihi" className="girdi !py-1.5" required />
@@ -176,7 +196,13 @@ function TaksitSatiri({
     ? ogrenciTaksitEkstraGuncelle.bind(null, studentId, satir.istisna_id!)
     : ogrenciTaksitGuncelle.bind(null, studentId, satir.taksit_plani_id!)
 
+  const router = useRouter()
   const [durum, gonder, bekliyor] = useActionState(eylem, {} as TaksitIstisnaDurumu)
+
+  // Kayıt sonrası satırlar tazelensin; sayfayı elle yenilemek gerekmesin
+  useEffect(() => {
+    if (durum.basari) router.refresh()
+  }, [durum.basari, router])
 
   if (durum.basari && duzenle) setDuzenle(false)
 

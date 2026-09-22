@@ -371,6 +371,13 @@ body {
       :is(.kart, table, .tablo, [class*='bg-'], [class*='border']) {
       color: var(--color-metin);
     }
+
+    /* Form kutuları her zaman koyu yazar: zemini beyaz olduğu için orta
+       alanın açık yazı rengini alınca içindeki değer görünmez oluyordu
+       (yemekhane ekranında Ücretli/Misafir adet ve fiyat kutuları). */
+    :is([data-orta='3'], [data-orta='5'])[data-tema] main :is(input, select, textarea) {
+      color: var(--color-metin);
+    }
   }
 }
 
