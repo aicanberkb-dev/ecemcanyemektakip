@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useRef, useState, useTransition } from 'react'
 
 import { useBugunTarihi } from '@/components/BugunSaglayici'
 import { para, tarih as tarihBicim } from '@/lib/format'
@@ -38,6 +38,9 @@ export function CiroEkrani({
   const [tutarlar, setTutarlar] = useState<Tutarlar>({})
   const [yeniYer, setYeniYer] = useState('')
   const [durum, setDurum] = useState<FinansDurumu>({})
+  /** Tablodan "Düzelt" ile yüklenen gün — form başlığında yazar */
+  const [duzenlenen, setDuzenlenen] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
   const [bas, setBas] = useState('')
   const [bit, setBit] = useState('')
 
@@ -65,7 +68,12 @@ export function CiroEkrani({
     [...gun.values()].reduce((t, s) => t + Number(s.tutar), 0)
   const genelToplam = gunler.reduce((t, [, gun]) => t + gunToplami(gun), 0)
 
-  /** Seçili günün kayıtlı değerlerini forma doldurur — düzeltmek için */
+  /**
+   * Seçili günün kayıtlı değerlerini forma doldurur — düzeltmek için.
+   *
+   * Form tablonun üstünde durduğu için sayfa oraya kaydırılır: tıklayınca
+   * ekranda hiçbir şey değişmiyor sanılıyordu.
+   */
   function gunuYukle(gun: string) {
     const kayitlar = satirlar.filter((s) => s.tarih === gun)
     setTarih(gun)
@@ -74,7 +82,9 @@ export function CiroEkrani({
         kayitlar.map((s) => [s.yer, String(Number(s.tutar)).replace('.', ',')]),
       ),
     )
+    setDuzenlenen(gun)
     setDurum({})
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   function kaydet(e: React.FormEvent) {
@@ -95,13 +105,38 @@ export function CiroEkrani({
       }
       setDurum({ basari: `${tarihBicim(tarih)} kaydedildi.` })
       setTutarlar({})
+      setDuzenlenen(null)
       router.refresh()
     })
   }
 
   return (
     <div className="space-y-4">
-      <form onSubmit={kaydet} className="kart space-y-3 p-4">
+      <form
+        ref={formRef}
+        onSubmit={kaydet}
+        className={`kart space-y-3 p-4 ${
+          duzenlenen ? 'ring-2 ring-amber-400' : ''
+        }`}
+      >
+        {duzenlenen && (
+          <div className="flex flex-wrap items-center gap-3 rounded-md bg-amber-50 px-3 py-2">
+            <span className="text-sm font-medium text-amber-900">
+              {tarihBicim(duzenlenen)} düzenleniyor — kaydedince o günün rakamları
+              değişir.
+            </span>
+            <button
+              type="button"
+              className="text-xs text-amber-900 underline"
+              onClick={() => {
+                setDuzenlenen(null)
+                setTutarlar({})
+              }}
+            >
+              Vazgeç
+            </button>
+          </div>
+        )}
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="etiket text-xs" htmlFor="ciro-tarih">
