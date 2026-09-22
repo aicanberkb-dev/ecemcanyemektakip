@@ -44,6 +44,8 @@ export function GiderEkrani({ satirlar }: { satirlar: GiderSatiri[] }) {
   const [bit, setBit] = useState('')
   const [ay, setAy] = useState('')
   const [arama, setArama] = useState('')
+  /** Masraf noktası özeti kapalı başlar; başlığa basınca aşağı açılır */
+  const [ozetAcik, setOzetAcik] = useState(false)
 
   const noktalar = useMemo(
     () =>
@@ -196,35 +198,56 @@ export function GiderEkrani({ satirlar }: { satirlar: GiderSatiri[] }) {
         </div>
       </div>
 
+      {/* Özet kapalı gelir: asıl iş günlük listede, bu yalnız istenince açılır */}
       {noktaOzeti.length > 1 && (
-        <div className="kart overflow-x-auto">
-          <h2 className="border-b border-cizgi px-4 py-3 font-semibold">Masraf Noktası Özeti</h2>
-          <table className="tablo">
-            <thead>
-              <tr>
-                <th>Masraf Noktası</th>
-                <th className="text-right">Toplam</th>
-              </tr>
-            </thead>
-            <tbody>
-              {noktaOzeti.map(([ad, tutar]) => (
-                <tr key={ad}>
-                  <td>
-                    <button
-                      type="button"
-                      className="font-medium text-vurgu hover:underline"
-                      onClick={() => setArama(arama === ad ? '' : ad)}
-                    >
-                      {ad}
-                    </button>
-                  </td>
-                  <td className="text-right font-medium tabular-nums text-red-700">
-                    {para(tutar)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="kart overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setOzetAcik((a) => !a)}
+            aria-expanded={ozetAcik}
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left font-semibold hover:bg-slate-50"
+          >
+            <span>
+              Masraf Noktası Özeti
+              <span className="ml-2 text-xs font-normal text-solgun">
+                {noktaOzeti.length} nokta
+              </span>
+            </span>
+            <span className="text-sm font-normal text-solgun">
+              {ozetAcik ? '▲ gizle' : '▼ göster'}
+            </span>
+          </button>
+
+          {ozetAcik && (
+            <div className="overflow-x-auto border-t border-cizgi">
+              <table className="tablo">
+                <thead>
+                  <tr>
+                    <th>Masraf Noktası</th>
+                    <th className="text-right">Toplam</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {noktaOzeti.map(([ad, tutar]) => (
+                    <tr key={ad}>
+                      <td>
+                        <button
+                          type="button"
+                          className="font-medium text-vurgu hover:underline"
+                          onClick={() => setArama(arama === ad ? '' : ad)}
+                        >
+                          {ad}
+                        </button>
+                      </td>
+                      <td className="text-right font-medium tabular-nums text-red-700">
+                        {para(tutar)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
