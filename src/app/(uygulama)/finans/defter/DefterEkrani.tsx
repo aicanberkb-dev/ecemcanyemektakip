@@ -136,18 +136,26 @@ export function DefterEkrani({ satirlar }: { satirlar: DefterSatiri[] }) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="kart bg-emerald-50 p-4 text-emerald-800">
+        {/* Renk borca göre: alınan mal borç yazar (kırmızı), ödeme borcu
+            kapatır (yeşil). Kalan pozitifse firmaya borçluyuz. */}
+        <div className="kart bg-red-50 p-4 text-red-800">
           <p className="text-xs font-semibold tracking-wide uppercase opacity-80">Alınan Mal</p>
           <p className="mt-1 text-2xl font-bold tabular-nums">{para(topla(artilar))}</p>
           <p className="mt-0.5 text-xs opacity-75">{artilar.length} satır</p>
         </div>
-        <div className="kart bg-red-50 p-4 text-red-800">
+        <div className="kart bg-emerald-50 p-4 text-emerald-800">
           <p className="text-xs font-semibold tracking-wide uppercase opacity-80">Ödenen</p>
           <p className="mt-1 text-2xl font-bold tabular-nums">{para(topla(eksiler))}</p>
           <p className="mt-0.5 text-xs opacity-75">{eksiler.length} satır</p>
         </div>
         <div
-          className={`kart p-4 ${fark >= 0 ? 'bg-slate-100 text-slate-900' : 'bg-red-100 text-red-900'}`}
+          className={`kart p-4 ${
+            fark > 0
+              ? 'bg-red-100 text-red-900'
+              : fark < 0
+                ? 'bg-emerald-100 text-emerald-900'
+                : 'bg-slate-100 text-slate-900'
+          }`}
         >
           <p className="text-xs font-semibold tracking-wide uppercase opacity-80">
             Kalan (alınan − ödenen)
@@ -182,11 +190,15 @@ export function DefterEkrani({ satirlar }: { satirlar: DefterSatiri[] }) {
                       {ad}
                     </button>
                   </td>
-                  <td className="text-right tabular-nums text-emerald-700">{para(o.arti)}</td>
-                  <td className="text-right tabular-nums text-red-700">{para(o.eksi)}</td>
+                  <td className="text-right tabular-nums text-red-700">{para(o.arti)}</td>
+                  <td className="text-right tabular-nums text-emerald-700">{para(o.eksi)}</td>
                   <td
                     className={`text-right font-semibold tabular-nums ${
-                      o.arti - o.eksi < 0 ? 'text-red-700' : ''
+                      o.arti - o.eksi > 0
+                        ? 'text-red-700'
+                        : o.arti - o.eksi < 0
+                          ? 'text-emerald-700'
+                          : ''
                     }`}
                   >
                     {para(o.arti - o.eksi)}
@@ -219,13 +231,14 @@ function Sutun({
   secilenFirma: string
 }) {
   const arti = yon === 'arti'
-  const renk = arti ? 'text-emerald-700' : 'text-red-700'
+  // Alınan mal borç yazar: kırmızı. Ödeme borcu kapatır: yeşil.
+  const renk = arti ? 'text-red-700' : 'text-emerald-700'
 
   return (
     <div className="kart min-w-0 overflow-hidden">
       <div
         className={`flex items-baseline justify-between border-b border-cizgi px-4 py-3 ${
-          arti ? 'bg-emerald-50' : 'bg-red-50'
+          arti ? 'bg-red-50' : 'bg-emerald-50'
         }`}
       >
         <h2 className={`font-semibold ${renk}`}>{arti ? 'Alınan Mal Tutarı' : 'Ödenen'}</h2>
