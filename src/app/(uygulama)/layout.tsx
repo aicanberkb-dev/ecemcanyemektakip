@@ -56,7 +56,7 @@ export default async function UygulamaLayout({
   return (
     <BugunSaglayici bugun={bugun} simulasyon={!!simulasyon}>
       <div data-tema={tema ?? undefined} data-orta={gorunum} className="contents">
-        <YanSeritler tema={tema} okulAdi={genel ? 'KURUMSAL' : (aktif?.ad ?? '')} />
+        <YanSeritler tema={tema} okulAdi={genel ? 'YÖNETİM' : (aktif?.ad ?? '')} />
         {simulasyon && (
           <SimulasyonSeridi tarih={simulasyon} gercekTarih={gercekBugun()} />
         )}
