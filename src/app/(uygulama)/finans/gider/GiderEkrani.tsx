@@ -39,7 +39,29 @@ function ayAraligi(ay: string): { bas: string; bit: string } {
   }
 }
 
+const iso = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate(),
+  ).padStart(2, '0')}`
+
+/** Bir günü kaydırır: gunEkle('2026-09-22', -1) → '2026-09-21' */
+function gunEkle(tarih: string, adet: number): string {
+  const d = new Date(`${tarih}T00:00:00`)
+  d.setDate(d.getDate() + adet)
+  return iso(d)
+}
+
+/** İçinde bulunulan haftanın pazartesi–pazar aralığı */
+function haftaAraligi(tarih: string): { bas: string; bit: string } {
+  const d = new Date(`${tarih}T00:00:00`)
+  // Pazar 0 geliyor; pazartesi başlangıç olacak şekilde kaydırılır
+  const pazartesiyeKalan = (d.getDay() + 6) % 7
+  const bas = gunEkle(tarih, -pazartesiyeKalan)
+  return { bas, bit: gunEkle(bas, 6) }
+}
+
 export function GiderEkrani({ satirlar }: { satirlar: GiderSatiri[] }) {
+  const bugun = useBugun()
   const [bas, setBas] = useState('')
   const [bit, setBit] = useState('')
   const [ay, setAy] = useState('')
@@ -54,6 +76,16 @@ export function GiderEkrani({ satirlar }: { satirlar: GiderSatiri[] }) {
       ),
     [satirlar],
   )
+
+  const hizliAraliklar = useMemo(() => {
+    const dun = gunEkle(bugun, -1)
+    const hafta = haftaAraligi(bugun)
+    return [
+      { ad: 'Dün', bas: dun, bit: dun },
+      { ad: 'Bugün', bas: bugun, bit: bugun },
+      { ad: 'Bu hafta', bas: hafta.bas, bit: hafta.bit },
+    ]
+  }, [bugun])
 
   // Kayıtlarda geçen aylar, yeniden eskiye
   const aylar = useMemo(
@@ -113,6 +145,37 @@ export function GiderEkrani({ satirlar }: { satirlar: GiderSatiri[] }) {
             .slice(0, 8)
             .map((n) => ({ deger: n, etiket: n }))}
         />
+
+        {/* Hızlı aralıklar: en sık bakılan üç aralık tek tuşla */}
+        <div className="flex flex-wrap items-center gap-2">
+          {hizliAraliklar.map((h) => {
+            const secili = bas === h.bas && bit === h.bit
+            return (
+              <button
+                key={h.ad}
+                type="button"
+                aria-pressed={secili}
+                onClick={() => {
+                  setAy('')
+                  if (secili) {
+                    setBas('')
+                    setBit('')
+                    return
+                  }
+                  setBas(h.bas)
+                  setBit(h.bit)
+                }}
+                className={`rounded-md border px-3 py-1.5 text-sm font-medium transition ${
+                  secili
+                    ? 'border-vurgu bg-blue-50 text-vurgu'
+                    : 'border-cizgi hover:bg-slate-50'
+                }`}
+              >
+                {h.ad}
+              </button>
+            )
+          })}
+        </div>
 
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-44">
