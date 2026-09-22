@@ -80,7 +80,7 @@ export function OkulSecici({ okullar, aktifId }: Props) {
           aria-hidden
         />
         <span className="max-w-40 truncate">
-          {bekliyor ? 'Geçiliyor…' : genelMi ? 'GENEL' : aktif?.ad}
+          {bekliyor ? 'Geçiliyor…' : genelMi ? 'KURUMSAL' : aktif?.ad}
         </span>
         <span className="text-xs opacity-70" aria-hidden>
           ▾
@@ -122,9 +122,9 @@ export function OkulSecici({ okullar, aktifId }: Props) {
             >
               <span className="w-4 shrink-0">{genelMi ? '✓' : ''}</span>
               <span>
-                GENEL
+                KURUMSAL
                 <span className="block text-xs font-normal text-solgun">
-                  Yemek listeleri · Maliyet · Kâr/Zarar
+                  Yemek listeleri · Maliyet · Finans · Kâr/Zarar
                 </span>
               </span>
             </button>
