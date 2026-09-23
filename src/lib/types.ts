@@ -29,7 +29,10 @@ export const PLANLI_OGRENCI_TIPLERI: OgrenciTipi[] = [
   'anasinifi_etut',
 ]
 export type IslemTipi = 'tahsilat' | 'harcama'
-export type SerbestOgunTipi = 'ucretli' | 'misafir'
+export type SerbestOgunTipi = 'ucretli' | 'misafir' | 'ogretmen'
+
+/** Serbest öğün ödeme yöntemi; misafirde yok */
+export type OgunOdeme = 'nakit' | 'kredi_karti'
 export type KullaniciRolu = 'admin' | 'personel'
 export type OdemeYontemi = 'nakit' | 'havale' | 'kredi_karti'
 
@@ -145,6 +148,8 @@ export type SerbestOgun = {
   tarih: string
   tip: SerbestOgunTipi
   tutar: number
+  /** Ücretli ve öğretmen öğünlerinde dolu; misafirde ve eski kayıtlarda null */
+  odeme_yontemi: OgunOdeme | null
   aciklama: string | null
   islemi_yapan_user_id: string
   created_at: string
@@ -177,6 +182,8 @@ export type UcretGecmisi = {
   okul_id: string
   gecerli_baslangic: string
   taban_gunluk_ucret: number
+  /** Öğretmen öğünü birim ücreti — taban ücretten farklı olabilir */
+  ogretmen_ucreti: number
   aciklama: string | null
   created_at: string
   updated_at: string
@@ -287,6 +294,12 @@ export type GunSonu = {
   gunlukcu_tutar: number
   ucretli_tutar: number
   misafir_tutar: number
+  ogretmen: number
+  ogretmen_tutar: number
+  ucretli_nakit: number
+  ucretli_kart: number
+  ogretmen_nakit: number
+  ogretmen_kart: number
 }
 
 export type NakitSatiri = {
@@ -297,10 +310,15 @@ export type NakitSatiri = {
   belirsiz_tutar: number
   tahsilat_tutar: number
   tahsilat_adet: number
+  /** Ücretli + öğretmen öğünlerinin toplamı (her iki ödeme yöntemi) */
   ucretli_tutar: number
   ucretli_adet: number
+  /** Öğünlerin nakit ödenen kısmı (ayrım öncesi eski kayıtlar da burada) */
+  ucretli_nakit_tutar: number
+  /** Öğünlerin kartla ödenen kısmı — kasaya girmez, bankaya gider */
+  ucretli_kart_tutar: number
   toplam: number
-  /** Kasaya fiilen giren para: nakit tahsilat + ücretli öğünler */
+  /** Kasaya fiilen giren para: nakit tahsilat + nakit ödenen öğünler */
   kasa_nakit: number
 }
 

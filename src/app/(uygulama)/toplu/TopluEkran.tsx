@@ -6,8 +6,9 @@ import { useMemo, useState } from 'react'
 import { AboneRozeti, Bakiye, OgrenciTipiRozeti } from '@/components/Rozetler'
 import { aramaEslesir } from '@/lib/arama'
 import { para, tarih as tarihBicim } from '@/lib/format'
+import { ogunAdi } from '@/lib/ogun'
 import { supabaseBrowser } from '@/lib/supabase/client'
-import type { AboneTipi, OgrenciTipi } from '@/lib/types'
+import type { AboneTipi, OgrenciTipi, OgunOdeme, SerbestOgunTipi } from '@/lib/types'
 
 export type TopluOgrenci = {
   student_id: string
@@ -30,6 +31,7 @@ export function TopluEkran({
   ogrenciler,
   siniflar,
   ucretliVarsayilan,
+  ogretmenVarsayilan,
 }: {
   gun: string
   /** Seçili gün resmi tatil / ara tatilse sebebi, değilse null */
@@ -39,6 +41,8 @@ export function TopluEkran({
   siniflar: string[]
   /** Seçili günün tarifesinden gelen ücretli öğün fiyatı */
   ucretliVarsayilan: number
+  /** Seçili günün tarifesinden gelen öğretmen öğünü fiyatı */
+  ogretmenVarsayilan: number
 }) {
   const router = useRouter()
   const supabase = useMemo(() => supabaseBrowser(), [])
@@ -134,7 +138,12 @@ export function TopluEkran({
     router.refresh()
   }
 
-  async function serbestKaydet(tip: 'ucretli' | 'misafir', adet: number, fiyat?: number) {
+  async function serbestKaydet(
+    tip: SerbestOgunTipi,
+    adet: number,
+    fiyat?: number,
+    odeme?: OgunOdeme,
+  ) {
     if (kaydediliyor) return
     setKaydediliyor(true)
 
@@ -144,6 +153,7 @@ export function TopluEkran({
       p_adet: adet,
       p_tarih: gun,
       p_birim_tutar: Number.isFinite(fiyat) ? fiyat : null,
+      p_odeme_yontemi: odeme ?? null,
     })
 
     setKaydediliyor(false)
@@ -152,7 +162,7 @@ export function TopluEkran({
       return
     }
     const s = (data as { eklenen: number; gun_toplami: number; birim_tutar: number }[] | null)?.[0]
-    const ad = tip === 'ucretli' ? 'Ücretli' : 'Misafir'
+    const ad = ogunAdi(tip, odeme)
     setMesaj({
       tip: 'ok',
       metin:
@@ -165,15 +175,21 @@ export function TopluEkran({
   }
 
   /**
-   * Ücretli/misafir öğün geri alma.
+   * Serbest öğün geri alma.
    *
    * Tutar verilirse yalnızca o fiyattan girilmiş kayıtlar silinir; o gün
    * yeterli kayıt yoksa sunucu hata verir. Sessizce başka tutarlı bir kaydı
-   * silmek kasayı bozardı.
+   * silmek kasayı bozardı. Ödeme yöntemi de eşleşir: nakit girilen bir öğün
+   * kart kaydından düşülmemeli.
    */
-  async function serbestGeriAl(tip: 'ucretli' | 'misafir', adet: number, fiyat?: number) {
+  async function serbestGeriAl(
+    tip: SerbestOgunTipi,
+    adet: number,
+    fiyat?: number,
+    odeme?: OgunOdeme,
+  ) {
     if (kaydediliyor) return
-    const ad = tip === 'ucretli' ? 'ücretli' : 'misafir'
+    const ad = ogunAdi(tip, odeme)
     const fiyatli = Number.isFinite(fiyat)
     if (
       !confirm(
@@ -191,6 +207,7 @@ export function TopluEkran({
       p_adet: adet,
       p_tarih: gun,
       p_birim_tutar: fiyatli ? fiyat : null,
+      p_odeme_yontemi: odeme ?? null,
     })
 
     setKaydediliyor(false)
@@ -202,7 +219,7 @@ export function TopluEkran({
     setMesaj({
       tip: 'ok',
       metin:
-        `${tip === 'ucretli' ? 'Ücretli' : 'Misafir'}: ${s?.silinen ?? adet} kayıt geri alındı` +
+        `${ad}: ${s?.silinen ?? adet} kayıt geri alındı` +
         `${Number(s?.iade_tutari ?? 0) > 0 ? ` (${para(s!.iade_tutari)} iade)` : ''}` +
         ` — o gün toplam ${s?.gun_toplami ?? '?'}.`,
     })
@@ -367,7 +384,7 @@ export function TopluEkran({
       >
         <div>
           <h2 className="font-semibold">
-            Ücretli ve Misafir Öğün — {tarihBicim(gun)}
+            Ücretli, Öğretmen ve Misafir Öğün — {tarihBicim(gun)}
             <span
               className={`rozet ml-2 ${
                 mod === 'ekle' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
@@ -388,11 +405,14 @@ export function TopluEkran({
             )}
           </p>
         </div>
+        {/* Yemekhane ekranındaki ayrımın aynısı: nakit ve kart ayrı sayılıyor,
+            öğretmen öğünü kendi tarifesinden fiyatlanıyor. Renkler de orayla
+            aynı ki iki ekran arasında geçerken buton karıştırılmasın. */}
         <div className="flex flex-wrap items-end gap-4">
           {/* key: işlemden sonra adet ve fiyat varsayılana döner */}
           <SerbestGiris
-            key={`ucretli-${mod}-${sifirlama}`}
-            etiket={mod === 'ekle' ? 'Ücretli Ekle' : 'Ücretli Geri Al'}
+            key={`ucretli-nakit-${mod}-${sifirlama}`}
+            etiket={mod === 'ekle' ? 'Ücretli · Nakit Ekle' : 'Ücretli · Nakit Geri Al'}
             renk={
               mod === 'ekle'
                 ? 'bg-yellow-400 hover:bg-yellow-500 text-slate-900'
@@ -402,8 +422,57 @@ export function TopluEkran({
             bekliyor={kaydediliyor}
             onGonder={(adet, fiyat) =>
               mod === 'ekle'
-                ? serbestKaydet('ucretli', adet, fiyat)
-                : serbestGeriAl('ucretli', adet, fiyat)
+                ? serbestKaydet('ucretli', adet, fiyat, 'nakit')
+                : serbestGeriAl('ucretli', adet, fiyat, 'nakit')
+            }
+          />
+          <SerbestGiris
+            key={`ucretli-kart-${mod}-${sifirlama}`}
+            etiket={mod === 'ekle' ? 'Ücretli · Kart Ekle' : 'Ücretli · Kart Geri Al'}
+            renk={
+              mod === 'ekle'
+                ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                : 'bg-white hover:bg-red-100 text-red-700 border border-red-300'
+            }
+            varsayilanFiyat={ucretliVarsayilan}
+            bekliyor={kaydediliyor}
+            onGonder={(adet, fiyat) =>
+              mod === 'ekle'
+                ? serbestKaydet('ucretli', adet, fiyat, 'kredi_karti')
+                : serbestGeriAl('ucretli', adet, fiyat, 'kredi_karti')
+            }
+          />
+          {/* Öğretmen ücreti Ayarlar'daki tarifeden gelir */}
+          <SerbestGiris
+            key={`ogretmen-nakit-${mod}-${sifirlama}`}
+            etiket={mod === 'ekle' ? 'Öğretmen · Nakit Ekle' : 'Öğretmen · Nakit Geri Al'}
+            renk={
+              mod === 'ekle'
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                : 'bg-white hover:bg-red-100 text-red-700 border border-red-300'
+            }
+            varsayilanFiyat={ogretmenVarsayilan}
+            bekliyor={kaydediliyor}
+            onGonder={(adet, fiyat) =>
+              mod === 'ekle'
+                ? serbestKaydet('ogretmen', adet, fiyat, 'nakit')
+                : serbestGeriAl('ogretmen', adet, fiyat, 'nakit')
+            }
+          />
+          <SerbestGiris
+            key={`ogretmen-kart-${mod}-${sifirlama}`}
+            etiket={mod === 'ekle' ? 'Öğretmen · Kart Ekle' : 'Öğretmen · Kart Geri Al'}
+            renk={
+              mod === 'ekle'
+                ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                : 'bg-white hover:bg-red-100 text-red-700 border border-red-300'
+            }
+            varsayilanFiyat={ogretmenVarsayilan}
+            bekliyor={kaydediliyor}
+            onGonder={(adet, fiyat) =>
+              mod === 'ekle'
+                ? serbestKaydet('ogretmen', adet, fiyat, 'kredi_karti')
+                : serbestGeriAl('ogretmen', adet, fiyat, 'kredi_karti')
             }
           />
           {/* Misafir personel: ücret alınmıyor, sadece sayaç */}

@@ -81,6 +81,9 @@ export async function okulAdiGuncelle(
 const tarifeSemasi = z.object({
   gecerli_baslangic: z.string().min(1, 'Geçerlilik başlangıcı gerekli.'),
   taban_gunluk_ucret: trSayi({ min: 0 }),
+  // Öğretmen öğünü taban ücretten farklı fiyatlanıyor; o da tarifeye bağlı
+  // ki fiyat değişince geçmiş kayıtlar bozulmasın.
+  ogretmen_ucreti: trSayi({ min: 0 }),
   aciklama: bosNull,
 })
 
@@ -91,7 +94,7 @@ async function guncelTarifeyiYansit(okulId: string) {
 
   const { data } = await supabase
     .from('ucret_gecmisi')
-    .select('taban_gunluk_ucret')
+    .select('taban_gunluk_ucret, ogretmen_ucreti')
     .eq('okul_id', okulId)
     .lte('gecerli_baslangic', bugun)
     .order('gecerli_baslangic', { ascending: false })

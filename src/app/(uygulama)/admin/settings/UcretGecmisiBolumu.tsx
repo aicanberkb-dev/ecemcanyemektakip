@@ -39,7 +39,8 @@ export function UcretGecmisiBolumu({
         Her tarife bir <strong>başlangıç tarihinden</strong> itibaren geçerlidir. Bir
         öğün, ait olduğu günün tarifesinden fiyatlanır — geçmişe dönük toplu giriş
         yaptığınızda o tarihteki fiyat uygulanır, bugünkü değil. Ücretli öğün de bu
-        günlük ücrete tabidir; misafirden ücret alınmaz.
+        günlük ücrete tabidir; misafirden ücret alınmaz. <strong>Öğretmen ücreti</strong>{' '}
+        ayrı tanımlanır — yemekhane ekranındaki öğretmen butonları bu fiyatla gelir.
       </p>
 
       <div className="overflow-x-auto">
@@ -48,6 +49,7 @@ export function UcretGecmisiBolumu({
             <tr>
               <th>Geçerlilik Başlangıcı</th>
               <th className="text-right">Günlük Ücret</th>
+              <th className="text-right">Öğretmen Ücreti</th>
               <th>Açıklama</th>
               <th className="text-right">İşlem</th>
             </tr>
@@ -63,7 +65,7 @@ export function UcretGecmisiBolumu({
             ))}
             {sirali.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-6 text-center text-solgun">
+                <td colSpan={5} className="py-6 text-center text-solgun">
                   Tarife tanımlı değil.
                 </td>
               </tr>
@@ -92,6 +94,19 @@ export function UcretGecmisiBolumu({
             />
             {durum.alanlar?.taban_gunluk_ucret && (
               <p className="hata">{durum.alanlar.taban_gunluk_ucret}</p>
+            )}
+          </div>
+          <div>
+            <label className="etiket text-xs">Öğretmen ücreti (₺)</label>
+            <input
+              name="ogretmen_ucreti"
+              inputMode="decimal"
+              defaultValue={gecerli ? String(gecerli.ogretmen_ucreti).replace('.', ',') : '0'}
+              className="girdi !py-1.5 w-32"
+              required
+            />
+            {durum.alanlar?.ogretmen_ucreti && (
+              <p className="hata">{durum.alanlar.ogretmen_ucreti}</p>
             )}
           </div>
           <div className="min-w-40 flex-1">
@@ -144,7 +159,7 @@ function TarifeSatiri({
   if (duzenle) {
     return (
       <tr className="bg-blue-50/40">
-        <td colSpan={4} className="px-3 py-3">
+        <td colSpan={5} className="px-3 py-3">
           <form action={gonder} className="flex flex-wrap items-end gap-3">
             <div>
               <label className="etiket text-xs">Başlangıç</label>
@@ -161,6 +176,15 @@ function TarifeSatiri({
                 name="taban_gunluk_ucret"
                 inputMode="decimal"
                 defaultValue={String(tarife.taban_gunluk_ucret).replace('.', ',')}
+                className="girdi !py-1.5 w-28"
+              />
+            </div>
+            <div>
+              <label className="etiket text-xs">Öğretmen</label>
+              <input
+                name="ogretmen_ucreti"
+                inputMode="decimal"
+                defaultValue={String(tarife.ogretmen_ucreti ?? 0).replace('.', ',')}
                 className="girdi !py-1.5 w-28"
               />
             </div>
@@ -197,6 +221,7 @@ function TarifeSatiri({
         )}
       </td>
       <td className="text-right tabular-nums">{para(tarife.taban_gunluk_ucret)}</td>
+      <td className="text-right tabular-nums">{para(tarife.ogretmen_ucreti ?? 0)}</td>
       <td className="text-solgun">{tarife.aciklama ?? '—'}</td>
       <td className="text-right whitespace-nowrap">
         <button

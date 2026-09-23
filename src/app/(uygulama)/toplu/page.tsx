@@ -78,8 +78,12 @@ export default async function TopluPage({
     .rpc('ucretler', { p_okul_id: okul.id, p_tarih: gun })
     .maybeSingle()
 
-  const tarife = tarifeVeri as { taban_gunluk_ucret: number } | null
+  const tarife = tarifeVeri as {
+    taban_gunluk_ucret: number
+    ogretmen_ogun_ucreti: number | null
+  } | null
   const ucretliVarsayilan = Number(tarife?.taban_gunluk_ucret ?? 0)
+  const ogretmenVarsayilan = Number(tarife?.ogretmen_ogun_ucreti ?? 0)
 
   const siniflar = [...new Set(ogrenciler.map((o) => o.sinif).filter(Boolean))].sort() as string[]
 
@@ -103,6 +107,7 @@ export default async function TopluPage({
         ogrenciler={ogrenciler}
         siniflar={siniflar}
         ucretliVarsayilan={ucretliVarsayilan}
+        ogretmenVarsayilan={ogretmenVarsayilan}
       />
     </div>
   )

@@ -30,8 +30,12 @@ export default async function PosPage() {
   // Genel tatil ya da bu okula özel kapalı gün (diğer okulunki değil)
   const tatil = (await okulKapaliGunleri(supabase, okul.id, bugun, bugun))[0] ?? null
 
-  const tarife = data as { taban_gunluk_ucret: number } | null
+  const tarife = data as {
+    taban_gunluk_ucret: number
+    ogretmen_ogun_ucreti: number | null
+  } | null
   const ucretliVarsayilan = Number(tarife?.taban_gunluk_ucret ?? 0)
+  const ogretmenVarsayilan = Number(tarife?.ogretmen_ogun_ucreti ?? 0)
 
   // key: okul değişince ekran tamamen sıfırlanır, önceki okulun öğrencisi kalmaz
   return (
@@ -40,6 +44,7 @@ export default async function PosPage() {
       okulId={okul.id}
       okulAdi={okul.ad}
       ucretliVarsayilan={ucretliVarsayilan}
+      ogretmenVarsayilan={ogretmenVarsayilan}
       taksitler={Object.fromEntries(taksitler)}
       tatilSebebi={(tatil as { sebep: string | null } | null)?.sebep ?? null}
     />

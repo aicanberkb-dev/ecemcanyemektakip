@@ -66,10 +66,12 @@ export default async function DashboardPage({
     .filter((h) => h.tip === 'harcama')
     .reduce((t, h) => t + Number(h.tutar), 0)
   const ogunSayisi = hareketler.filter((h) => h.ogun_abone_tipi !== null).length
+  // Öğretmen öğünü de kasaya giren bir gelir; ücretliyle aynı kutuda toplanır
   const ucretliTutar = serbestler
-    .filter((s) => s.tip === 'ucretli')
+    .filter((s) => s.tip === 'ucretli' || s.tip === 'ogretmen')
     .reduce((t, s) => t + Number(s.tutar), 0)
   const ucretliAdet = serbestler.filter((s) => s.tip === 'ucretli').length
+  const ogretmenAdet = serbestler.filter((s) => s.tip === 'ogretmen').length
   const misafirAdet = serbestler.filter((s) => s.tip === 'misafir').length
 
   return (
@@ -85,9 +87,9 @@ export default async function DashboardPage({
         <Kart baslik="Tahsilat" deger={para(tahsilat)} renk="text-emerald-700" alt={`${bas} – ${bit}`} />
         <Kart baslik="Harcama (yemek)" deger={para(harcama)} alt={`${ogunSayisi} öğrenci öğünü`} />
         <Kart
-          baslik="Ücretli öğün"
+          baslik="Ücretli / öğretmen öğün"
           deger={para(ucretliTutar)}
-          alt={`${ucretliAdet} adet · ${misafirAdet} misafir`}
+          alt={`${ucretliAdet} ücretli · ${ogretmenAdet} öğretmen · ${misafirAdet} misafir`}
         />
         <Kart baslik="Aktif öğrenci" deger={String(aktifOgrenci ?? 0)} alt="kayıtlı" />
       </div>

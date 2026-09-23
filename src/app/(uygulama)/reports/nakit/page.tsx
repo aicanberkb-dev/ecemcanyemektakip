@@ -37,6 +37,8 @@ export default async function NakitPage({
       tahsilatAdet: t.tahsilatAdet + Number(s.tahsilat_adet),
       ucretli: t.ucretli + Number(s.ucretli_tutar),
       ucretliAdet: t.ucretliAdet + Number(s.ucretli_adet),
+      ucretliNakit: t.ucretliNakit + Number(s.ucretli_nakit_tutar),
+      ucretliKart: t.ucretliKart + Number(s.ucretli_kart_tutar),
       genel: t.genel + Number(s.toplam),
       kasa: t.kasa + Number(s.kasa_nakit),
     }),
@@ -49,6 +51,8 @@ export default async function NakitPage({
       tahsilatAdet: 0,
       ucretli: 0,
       ucretliAdet: 0,
+      ucretliNakit: 0,
+      ucretliKart: 0,
       genel: 0,
       kasa: 0,
     },
@@ -71,9 +75,9 @@ export default async function NakitPage({
         <Ozet baslik="Havale / EFT" deger={para(toplam.havale)} />
         <Ozet baslik="Kredi kartı" deger={para(toplam.kart)} />
         <Ozet
-          baslik="Ücretli öğünler"
+          baslik="Ücretli / öğretmen öğün"
           deger={para(toplam.ucretli)}
-          alt={`${toplam.ucretliAdet} öğün · kapıda nakit`}
+          alt={`${toplam.ucretliAdet} öğün · ${para(toplam.ucretliNakit)} nakit / ${para(toplam.ucretliKart)} kart`}
         />
       </div>
 
@@ -82,7 +86,7 @@ export default async function NakitPage({
           baslik="Kasaya giren nakit"
           deger={para(toplam.kasa)}
           renk="text-emerald-700"
-          alt="nakit tahsilat + ücretli öğünler"
+          alt="nakit tahsilat + nakit ödenen öğünler (kart hariç)"
         />
         <Ozet
           baslik="Dönem geneli (tüm yöntemler)"
@@ -99,7 +103,8 @@ export default async function NakitPage({
               <th className="text-right">Nakit</th>
               <th className="text-right">Havale</th>
               <th className="text-right">Kart</th>
-              <th className="text-right">Ücretli öğün</th>
+              <th className="text-right">Öğün (nakit)</th>
+              <th className="text-right">Öğün (kart)</th>
               <th className="text-right">Kasaya giren</th>
               <th className="text-right">Günün toplamı</th>
             </tr>
@@ -111,7 +116,8 @@ export default async function NakitPage({
                 <td className="text-right tabular-nums">{para(s.nakit_tutar)}</td>
                 <td className="text-right tabular-nums">{para(s.havale_tutar)}</td>
                 <td className="text-right tabular-nums">{para(s.kart_tutar)}</td>
-                <td className="text-right tabular-nums">{para(s.ucretli_tutar)}</td>
+                <td className="text-right tabular-nums">{para(s.ucretli_nakit_tutar)}</td>
+                <td className="text-right tabular-nums">{para(s.ucretli_kart_tutar)}</td>
                 <td className="text-right font-semibold tabular-nums text-emerald-700">
                   {para(s.kasa_nakit)}
                 </td>
@@ -120,7 +126,7 @@ export default async function NakitPage({
             ))}
             {satirlar.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-solgun">
+                <td colSpan={8} className="py-8 text-center text-solgun">
                   Bu aralıkta kasaya para girişi yok.
                 </td>
               </tr>
@@ -133,7 +139,8 @@ export default async function NakitPage({
                 <td className="px-3 py-2 text-right tabular-nums">{para(toplam.nakit)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{para(toplam.havale)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{para(toplam.kart)}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{para(toplam.ucretli)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{para(toplam.ucretliNakit)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{para(toplam.ucretliKart)}</td>
                 <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
                   {para(toplam.kasa)}
                 </td>

@@ -5,8 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBugun } from '@/components/BugunSaglayici'
 import { TaksitRozeti, type TaksitBilgisi } from '@/components/TaksitRozeti'
 import { para } from '@/lib/format'
+import { ogunAdi } from '@/lib/ogun'
 import { supabaseBrowser } from '@/lib/supabase/client'
-import type { GunSonu, PosSonuc, SerbestOgunTipi } from '@/lib/types'
+import type { GunSonu, OgunOdeme, PosSonuc, SerbestOgunTipi } from '@/lib/types'
 
 type Mesaj = { tip: 'ok' | 'hata'; metin: string }
 
@@ -14,6 +15,7 @@ export function PosEkrani({
   okulId,
   okulAdi,
   ucretliVarsayilan,
+  ogretmenVarsayilan,
   taksitler,
   tatilSebebi,
 }: {
@@ -21,6 +23,8 @@ export function PosEkrani({
   okulAdi: string
   /** Bugünkü tarifeden gelen ücretli öğün fiyatı; ekranda değiştirilebilir */
   ucretliVarsayilan: number
+  /** Öğretmen öğünü birim ücreti — Ayarlar'daki tarifeden */
+  ogretmenVarsayilan: number
   /** Aylıkçıların taksit durumu, öğrenci id'siyle */
   taksitler: Record<string, TaksitBilgisi>
   /** Bugün resmi tatil / ara tatilse sebebi, değilse null */
@@ -183,7 +187,12 @@ export function PosEkrani({
     ozetYenile()
   }
 
-  async function serbestKaydet(tip: SerbestOgunTipi, adet: number, birim?: number) {
+  async function serbestKaydet(
+    tip: SerbestOgunTipi,
+    adet: number,
+    birim?: number,
+    odeme?: OgunOdeme,
+  ) {
     if (kaydediliyor) return
     setKaydediliyor(true)
 
@@ -194,6 +203,7 @@ export function PosEkrani({
       p_adet: adet,
       p_tarih: bugun,
       p_birim_tutar: Number.isFinite(birim) ? birim : null,
+      p_odeme_yontemi: odeme ?? null,
     })
 
     setKaydediliyor(false)
@@ -202,7 +212,7 @@ export function PosEkrani({
       return
     }
     const sonuc = (data as { eklenen: number; gun_toplami: number; birim_tutar: number }[] | null)?.[0]
-    const ad = tip === 'ucretli' ? 'Ücretli' : 'Misafir'
+    const ad = ogunAdi(tip, odeme)
     setMesaj({
       tip: 'ok',
       metin:
@@ -215,9 +225,14 @@ export function PosEkrani({
     ozetYenile()
   }
 
-  async function serbestGeriAl(tip: SerbestOgunTipi, adet: number, birim?: number) {
+  async function serbestGeriAl(
+    tip: SerbestOgunTipi,
+    adet: number,
+    birim?: number,
+    odeme?: OgunOdeme,
+  ) {
     if (kaydediliyor) return
-    const ad = tip === 'ucretli' ? 'ücretli' : 'misafir'
+    const ad = ogunAdi(tip, odeme)
     const fiyatli = Number.isFinite(birim)
     if (
       !confirm(
@@ -236,6 +251,7 @@ export function PosEkrani({
       p_adet: adet,
       p_tarih: bugun,
       p_birim_tutar: fiyatli ? birim : null,
+      p_odeme_yontemi: odeme ?? null,
     })
 
     setKaydediliyor(false)
@@ -247,7 +263,7 @@ export function PosEkrani({
     setMesaj({
       tip: 'ok',
       metin:
-        `${tip === 'ucretli' ? 'Ücretli' : 'Misafir'}: ${sonuc?.silinen ?? adet} kayıt geri alındı` +
+        `${ad}: ${sonuc?.silinen ?? adet} kayıt geri alındı` +
         `${Number(sonuc?.iade_tutari ?? 0) > 0 ? ` (${para(sonuc!.iade_tutari)} iade)` : ''}` +
         ` — bugün toplam ${sonuc?.gun_toplami ?? '?'}.`,
     })
@@ -400,7 +416,7 @@ export function PosEkrani({
 
         {/* Kayıt butonları — abone tipini öğrencinin verisinden biliyoruz,
             kullanıcıya seçtirmiyoruz */}
-        <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr_auto]">
+        <div className="grid gap-3 sm:grid-cols-[2fr_auto]">
           <OgunButonu
             renk="bg-blue-600 hover:bg-blue-700"
             etkin={!yemekKilitli}
@@ -410,34 +426,71 @@ export function PosEkrani({
             Öğrenci Yemek Yedir
           </OgunButonu>
 
-          {/* key: her kayıttan sonra bileşen sıfırlanır — fiyat tarifeye,
-              adet 1'e döner. Değiştirilmiş fiyatın sonraki işlemde de
-              kullanılması sessiz bir hataya yol açıyordu. */}
+          <OgunButonu renk="bg-slate-500 hover:bg-slate-600" etkin onClick={vazgec}>
+            Vazgeç
+          </OgunButonu>
+        </div>
+
+        {/* Ücretli ve öğretmen öğünü nakit / kart ayrı: gün sonunda kasa ile
+            kart ayrı tutuluyor, tek kalemde toplanınca tutmuyordu.
+            key: her kayıttan sonra bileşen sıfırlanır — fiyat tarifeye,
+            adet 1'e döner. Değiştirilmiş fiyatın sonraki işlemde de
+            kullanılması sessiz bir hataya yol açıyordu. */}
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <AdetliButon
-            key={`ucretli-${sifirlama}`}
+            key={`ucretli-nakit-${sifirlama}`}
             renk="bg-yellow-400 hover:bg-yellow-500"
             metinRengi="text-slate-900"
             etkin={!kaydediliyor}
             varsayilanFiyat={ucretliVarsayilan}
-            onGonder={(adet, fiyat) => serbestKaydet('ucretli', adet, fiyat)}
+            onGonder={(adet, fiyat) => serbestKaydet('ucretli', adet, fiyat, 'nakit')}
           >
-            Ücretli
+            Ücretli · Nakit
           </AdetliButon>
 
-          {/* Misafir personelimiz: ücret alınmıyor, buton yalnızca sayaç.
-              Bu yüzden fiyat kutusu yok. */}
+          <AdetliButon
+            key={`ucretli-kart-${sifirlama}`}
+            renk="bg-orange-600 hover:bg-orange-700"
+            etkin={!kaydediliyor}
+            varsayilanFiyat={ucretliVarsayilan}
+            onGonder={(adet, fiyat) => serbestKaydet('ucretli', adet, fiyat, 'kredi_karti')}
+          >
+            Ücretli · Kredi Kartı
+          </AdetliButon>
+
+          {/* Öğretmen ücreti Ayarlar'daki tarifeden gelir */}
+          <AdetliButon
+            key={`ogretmen-nakit-${sifirlama}`}
+            renk="bg-emerald-600 hover:bg-emerald-700"
+            etkin={!kaydediliyor}
+            varsayilanFiyat={ogretmenVarsayilan}
+            onGonder={(adet, fiyat) => serbestKaydet('ogretmen', adet, fiyat, 'nakit')}
+          >
+            Öğretmen · Nakit
+          </AdetliButon>
+
+          <AdetliButon
+            key={`ogretmen-kart-${sifirlama}`}
+            renk="bg-indigo-600 hover:bg-indigo-700"
+            etkin={!kaydediliyor}
+            varsayilanFiyat={ogretmenVarsayilan}
+            onGonder={(adet, fiyat) => serbestKaydet('ogretmen', adet, fiyat, 'kredi_karti')}
+          >
+            Öğretmen · Kredi Kartı
+          </AdetliButon>
+        </div>
+
+        {/* Misafir personelimiz: ücret alınmıyor, buton yalnızca sayaç.
+            Bu yüzden fiyat kutusu ve ödeme yöntemi yok. */}
+        <div className="mt-3 grid gap-3 sm:grid-cols-4">
           <AdetliButon
             key={`misafir-${sifirlama}`}
             renk="bg-purple-600 hover:bg-purple-700"
             etkin={!kaydediliyor}
             onGonder={(adet) => serbestKaydet('misafir', adet)}
           >
-            Misafir
+            Misafir (ücretsiz)
           </AdetliButon>
-
-          <OgunButonu renk="bg-slate-500 hover:bg-slate-600" etkin onClick={vazgec}>
-            Vazgeç
-          </OgunButonu>
         </div>
 
         {/* Geri alma barı — yanlışlıkla basılmasın diye ayrı ve uzakta */}
@@ -445,7 +498,12 @@ export function PosEkrani({
           <h3 className="mb-3 text-xs font-semibold tracking-wide text-red-800 uppercase">
             Geri alma — yanlış girilen kayıtları siler
           </h3>
-          <div className="grid gap-3 sm:grid-cols-3">
+          {/* Her kayıt butonunun karşılığı burada: yanlış basılan her işlem
+              aynı ayrımla geri alınabilmeli (nakit kaydı karttan silinmesin).
+              Fiyat kutusu burada da var: taban dışı bir tutardan tahsilat
+              yapıldıysa iadesi de o tutardan olmalı. key ile her işlemden
+              sonra tabana döner. */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <button
               type="button"
               disabled={!secili || kaydediliyor}
@@ -459,20 +517,56 @@ export function PosEkrani({
               {!secili && <span className="mt-0.5 block text-xs">önce öğrenci seçin</span>}
             </button>
 
-            {/* Fiyat kutusu burada da var: taban dışı bir tutardan tahsilat
-                yapıldıysa iadesi de o tutardan olmalı. key ile her işlemden
-                sonra tabana döner. */}
             <AdetliButon
-              key={`ucretli-geri-${sifirlama}`}
+              key={`ucretli-nakit-geri-${sifirlama}`}
               renk="bg-white hover:bg-red-100"
               metinRengi="text-red-700"
               kenarlik="border border-red-300"
               etkin={!kaydediliyor}
               kucuk
               varsayilanFiyat={ucretliVarsayilan}
-              onGonder={(adet, fiyat) => serbestGeriAl('ucretli', adet, fiyat)}
+              onGonder={(adet, fiyat) => serbestGeriAl('ucretli', adet, fiyat, 'nakit')}
             >
-              Ücretli Geri Al
+              Ücretli · Nakit Geri Al
+            </AdetliButon>
+
+            <AdetliButon
+              key={`ucretli-kart-geri-${sifirlama}`}
+              renk="bg-white hover:bg-red-100"
+              metinRengi="text-red-700"
+              kenarlik="border border-red-300"
+              etkin={!kaydediliyor}
+              kucuk
+              varsayilanFiyat={ucretliVarsayilan}
+              onGonder={(adet, fiyat) => serbestGeriAl('ucretli', adet, fiyat, 'kredi_karti')}
+            >
+              Ücretli · Kart Geri Al
+            </AdetliButon>
+
+            <AdetliButon
+              key={`ogretmen-nakit-geri-${sifirlama}`}
+              renk="bg-white hover:bg-red-100"
+              metinRengi="text-red-700"
+              kenarlik="border border-red-300"
+              etkin={!kaydediliyor}
+              kucuk
+              varsayilanFiyat={ogretmenVarsayilan}
+              onGonder={(adet, fiyat) => serbestGeriAl('ogretmen', adet, fiyat, 'nakit')}
+            >
+              Öğretmen · Nakit Geri Al
+            </AdetliButon>
+
+            <AdetliButon
+              key={`ogretmen-kart-geri-${sifirlama}`}
+              renk="bg-white hover:bg-red-100"
+              metinRengi="text-red-700"
+              kenarlik="border border-red-300"
+              etkin={!kaydediliyor}
+              kucuk
+              varsayilanFiyat={ogretmenVarsayilan}
+              onGonder={(adet, fiyat) => serbestGeriAl('ogretmen', adet, fiyat, 'kredi_karti')}
+            >
+              Öğretmen · Kart Geri Al
             </AdetliButon>
 
             <AdetliButon
@@ -508,7 +602,16 @@ export function PosEkrani({
         <dl className="space-y-2 text-sm">
           <Satir ad="Günlükçü" deger={ozet?.gunlukcu ?? 0} />
           <Satir ad="Aylıkçı" deger={ozet?.aylikci ?? 0} />
-          <Satir ad="Ücretli" deger={ozet?.ucretli ?? 0} />
+          <Satir
+            ad="Ücretli"
+            deger={ozet?.ucretli ?? 0}
+            alt={`${ozet?.ucretli_nakit ?? 0} nakit · ${ozet?.ucretli_kart ?? 0} kart`}
+          />
+          <Satir
+            ad="Öğretmen"
+            deger={ozet?.ogretmen ?? 0}
+            alt={`${ozet?.ogretmen_nakit ?? 0} nakit · ${ozet?.ogretmen_kart ?? 0} kart`}
+          />
           <Satir ad="Misafir" deger={ozet?.misafir ?? 0} />
           <div className="border-t border-cizgi pt-2">
             <Satir ad="Toplam" deger={ozet?.toplam ?? 0} kalin />
@@ -567,7 +670,7 @@ function AdetliButon({
         disabled={!etkin || (varsayilanFiyat !== undefined && !fiyatGecerli)}
         onClick={() => onGonder(sayi, varsayilanFiyat === undefined ? undefined : fiyatSayi)}
         className={`rounded-lg px-3 font-semibold transition
-          ${kucuk ? 'py-3 text-sm' : 'py-6 text-base'}
+          ${kucuk ? 'py-3 text-sm' : 'py-9 text-xl'}
           disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white
           ${renk} ${kenarlik} ${etkin ? metinRengi : ''}`}
       >
@@ -639,7 +742,7 @@ function OgunButonu({
       type="button"
       disabled={!etkin}
       onClick={onClick}
-      className={`rounded-lg px-3 py-6 text-base font-semibold transition
+      className={`rounded-lg px-3 py-9 text-xl font-semibold transition
         disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white
         ${renk} ${etkin ? metinRengi : ''}
         ${vurgulu && etkin ? 'ring-4 ring-offset-2 ring-blue-200' : ''}`}
@@ -649,10 +752,24 @@ function OgunButonu({
   )
 }
 
-function Satir({ ad, deger, kalin }: { ad: string; deger: number; kalin?: boolean }) {
+function Satir({
+  ad,
+  deger,
+  kalin,
+  alt,
+}: {
+  ad: string
+  deger: number
+  kalin?: boolean
+  /** Küçük kırılım yazısı: "3 nakit · 1 kart" */
+  alt?: string
+}) {
   return (
     <div className="flex items-baseline justify-between">
-      <dt className={kalin ? 'font-semibold' : 'text-solgun'}>{ad}</dt>
+      <dt className={kalin ? 'font-semibold' : 'text-solgun'}>
+        {ad}
+        {alt && <span className="block text-xs text-solgun">{alt}</span>}
+      </dt>
       <dd className={`tabular-nums ${kalin ? 'text-xl font-bold' : 'font-medium'}`}>
         {deger}
       </dd>

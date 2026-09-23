@@ -2,12 +2,20 @@ import Link from 'next/link'
 
 import { AboneRozeti, DenemeRozeti } from '@/components/Rozetler'
 import { para, tarih as tarihBicim, tarihSaat } from '@/lib/format'
+import { ogunAdi } from '@/lib/ogun'
 import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { aktifOkul } from '@/lib/okul'
 import { supabaseServer } from '@/lib/supabase/server'
-import type { GunSonu, SerbestOgun, Transaction } from '@/lib/types'
+import type { GunSonu, SerbestOgun, SerbestOgunTipi, Transaction } from '@/lib/types'
 
 export const metadata = { title: 'Gün Sonu — Yemek Takip' }
+
+/** Öğün tipi rozet renkleri — sayaç kutularıyla aynı renk ailesi */
+const SERBEST_ROZET: Record<SerbestOgunTipi, string> = {
+  ucretli: 'bg-emerald-100 text-emerald-800',
+  ogretmen: 'bg-indigo-100 text-indigo-800',
+  misafir: 'bg-purple-100 text-purple-800',
+}
 
 type Yiyen = Transaction & {
   students: { ad_soyad: string; ogrenci_no: string; sinif: string | null; deneme: boolean } | null
@@ -116,10 +124,23 @@ export default async function GunSonuPage({
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      {/* Ücretli ve öğretmen kutularında nakit/kart kırılımı da var: gün sonunda
+          kasa sayılırken kartla ödenenin ayrı görünmesi gerekiyor. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
         <Sayac baslik="Günlükçü" adet={ozet?.gunlukcu ?? 0} alt={para(ozet?.gunlukcu_tutar ?? 0)} renk="bg-blue-50 text-blue-800" />
         <Sayac baslik="Aylıkçı" adet={ozet?.aylikci ?? 0} alt="ücret düşmez" renk="bg-amber-50 text-amber-800" />
-        <Sayac baslik="Ücretli" adet={ozet?.ucretli ?? 0} alt={para(ozet?.ucretli_tutar ?? 0)} renk="bg-emerald-50 text-emerald-800" />
+        <Sayac
+          baslik="Ücretli"
+          adet={ozet?.ucretli ?? 0}
+          alt={`${para(ozet?.ucretli_tutar ?? 0)} · ${ozet?.ucretli_nakit ?? 0} nakit / ${ozet?.ucretli_kart ?? 0} kart`}
+          renk="bg-emerald-50 text-emerald-800"
+        />
+        <Sayac
+          baslik="Öğretmen"
+          adet={ozet?.ogretmen ?? 0}
+          alt={`${para(ozet?.ogretmen_tutar ?? 0)} · ${ozet?.ogretmen_nakit ?? 0} nakit / ${ozet?.ogretmen_kart ?? 0} kart`}
+          renk="bg-indigo-50 text-indigo-800"
+        />
         <Sayac baslik="Misafir" adet={ozet?.misafir ?? 0} alt={para(ozet?.misafir_tutar ?? 0)} renk="bg-purple-50 text-purple-800" />
         <Sayac baslik="Toplam" adet={ozet?.toplam ?? 0} alt="kişi yemek yedi" renk="bg-slate-100 text-slate-800" />
       </div>
@@ -175,13 +196,14 @@ export default async function GunSonuPage({
 
         <div className="kart overflow-x-auto">
           <h2 className="border-b border-cizgi px-4 py-3 font-semibold">
-            Ücretli / Misafir öğünler ({serbestler.length})
+            Ücretli / Öğretmen / Misafir öğünler ({serbestler.length})
           </h2>
           <table className="tablo">
             <thead>
               <tr>
                 <th>Saat</th>
                 <th>Tip</th>
+                <th>Ödeme</th>
                 <th>Açıklama</th>
                 <th className="text-right">Tutar</th>
               </tr>
@@ -191,11 +213,15 @@ export default async function GunSonuPage({
                 <tr key={s.id}>
                   <td className="whitespace-nowrap text-solgun">{tarihSaat(s.created_at).slice(11)}</td>
                   <td>
-                    {s.tip === 'ucretli' ? (
-                      <span className="rozet bg-emerald-100 text-emerald-800">Ücretli</span>
-                    ) : (
-                      <span className="rozet bg-purple-100 text-purple-800">Misafir</span>
-                    )}
+                    <span className={`rozet ${SERBEST_ROZET[s.tip]}`}>{ogunAdi(s.tip)}</span>
+                  </td>
+                  {/* Ödeme yöntemi ayrımından önceki kayıtlarda boş kalır */}
+                  <td className="text-solgun">
+                    {s.odeme_yontemi === 'nakit'
+                      ? 'Nakit'
+                      : s.odeme_yontemi === 'kredi_karti'
+                        ? 'Kredi Kartı'
+                        : '—'}
                   </td>
                   <td className="text-solgun">{s.aciklama ?? '—'}</td>
                   <td className="text-right tabular-nums">{para(s.tutar)}</td>
@@ -203,8 +229,8 @@ export default async function GunSonuPage({
               ))}
               {serbestler.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-solgun">
-                    Bu tarihte ücretli/misafir öğün yok.
+                  <td colSpan={5} className="py-8 text-center text-solgun">
+                    Bu tarihte ücretli/öğretmen/misafir öğün yok.
                   </td>
                 </tr>
               )}
