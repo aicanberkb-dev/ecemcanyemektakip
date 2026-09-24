@@ -123,7 +123,9 @@ export function TeslimButonu({
           type="button"
           disabled={bekliyor}
           onClick={topluCalistir}
-          className="text-xs whitespace-nowrap text-vurgu hover:underline disabled:opacity-50"
+          className="rounded-md border border-amber-400 bg-amber-50 px-2 py-1 text-xs
+                     font-medium whitespace-nowrap text-amber-800 transition
+                     hover:bg-amber-100 disabled:opacity-50"
         >
           Bu güne kadar {bekleyenGun} günü al ({para(bekleyenTutar)})
         </button>

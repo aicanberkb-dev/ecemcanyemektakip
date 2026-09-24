@@ -6,6 +6,7 @@ import { supabaseServer } from '@/lib/supabase/server'
 import type { KasaSatiri } from '@/lib/types'
 
 import { TeslimButonu } from './TeslimButonu'
+import { TopluTeslim } from './TopluTeslim'
 
 export const metadata = { title: 'Okul Kasa Takibi — Yemek Takip' }
 
@@ -74,6 +75,10 @@ export default async function KasaPage({
   // İki hafta sonra gelip biriken kasayı topluca almak için: her satır,
   // o güne kadar teslim alınmamış günlerin sayısını ve toplamını bilir.
   // Teslim alınmış günler zaten atlanır, yani bu "son teslimden bu yana".
+  const bekleyenGunSayisi = satirlar.filter(
+    (s) => !s.teslim_alindi && Number(s.nakit_toplam) !== 0,
+  ).length
+
   const bekleyenler: Record<string, number> = {}
   const bekleyenTutarlar: Record<string, number> = {}
   for (const s of satirlar) {
@@ -100,6 +105,11 @@ export default async function KasaPage({
 
       {error && (
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error.message}</p>
+      )}
+
+      {/* Birikmiş gün varsa toplu teslim en görünür yerde dursun */}
+      {bekleyenGunSayisi > 1 && (
+        <TopluTeslim bas={bas} bit={bit} gun={bekleyenGunSayisi} tutar={toplam.bekleyen} />
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
