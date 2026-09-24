@@ -436,7 +436,9 @@ export function PosEkrani({
             key: her kayıttan sonra bileşen sıfırlanır — fiyat tarifeye,
             adet 1'e döner. Değiştirilmiş fiyatın sonraki işlemde de
             kullanılması sessiz bir hataya yol açıyordu. */}
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Dört sütun ancak geniş ekranda: dar ekranda hücre daralınca
+            butonlardan biri iki satıra kayıp diğerlerinden farklı duruyordu. */}
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <AdetliButon
             key={`ucretli-nakit-${sifirlama}`}
             renk="bg-yellow-400 hover:bg-yellow-500"
@@ -455,7 +457,7 @@ export function PosEkrani({
             varsayilanFiyat={ucretliVarsayilan}
             onGonder={(adet, fiyat) => serbestKaydet('ucretli', adet, fiyat, 'kredi_karti')}
           >
-            Ücretli · Kredi Kartı
+            Ücretli · Kart
           </AdetliButon>
 
           {/* Öğretmen ücreti Ayarlar'daki tarifeden gelir */}
@@ -476,13 +478,13 @@ export function PosEkrani({
             varsayilanFiyat={ogretmenVarsayilan}
             onGonder={(adet, fiyat) => serbestKaydet('ogretmen', adet, fiyat, 'kredi_karti')}
           >
-            Öğretmen · Kredi Kartı
+            Öğretmen · Kart
           </AdetliButon>
         </div>
 
         {/* Misafir personelimiz: ücret alınmıyor, buton yalnızca sayaç.
             Bu yüzden fiyat kutusu ve ödeme yöntemi yok. */}
-        <div className="mt-3 grid gap-3 sm:grid-cols-4">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <AdetliButon
             key={`misafir-${sifirlama}`}
             renk="bg-purple-600 hover:bg-purple-700"
@@ -670,7 +672,7 @@ function AdetliButon({
         disabled={!etkin || (varsayilanFiyat !== undefined && !fiyatGecerli)}
         onClick={() => onGonder(sayi, varsayilanFiyat === undefined ? undefined : fiyatSayi)}
         className={`rounded-lg px-3 font-semibold transition
-          ${kucuk ? 'py-3 text-sm' : 'py-9 text-xl'}
+          ${kucuk ? 'py-3 text-sm' : 'py-9 text-xl whitespace-nowrap'}
           disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white
           ${renk} ${kenarlik} ${etkin ? metinRengi : ''}`}
       >
