@@ -568,15 +568,13 @@ export function PosEkrani({
           >
             Misafir (ücretsiz)
           </AdetliButon>
-        </div>
 
-        {/* Öğün dışı kasa hareketi: yemek yiyen sayısını etkilemez, yalnızca
-            kasadaki parayı değiştirir. Gün sonunda sayım tutsun diye. */}
-        <div className="mt-8 rounded-lg border border-cizgi bg-slate-50/70 p-4">
-          <h3 className="mb-3 text-xs font-semibold tracking-wide text-solgun uppercase">
-            Kasa hareketi — yemek sayısını etkilemez
-          </h3>
-          <div className="grid gap-3 sm:grid-cols-2">
+          {/* Öğün dışı kasa hareketi: yemek yiyen sayısını etkilemez, sadece
+              kasadaki parayı değiştirir. Misafirin yanındaki boş sütunlara
+              yerleşti — ayrı bir bölüm sayfayı gereksiz uzatıyordu.
+              Kalan üç sütunu ikiye bölerler: sağ kenar üstteki Öğretmen ·
+              Kart ile hizalı kalır, açıklama kutusu da geniş olur. */}
+          <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2 xl:col-span-3">
             <KasaButonu
               key={`kasa-giris-${sifirlama}`}
               renk="bg-emerald-700 hover:bg-emerald-800"
@@ -595,35 +593,35 @@ export function PosEkrani({
               Kasadan Para Çıkışı
             </KasaButonu>
           </div>
-
-          {kasaHareketleri.length > 0 && (
-            <ul className="mt-3 space-y-1 border-t border-cizgi pt-3 text-sm">
-              {kasaHareketleri.map((h) => (
-                <li key={h.id} className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`rozet ${
-                      h.yon === 'giris'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-rose-100 text-rose-800'
-                    }`}
-                  >
-                    {h.yon === 'giris' ? 'Giriş' : 'Çıkış'}
-                  </span>
-                  <span className="font-semibold tabular-nums">{para(h.tutar)}</span>
-                  <span className="text-solgun">{h.aciklama ?? '—'}</span>
-                  <button
-                    type="button"
-                    disabled={kaydediliyor}
-                    onClick={() => kasaSil(h)}
-                    className="ml-auto text-xs text-red-600 hover:underline disabled:opacity-50"
-                  >
-                    Geri al
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
+
+        {kasaHareketleri.length > 0 && (
+          <ul className="mt-3 space-y-1 rounded-lg border border-cizgi bg-slate-50/70 p-3 text-sm">
+            {kasaHareketleri.map((h) => (
+              <li key={h.id} className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`rozet ${
+                    h.yon === 'giris'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  {h.yon === 'giris' ? 'Kasaya giriş' : 'Kasadan çıkış'}
+                </span>
+                <span className="font-semibold tabular-nums">{para(h.tutar)}</span>
+                <span className="text-solgun">{h.aciklama ?? '—'}</span>
+                <button
+                  type="button"
+                  disabled={kaydediliyor}
+                  onClick={() => kasaSil(h)}
+                  className="ml-auto text-xs text-red-600 hover:underline disabled:opacity-50"
+                >
+                  Geri al
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
 
         {/* Geri alma barı — yanlışlıkla basılmasın diye ayrı ve uzakta */}
         <div className="mt-8 rounded-lg border border-red-200 bg-red-50/50 p-4">
@@ -978,13 +976,15 @@ function KasaButonu({
           setUyari(false)
           onGonder(sayi, aciklama)
         }}
-        className={`rounded-lg px-3 py-6 text-lg font-semibold whitespace-nowrap text-white transition
+        className={`rounded-lg px-3 py-9 text-lg font-semibold whitespace-nowrap text-white transition
           disabled:cursor-not-allowed disabled:bg-slate-300 ${renk}`}
       >
         {children}
       </button>
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1.5 text-xs text-solgun">
+      {/* Açıklama kutusu kalan bütün genişliği alır: "bu para neydi"
+          sorusunun tek cevabı orası, dar bir kutuya sığmıyor. */}
+      <div className="flex items-center gap-2">
+        <label className="flex shrink-0 items-center gap-1.5 text-xs text-solgun">
           <span>Tutar ₺</span>
           <input
             inputMode="decimal"
@@ -999,8 +999,8 @@ function KasaButonu({
                         ${uyari ? 'border-red-400 text-red-700' : 'border-cizgi text-metin'}`}
           />
         </label>
-        <label className="flex min-w-40 flex-1 items-center gap-1.5 text-xs text-solgun">
-          <span>Açıklama</span>
+        <label className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-solgun">
+          <span className="shrink-0">Açıklama</span>
           <input
             value={aciklama}
             onChange={(e) => setAciklama(e.target.value)}

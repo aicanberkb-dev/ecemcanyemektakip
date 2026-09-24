@@ -71,6 +71,19 @@ export default async function KasaPage({
   // En son günün kartı yarın hesaba geçecek olan; akşam bakılan rakam bu
   const sonGun = satirlar[0] ?? null
 
+  // İki hafta sonra gelip biriken kasayı topluca almak için: her satır,
+  // o güne kadar teslim alınmamış günlerin sayısını ve toplamını bilir.
+  // Teslim alınmış günler zaten atlanır, yani bu "son teslimden bu yana".
+  const bekleyenler: Record<string, number> = {}
+  const bekleyenTutarlar: Record<string, number> = {}
+  for (const s of satirlar) {
+    const oncekiler = satirlar.filter(
+      (d) => d.tarih <= s.tarih && !d.teslim_alindi && Number(d.nakit_toplam) !== 0,
+    )
+    bekleyenler[s.tarih] = oncekiler.length
+    bekleyenTutarlar[s.tarih] = oncekiler.reduce((t, d) => t + Number(d.nakit_toplam), 0)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -124,10 +137,11 @@ export default async function KasaPage({
               <th className="text-right">Tahsilat nakit</th>
               <th className="text-right">Tahsilat kart</th>
               <th className="text-right">Kasa giriş/çıkış</th>
-              <th className="text-right">NAKİT</th>
               <th className="text-right">KART</th>
-              <th className="text-right">Toplam</th>
               <th className="text-right">Havale</th>
+              <th className="bg-emerald-50 text-right text-emerald-900">
+                TESLİM ALINACAK TOPLAM TUTAR
+              </th>
               <th className="text-right">Teslim</th>
             </tr>
           </thead>
@@ -146,15 +160,15 @@ export default async function KasaPage({
                     ? '—'
                     : `${para(s.kasa_giris)} / ${para(s.kasa_cikis)}`}
                 </td>
-                <td className="text-right font-semibold tabular-nums text-emerald-700">
-                  {para(s.nakit_toplam)}
-                </td>
                 <td className="text-right font-semibold tabular-nums text-indigo-700">
                   {para(s.kart_toplam)}
                 </td>
-                <td className="text-right tabular-nums">{para(s.genel_toplam)}</td>
                 <td className="text-right tabular-nums text-solgun">
                   {Number(s.tahsilat_havale) === 0 ? '—' : para(s.tahsilat_havale)}
+                </td>
+                {/* Elden alınacak para: nakit öğün + nakit tahsilat + kasa girişi − çıkış */}
+                <td className="bg-emerald-50/60 text-right text-lg font-bold tabular-nums text-emerald-800">
+                  {para(s.nakit_toplam)}
                 </td>
                 <td className="text-right">
                   <TeslimButonu
@@ -162,13 +176,15 @@ export default async function KasaPage({
                     tutar={Number(s.nakit_toplam)}
                     alindi={s.teslim_alindi}
                     alinanTutar={Number(s.teslim_tutar)}
+                    bekleyenGun={bekleyenler[s.tarih] ?? 0}
+                    bekleyenTutar={bekleyenTutarlar[s.tarih] ?? 0}
                   />
                 </td>
               </tr>
             ))}
             {satirlar.length === 0 && (
               <tr>
-                <td colSpan={11} className="py-8 text-center text-solgun">
+                <td colSpan={10} className="py-8 text-center text-solgun">
                   Bu aralıkta kasa hareketi yok.
                 </td>
               </tr>
@@ -185,15 +201,14 @@ export default async function KasaPage({
                 <td className="px-3 py-2 text-right tabular-nums text-solgun">
                   {para(toplam.giris)} / {para(toplam.cikis)}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
-                  {para(toplam.nakit)}
-                </td>
                 <td className="px-3 py-2 text-right tabular-nums text-indigo-700">
                   {para(toplam.kart)}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums">{para(toplam.genel)}</td>
                 <td className="px-3 py-2 text-right tabular-nums text-solgun">
                   {para(toplam.havale)}
+                </td>
+                <td className="bg-emerald-50 px-3 py-2 text-right text-lg tabular-nums text-emerald-800">
+                  {para(toplam.nakit)}
                 </td>
                 <td className="px-3 py-2 text-right text-xs text-amber-700">
                   {para(toplam.bekleyen)} bekliyor

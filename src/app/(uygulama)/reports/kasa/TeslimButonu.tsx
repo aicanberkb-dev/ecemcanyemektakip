@@ -5,7 +5,7 @@ import { useState } from 'react'
 
 import { para, tarih as tarihBicim } from '@/lib/format'
 
-import { teslimAl, teslimGeriAl } from './actions'
+import { teslimAl, teslimAlToplu, teslimGeriAl } from './actions'
 
 /**
  * Günün nakiti teslim alındı işareti.
@@ -18,6 +18,8 @@ export function TeslimButonu({
   tutar,
   alindi,
   alinanTutar,
+  bekleyenGun,
+  bekleyenTutar,
 }: {
   tarih: string
   /** Bugüne kadar hesaplanan nakit — teslim anında dondurulur */
@@ -25,6 +27,10 @@ export function TeslimButonu({
   alindi: boolean
   /** Teslim anında kaydedilen tutar */
   alinanTutar: number
+  /** Bu güne kadar teslim alınmamış gün sayısı (bu gün dahil) */
+  bekleyenGun: number
+  /** O günlerin nakit toplamı */
+  bekleyenTutar: number
 }) {
   const router = useRouter()
   const [bekliyor, setBekliyor] = useState(false)
@@ -77,16 +83,51 @@ export function TeslimButonu({
     )
   }
 
+  /** Son teslimden bu güne kadar biriken bütün günleri tek seferde işaretler */
+  async function topluCalistir() {
+    if (bekliyor) return
+    if (
+      !confirm(
+        `${tarihBicim(tarih)} gününe kadar teslim alınmamış ${bekleyenGun} gün var.\n` +
+          `Toplam ${para(bekleyenTutar)} teslim alındı olarak işaretlensin mi?`,
+      )
+    )
+      return
+
+    setBekliyor(true)
+    try {
+      await teslimAlToplu('2000-01-01', tarih)
+      router.refresh()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'İşlem tamamlanamadı.')
+    } finally {
+      setBekliyor(false)
+    }
+  }
+
   return (
-    <button
-      type="button"
-      disabled={bekliyor || tutar === 0}
-      onClick={calistir}
-      className="rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm font-medium
-                 whitespace-nowrap text-emerald-700 transition hover:bg-emerald-50
-                 disabled:cursor-not-allowed disabled:border-cizgi disabled:text-slate-400"
-    >
-      {bekliyor ? 'Kaydediliyor…' : 'Teslim Aldım'}
-    </button>
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        disabled={bekliyor || tutar === 0}
+        onClick={calistir}
+        className="rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-sm font-medium
+                   whitespace-nowrap text-emerald-700 transition hover:bg-emerald-50
+                   disabled:cursor-not-allowed disabled:border-cizgi disabled:text-slate-400"
+      >
+        {bekliyor ? 'Kaydediliyor…' : 'Teslim Aldım'}
+      </button>
+      {/* Tek gün değil, birikmiş günler: iki hafta sonra gelince hepsi bir tıkla */}
+      {bekleyenGun > 1 && (
+        <button
+          type="button"
+          disabled={bekliyor}
+          onClick={topluCalistir}
+          className="text-xs whitespace-nowrap text-vurgu hover:underline disabled:opacity-50"
+        >
+          Bu güne kadar {bekleyenGun} günü al ({para(bekleyenTutar)})
+        </button>
+      )}
+    </div>
   )
 }

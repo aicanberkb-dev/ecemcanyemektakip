@@ -13,7 +13,8 @@ const KAGIT_GEN = 297
 const KAGIT_YUK = 210
 const KENAR = 7
 
-const BASLIK_YUK = 15
+/** Logo büyüdü: başlık şeridi de onu alacak kadar yükseldi */
+const BASLIK_YUK = 19
 const BASLIK_ARALIK = 2
 const GUN_BASLIK_YUK = 7
 const ALT_YUK = 7
@@ -120,7 +121,7 @@ export function YoklamaKagidi({
           <img
             src="/logo/logo-siyah-beyaz.svg"
             alt=""
-            style={{ height: '11mm', width: 'auto' }}
+            style={{ height: '16mm', width: 'auto' }}
           />
           <span className="font-black" style={{ fontSize: '11mm', lineHeight: 1 }}>
             {sube}
