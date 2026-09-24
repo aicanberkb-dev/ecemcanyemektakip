@@ -32,12 +32,33 @@ export default async function KasaPage({
   if (!okul) return null
 
   const supabase = await supabaseServer()
-  const { data, error } = await supabase.rpc('kasa_raporu', {
-    p_okul_id: okul.id,
-    p_bas: bas,
-    p_bit: bit,
-  })
+  // Hareketlerin kendisi de çekiliyor: giriş/çıkış hücresinin üstüne
+  // gelince "bu para neydi" açıklaması görünsün.
+  const [{ data, error }, { data: hareketVeri }] = await Promise.all([
+    supabase.rpc('kasa_raporu', { p_okul_id: okul.id, p_bas: bas, p_bit: bit }),
+    supabase
+      .from('kasa_hareketleri')
+      .select('tarih, yon, tutar, aciklama')
+      .eq('okul_id', okul.id)
+      .gte('tarih', bas)
+      .lte('tarih', bit)
+      .order('created_at'),
+  ])
   const satirlar = (data ?? []) as KasaSatiri[]
+
+  const hareketler = (hareketVeri ?? []) as {
+    tarih: string
+    yon: 'giris' | 'cikis'
+    tutar: number
+    aciklama: string | null
+  }[]
+  const aciklamalar: Record<string, string> = {}
+  for (const h of hareketler) {
+    const satir =
+      `${h.yon === 'giris' ? 'Giriş' : 'Çıkış'} ${para(h.tutar)}` +
+      (h.aciklama ? ` — ${h.aciklama}` : '')
+    aciklamalar[h.tarih] = aciklamalar[h.tarih] ? `${aciklamalar[h.tarih]}\n${satir}` : satir
+  }
 
   const toplam = satirlar.reduce(
     (t, s) => ({
@@ -152,6 +173,7 @@ export default async function KasaPage({
               <th className="bg-emerald-50 text-right text-emerald-900">
                 TESLİM ALINACAK TOPLAM TUTAR
               </th>
+              <th className="bg-slate-100 text-right">GÜN TOPLAMI</th>
               <th className="text-right">Teslim</th>
             </tr>
           </thead>
@@ -165,7 +187,12 @@ export default async function KasaPage({
                   {para(Number(s.tahsilat_nakit) + Number(s.tahsilat_belirsiz))}
                 </td>
                 <td className="text-right tabular-nums">{para(s.tahsilat_kart)}</td>
-                <td className="text-right tabular-nums text-solgun">
+                <td
+                  className={`text-right tabular-nums text-solgun ${
+                    aciklamalar[s.tarih] ? 'cursor-help underline decoration-dotted' : ''
+                  }`}
+                  title={aciklamalar[s.tarih]}
+                >
                   {Number(s.kasa_giris) === 0 && Number(s.kasa_cikis) === 0
                     ? '—'
                     : `${para(s.kasa_giris)} / ${para(s.kasa_cikis)}`}
@@ -179,6 +206,12 @@ export default async function KasaPage({
                 {/* Elden alınacak para: nakit öğün + nakit tahsilat + kasa girişi − çıkış */}
                 <td className="bg-emerald-50/60 text-right text-lg font-bold tabular-nums text-emerald-800">
                   {para(s.nakit_toplam)}
+                </td>
+                {/* O gün bu okuldan alınan bütün para: nakit + kart + havale */}
+                <td className="bg-slate-50 text-right font-semibold tabular-nums">
+                  {para(
+                    Number(s.nakit_toplam) + Number(s.kart_toplam) + Number(s.tahsilat_havale),
+                  )}
                 </td>
                 <td className="text-right">
                   <TeslimButonu
@@ -194,7 +227,7 @@ export default async function KasaPage({
             ))}
             {satirlar.length === 0 && (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-solgun">
+                <td colSpan={11} className="py-8 text-center text-solgun">
                   Bu aralıkta kasa hareketi yok.
                 </td>
               </tr>
@@ -219,6 +252,9 @@ export default async function KasaPage({
                 </td>
                 <td className="bg-emerald-50 px-3 py-2 text-right text-lg tabular-nums text-emerald-800">
                   {para(toplam.nakit)}
+                </td>
+                <td className="bg-slate-100 px-3 py-2 text-right tabular-nums">
+                  {para(toplam.nakit + toplam.kart + toplam.havale)}
                 </td>
                 <td className="px-3 py-2 text-right text-xs text-amber-700">
                   {para(toplam.bekleyen)} bekliyor
