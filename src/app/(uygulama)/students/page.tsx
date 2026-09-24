@@ -68,6 +68,10 @@ export default async function StudentsPage() {
               Link değil <a>: bu bir sayfa değil, dosya indiren bir uç nokta;
               istemci tarafı gezinme indirmeyi başlatmaz. */}
           <RehberDugmesi bekleyen={bekleyenSayisi} toplam={rehberToplam} />
+          {/* Ters yön: rehberdeki numaraları sisteme almak */}
+          <Link href="/students/rehber-aktar" className="btn-ikincil">
+            Rehberden Telefon Aktar
+          </Link>
           <Link href="/students/kayit-formu" className="btn-ikincil">
             Kayıt Formu Yazdır
           </Link>
