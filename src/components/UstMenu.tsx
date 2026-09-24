@@ -56,6 +56,7 @@ const RAPOR_ALT = [
   { yol: '/reports/yemek', ad: 'Yemek Katılımı' },
   { yol: '/reports/tahsilat', ad: 'Tahsilat Geçmişi' },
   { yol: '/reports/taksit', ad: 'Taksit Takibi' },
+  { yol: '/reports/mesaj', ad: 'Veli Mesajları' },
   { yol: '/reports/iadeler', ad: 'İadeler' },
   { yol: '/reports/fatura', ad: 'Fatura İstenenler' },
 ]
