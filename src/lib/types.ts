@@ -300,6 +300,47 @@ export type GunSonu = {
   ucretli_kart: number
   ogretmen_nakit: number
   ogretmen_kart: number
+  /** Ücretli + öğretmen öğünlerinin nakit ödenen kısmı */
+  ogun_nakit_tutar: number
+  /** Ücretli + öğretmen öğünlerinin kartla ödenen kısmı */
+  ogun_kart_tutar: number
+  kasa_giris: number
+  kasa_cikis: number
+  /** Kasada olması gereken nakit: nakit öğünler + elle giriş − çıkış */
+  kasa_nakit: number
+}
+
+/** Öğün dışı kasa hareketi; yemek yiyen sayısına girmez */
+export type KasaHareketi = {
+  id: string
+  okul_id: string
+  tarih: string
+  yon: 'giris' | 'cikis'
+  tutar: number
+  aciklama: string | null
+  islemi_yapan_user_id: string
+  created_at: string
+}
+
+/** Okulun günlük kasa raporu satırı */
+export type KasaSatiri = {
+  tarih: string
+  ogun_nakit: number
+  ogun_kart: number
+  tahsilat_nakit: number
+  tahsilat_kart: number
+  tahsilat_havale: number
+  tahsilat_belirsiz: number
+  kasa_giris: number
+  kasa_cikis: number
+  /** Okulda biriken, teslim alınacak nakit */
+  nakit_toplam: number
+  /** Ertesi gün hesaba geçecek kart tutarı */
+  kart_toplam: number
+  genel_toplam: number
+  teslim_alindi: boolean
+  teslim_tutar: number
+  teslim_zamani: string | null
 }
 
 export type NakitSatiri = {

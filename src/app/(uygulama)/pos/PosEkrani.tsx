@@ -7,7 +7,7 @@ import { TaksitRozeti, type TaksitBilgisi } from '@/components/TaksitRozeti'
 import { para } from '@/lib/format'
 import { ogunAdi } from '@/lib/ogun'
 import { supabaseBrowser } from '@/lib/supabase/client'
-import type { GunSonu, OgunOdeme, PosSonuc, SerbestOgunTipi } from '@/lib/types'
+import type { GunSonu, KasaHareketi, OgunOdeme, PosSonuc, SerbestOgunTipi } from '@/lib/types'
 
 type Mesaj = { tip: 'ok' | 'hata'; metin: string }
 
@@ -43,6 +43,7 @@ export function PosEkrani({
   const [mesaj, setMesaj] = useState<Mesaj | null>(null)
   const [kaydediliyor, setKaydediliyor] = useState(false)
   const [ozet, setOzet] = useState<GunSonu | null>(null)
+  const [kasaHareketleri, setKasaHareketleri] = useState<KasaHareketi[]>([])
   // Her serbest öğün kaydından sonra artar; adet ve fiyat kutularını
   // varsayılana döndürmek için AdetliButon'a key olarak verilir.
   const [sifirlama, setSifirlama] = useState(0)
@@ -57,6 +58,16 @@ export function PosEkrani({
     if (data?.[0]) setOzet(data[0] as GunSonu)
   }, [supabase, okulId, bugun])
 
+  const kasaYenile = useCallback(async () => {
+    const { data } = await supabase
+      .from('kasa_hareketleri')
+      .select('*')
+      .eq('okul_id', okulId)
+      .eq('tarih', bugun)
+      .order('created_at', { ascending: false })
+    setKasaHareketleri((data ?? []) as KasaHareketi[])
+  }, [supabase, okulId, bugun])
+
   // İlk açılışta bugünün sayacını çek ve odağı arama kutusuna ver.
   // Okul değişince bileşen key ile yeniden kurulur (bkz. pos/page.tsx).
   useEffect(() => {
@@ -64,6 +75,15 @@ export function PosEkrani({
     supabase.rpc('gun_sonu', { p_okul_id: okulId, p_tarih: bugun }).then(({ data }) => {
       if (!iptal && data?.[0]) setOzet(data[0] as GunSonu)
     })
+    supabase
+      .from('kasa_hareketleri')
+      .select('*')
+      .eq('okul_id', okulId)
+      .eq('tarih', bugun)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (!iptal) setKasaHareketleri((data ?? []) as KasaHareketi[])
+      })
     aramaRef.current?.focus()
     return () => {
       iptal = true
@@ -269,6 +289,61 @@ export function PosEkrani({
     })
     setSifirlama((n) => n + 1)
     vazgec()
+    ozetYenile()
+  }
+
+  /**
+   * Öğün dışı kasa hareketi.
+   *
+   * Yemek yiyen sayısını etkilemez: ayrı tabloya yazılır. Kasadan alınan
+   * bir ödeme ya da kasaya konan bozuk para gün sonunda sayımla tutsun diye.
+   */
+  async function kasaKaydet(yon: 'giris' | 'cikis', tutar: number, aciklama: string) {
+    if (kaydediliyor) return
+    setKaydediliyor(true)
+
+    const { error } = await supabase.rpc('kasa_hareketi_kaydet', {
+      p_okul_id: okulId,
+      p_yon: yon,
+      p_tutar: tutar,
+      p_tarih: bugun,
+      p_aciklama: aciklama.trim() === '' ? null : aciklama.trim(),
+    })
+
+    setKaydediliyor(false)
+    if (error) {
+      setMesaj({ tip: 'hata', metin: error.message })
+      return
+    }
+    setMesaj({
+      tip: 'ok',
+      metin: `Kasaya ${yon === 'giris' ? 'giriş' : 'çıkış'}: ${para(tutar)} kaydedildi.`,
+    })
+    setSifirlama((n) => n + 1)
+    kasaYenile()
+    ozetYenile()
+  }
+
+  /** Her hareketin ters işlemi: yanlış girilen satır silinir */
+  async function kasaSil(hareket: KasaHareketi) {
+    if (kaydediliyor) return
+    if (
+      !confirm(
+        `${hareket.yon === 'giris' ? 'Kasaya giriş' : 'Kasadan çıkış'} ${para(hareket.tutar)} silinsin mi?` +
+          (hareket.aciklama ? `\nAçıklama: ${hareket.aciklama}` : ''),
+      )
+    )
+      return
+
+    setKaydediliyor(true)
+    const { error } = await supabase.rpc('kasa_hareketi_sil', { p_id: hareket.id })
+    setKaydediliyor(false)
+    if (error) {
+      setMesaj({ tip: 'hata', metin: error.message })
+      return
+    }
+    setMesaj({ tip: 'ok', metin: `${para(hareket.tutar)} kasa hareketi silindi.` })
+    kasaYenile()
     ozetYenile()
   }
 
@@ -495,6 +570,61 @@ export function PosEkrani({
           </AdetliButon>
         </div>
 
+        {/* Öğün dışı kasa hareketi: yemek yiyen sayısını etkilemez, yalnızca
+            kasadaki parayı değiştirir. Gün sonunda sayım tutsun diye. */}
+        <div className="mt-8 rounded-lg border border-cizgi bg-slate-50/70 p-4">
+          <h3 className="mb-3 text-xs font-semibold tracking-wide text-solgun uppercase">
+            Kasa hareketi — yemek sayısını etkilemez
+          </h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <KasaButonu
+              key={`kasa-giris-${sifirlama}`}
+              renk="bg-emerald-700 hover:bg-emerald-800"
+              etkin={!kaydediliyor}
+              onGonder={(tutar, aciklama) => kasaKaydet('giris', tutar, aciklama)}
+            >
+              Kasaya Para Girişi
+            </KasaButonu>
+
+            <KasaButonu
+              key={`kasa-cikis-${sifirlama}`}
+              renk="bg-rose-700 hover:bg-rose-800"
+              etkin={!kaydediliyor}
+              onGonder={(tutar, aciklama) => kasaKaydet('cikis', tutar, aciklama)}
+            >
+              Kasadan Para Çıkışı
+            </KasaButonu>
+          </div>
+
+          {kasaHareketleri.length > 0 && (
+            <ul className="mt-3 space-y-1 border-t border-cizgi pt-3 text-sm">
+              {kasaHareketleri.map((h) => (
+                <li key={h.id} className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rozet ${
+                      h.yon === 'giris'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-rose-100 text-rose-800'
+                    }`}
+                  >
+                    {h.yon === 'giris' ? 'Giriş' : 'Çıkış'}
+                  </span>
+                  <span className="font-semibold tabular-nums">{para(h.tutar)}</span>
+                  <span className="text-solgun">{h.aciklama ?? '—'}</span>
+                  <button
+                    type="button"
+                    disabled={kaydediliyor}
+                    onClick={() => kasaSil(h)}
+                    className="ml-auto text-xs text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    Geri al
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         {/* Geri alma barı — yanlışlıkla basılmasın diye ayrı ve uzakta */}
         <div className="mt-8 rounded-lg border border-red-200 bg-red-50/50 p-4">
           <h3 className="mb-3 text-xs font-semibold tracking-wide text-red-800 uppercase">
@@ -618,8 +748,25 @@ export function PosEkrani({
           <div className="border-t border-cizgi pt-2">
             <Satir ad="Toplam" deger={ozet?.toplam ?? 0} kalin />
           </div>
-          <div className="border-t border-cizgi pt-2 text-xs text-solgun">
-            Kasaya giren (ücretli): {para(ozet?.ucretli_tutar ?? 0)}
+          {/* Öğün parası: ücretli + öğretmen, ödeme yöntemine göre ayrı.
+              Kartla ödenen kasaya girmez, ertesi gün hesaba geçer. */}
+          <div className="space-y-1 border-t border-cizgi pt-2 text-xs text-solgun">
+            <ParaSatiri ad="Öğün nakit" tutar={ozet?.ogun_nakit_tutar ?? 0} />
+            <ParaSatiri ad="Öğün kredi kartı" tutar={ozet?.ogun_kart_tutar ?? 0} />
+            {Number(ozet?.kasa_giris ?? 0) > 0 && (
+              <ParaSatiri ad="Kasaya giriş" tutar={ozet?.kasa_giris ?? 0} />
+            )}
+            {Number(ozet?.kasa_cikis ?? 0) > 0 && (
+              <ParaSatiri ad="Kasadan çıkış" tutar={-(ozet?.kasa_cikis ?? 0)} />
+            )}
+          </div>
+          <div className="border-t border-cizgi pt-2">
+            <Satir
+              ad="Kasadaki nakit"
+              deger={para(ozet?.kasa_nakit ?? 0)}
+              alt={`kart ayrı: ${para(ozet?.ogun_kart_tutar ?? 0)}`}
+              kalin
+            />
           </div>
         </dl>
       </aside>
@@ -761,7 +908,8 @@ function Satir({
   alt,
 }: {
   ad: string
-  deger: number
+  /** Adet sayısı ya da biçimlenmiş tutar */
+  deger: number | string
   kalin?: boolean
   /** Küçük kırılım yazısı: "3 nakit · 1 kart" */
   alt?: string
@@ -775,6 +923,94 @@ function Satir({
       <dd className={`tabular-nums ${kalin ? 'text-xl font-bold' : 'font-medium'}`}>
         {deger}
       </dd>
+    </div>
+  )
+}
+
+/** Sayaç altındaki para kırılımı satırı */
+function ParaSatiri({ ad, tutar }: { ad: string; tutar: number }) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <span>{ad}</span>
+      <span className="tabular-nums">{para(tutar)}</span>
+    </div>
+  )
+}
+
+/**
+ * Kasaya elle para giriş/çıkış butonu.
+ *
+ * Tutar boş (0) başlar: kaydedilecek rakamı her seferinde kullanıcı yazar,
+ * yanlışlıkla önceki tutarın tekrar girilmesi engellenir. Açıklama isteğe
+ * bağlı ama ay sonunda "bu para neydi" sorusunun tek cevabı orası.
+ */
+function KasaButonu({
+  children,
+  renk,
+  etkin,
+  onGonder,
+}: {
+  children: React.ReactNode
+  renk: string
+  etkin: boolean
+  onGonder: (tutar: number, aciklama: string) => void
+}) {
+  const [tutar, setTutar] = useState('0')
+  const [aciklama, setAciklama] = useState('')
+  const [uyari, setUyari] = useState(false)
+
+  // Türkçe virgüllü giriş kabul edilir
+  const sayi = Number(tutar.replace(/\./g, '').replace(',', '.'))
+  const gecerli = tutar.trim() !== '' && Number.isFinite(sayi) && sayi > 0
+
+  // Buton tutar yazılmadan da renkli durur: sönük bir buton "bozuk" gibi
+  // görünüyordu. Tutar yoksa basınca uyarı çıkar.
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        disabled={!etkin}
+        onClick={() => {
+          if (!gecerli) {
+            setUyari(true)
+            return
+          }
+          setUyari(false)
+          onGonder(sayi, aciklama)
+        }}
+        className={`rounded-lg px-3 py-6 text-lg font-semibold whitespace-nowrap text-white transition
+          disabled:cursor-not-allowed disabled:bg-slate-300 ${renk}`}
+      >
+        {children}
+      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5 text-xs text-solgun">
+          <span>Tutar ₺</span>
+          <input
+            inputMode="decimal"
+            value={tutar}
+            onChange={(e) => {
+              setTutar(e.target.value)
+              setUyari(false)
+            }}
+            onFocus={(e) => e.target.select()}
+            className={`w-24 rounded border bg-white px-2 py-1 text-center text-sm font-medium
+                        tabular-nums outline-none focus:ring-2 focus:ring-blue-100
+                        ${uyari ? 'border-red-400 text-red-700' : 'border-cizgi text-metin'}`}
+          />
+        </label>
+        <label className="flex min-w-40 flex-1 items-center gap-1.5 text-xs text-solgun">
+          <span>Açıklama</span>
+          <input
+            value={aciklama}
+            onChange={(e) => setAciklama(e.target.value)}
+            placeholder="ör. bozuk para takviyesi"
+            className="w-full rounded border border-cizgi bg-white px-2 py-1 text-sm
+                       text-metin outline-none focus:border-vurgu focus:ring-2 focus:ring-blue-100"
+          />
+        </label>
+      </div>
+      {uyari && <p className="text-xs text-red-600">Önce sıfırdan büyük bir tutar yazın.</p>}
     </div>
   )
 }
