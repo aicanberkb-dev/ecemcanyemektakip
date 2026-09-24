@@ -1,14 +1,21 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import { KasaButonu, KasaListesi } from '@/components/KasaButonu'
 import { AboneRozeti, Bakiye, OgrenciTipiRozeti } from '@/components/Rozetler'
 import { aramaEslesir } from '@/lib/arama'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import { ogunAdi } from '@/lib/ogun'
 import { supabaseBrowser } from '@/lib/supabase/client'
-import type { AboneTipi, OgrenciTipi, OgunOdeme, SerbestOgunTipi } from '@/lib/types'
+import type {
+  AboneTipi,
+  KasaHareketi,
+  OgrenciTipi,
+  OgunOdeme,
+  SerbestOgunTipi,
+} from '@/lib/types'
 
 export type TopluOgrenci = {
   student_id: string
@@ -56,6 +63,86 @@ export function TopluEkran({
   const [mesaj, setMesaj] = useState<Mesaj | null>(null)
   // Kayıttan sonra adet ve fiyat kutuları varsayılana dönsün
   const [sifirlama, setSifirlama] = useState(0)
+  const [kasaHareketleri, setKasaHareketleri] = useState<KasaHareketi[]>([])
+
+  // Seçili günün kasa hareketleri: geçmişe dönük giriş de buradan yapılıyor
+  useEffect(() => {
+    let iptal = false
+    supabase
+      .from('kasa_hareketleri')
+      .select('*')
+      .eq('okul_id', okulId)
+      .eq('tarih', gun)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (!iptal) setKasaHareketleri((data ?? []) as KasaHareketi[])
+      })
+    return () => {
+      iptal = true
+    }
+  }, [supabase, okulId, gun])
+
+  const kasaYenile = useCallback(async () => {
+    const { data } = await supabase
+      .from('kasa_hareketleri')
+      .select('*')
+      .eq('okul_id', okulId)
+      .eq('tarih', gun)
+      .order('created_at', { ascending: false })
+    setKasaHareketleri((data ?? []) as KasaHareketi[])
+  }, [supabase, okulId, gun])
+
+  /** Öğün dışı kasa hareketi — yemek yiyen sayısını etkilemez */
+  async function kasaKaydet(yon: 'giris' | 'cikis', tutar: number, aciklama: string) {
+    if (kaydediliyor) return
+    setKaydediliyor(true)
+
+    const { error } = await supabase.rpc('kasa_hareketi_kaydet', {
+      p_okul_id: okulId,
+      p_yon: yon,
+      p_tutar: tutar,
+      p_tarih: gun,
+      p_aciklama: aciklama.trim() === '' ? null : aciklama.trim(),
+    })
+
+    setKaydediliyor(false)
+    if (error) {
+      setMesaj({ tip: 'hata', metin: error.message })
+      return
+    }
+    setMesaj({
+      tip: 'ok',
+      metin:
+        `Kasaya ${yon === 'giris' ? 'giriş' : 'çıkış'}: ${para(tutar)} — ` +
+        `${tarihBicim(gun)} tarihine işlendi.`,
+    })
+    setSifirlama((n) => n + 1)
+    kasaYenile()
+    router.refresh()
+  }
+
+  /** Her hareketin ters işlemi */
+  async function kasaSil(hareket: KasaHareketi) {
+    if (kaydediliyor) return
+    if (
+      !confirm(
+        `${hareket.yon === 'giris' ? 'Kasaya giriş' : 'Kasadan çıkış'} ${para(hareket.tutar)} silinsin mi?` +
+          (hareket.aciklama ? `\nAçıklama: ${hareket.aciklama}` : ''),
+      )
+    )
+      return
+
+    setKaydediliyor(true)
+    const { error } = await supabase.rpc('kasa_hareketi_sil', { p_id: hareket.id })
+    setKaydediliyor(false)
+    if (error) {
+      setMesaj({ tip: 'hata', metin: error.message })
+      return
+    }
+    setMesaj({ tip: 'ok', metin: `${para(hareket.tutar)} kasa hareketi silindi.` })
+    kasaYenile()
+    router.refresh()
+  }
 
   // Zaten kaydı olanlar seçilemez
   const secilebilir = ogrenciler.filter((o) => !o.zaten_kayitli)
@@ -488,6 +575,43 @@ export function TopluEkran({
             onGonder={(adet) =>
               mod === 'ekle' ? serbestKaydet('misafir', adet) : serbestGeriAl('misafir', adet)
             }
+          />
+        </div>
+
+        {/* Öğün dışı kasa hareketi: seçili güne işlenir, yemek yiyen
+            sayısını etkilemez. Bilgisayarın açılamadığı bir günün kasa
+            girişi de geçmişe dönük buradan girilebilsin diye. */}
+        <div className="space-y-3 border-t border-cizgi pt-4">
+          <p className="text-xs font-semibold tracking-wide text-solgun uppercase">
+            Kasa hareketi — yemek sayısını etkilemez
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:max-w-3xl">
+            <KasaButonu
+              key={`kasa-giris-${sifirlama}`}
+              renk="bg-emerald-700 hover:bg-emerald-800"
+              etkin={!kaydediliyor}
+              kucuk
+              onGonder={(tutar, aciklama) => kasaKaydet('giris', tutar, aciklama)}
+            >
+              Kasaya Para Girişi
+            </KasaButonu>
+
+            <KasaButonu
+              key={`kasa-cikis-${sifirlama}`}
+              renk="bg-rose-700 hover:bg-rose-800"
+              etkin={!kaydediliyor}
+              kucuk
+              onGonder={(tutar, aciklama) => kasaKaydet('cikis', tutar, aciklama)}
+            >
+              Kasadan Para Çıkışı
+            </KasaButonu>
+          </div>
+
+          <KasaListesi
+            hareketler={kasaHareketleri}
+            bekliyor={kaydediliyor}
+            onSil={(h) => kasaSil(h as KasaHareketi)}
+            paraBicim={para}
           />
         </div>
       </div>
