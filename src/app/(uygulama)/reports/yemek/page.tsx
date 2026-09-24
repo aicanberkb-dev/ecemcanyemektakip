@@ -10,6 +10,10 @@ type Satir = {
   gun_sayisi: number
   toplam_ogun: number
   ortalama: number
+  /** Günlükçü + aylıkçı öğrenci öğünleri */
+  ogrenci_ogun: number
+  /** Ücretli + öğretmen öğünleri */
+  serbest_ogun: number
 }
 
 /**
@@ -17,6 +21,10 @@ type Satir = {
  *
  * Menüdeki ana yemek ile o günün öğün sayısı eşleştirilir. Menü girilmemiş
  * günler hesaba katılmaz; yemek girildikçe tablo anlamlanır.
+ *
+ * Sayıya günlükçü, aylıkçı, ücretli ve öğretmen girer. Misafir girmez:
+ * ücret alınmıyor ve sayısı personel hareketine göre değişiyor, yemeğin
+ * tutup tutmadığı hakkında bir şey söylemiyor.
  */
 export default async function YemekKatilimiPage() {
   const okul = await aktifOkul()
@@ -32,13 +40,17 @@ export default async function YemekKatilimiPage() {
         satirlar.reduce((t, s) => t + s.gun_sayisi, 0)
       : 0
 
+  const toplamOgrenci = satirlar.reduce((t, s) => t + Number(s.ogrenci_ogun), 0)
+  const toplamSerbest = satirlar.reduce((t, s) => t + Number(s.serbest_ogun), 0)
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="baslik">Yemek Katılımı</h1>
           <p className="text-sm text-solgun">
-            Ana yemeğe göre ortalama katılım. Menü girilen günler hesaba katılır.
+            Ana yemeğe göre ortalama katılım. Günlükçü, aylıkçı, ücretli ve öğretmen
+            öğünleri sayılır; misafir sayılmaz. Menü girilen günler hesaba katılır.
           </p>
         </div>
         <span className="rozet bg-blue-100 text-blue-800">{okul.ad}</span>
@@ -63,6 +75,11 @@ export default async function YemekKatilimiPage() {
           <div className="kart p-4 text-sm">
             <strong>{satirlar.length}</strong> farklı ana yemek ·{' '}
             <strong>{genelOrtalama.toFixed(1)}</strong> kişi genel ortalama
+            <span className="text-solgun">
+              {' '}
+              ({toplamOgrenci} öğrenci + {toplamSerbest} ücretli/öğretmen ={' '}
+              {toplamOgrenci + toplamSerbest} öğün)
+            </span>
           </div>
 
           <div className="kart overflow-x-auto">
@@ -71,6 +88,8 @@ export default async function YemekKatilimiPage() {
                 <tr>
                   <th>Ana Yemek</th>
                   <th className="text-right">Kaç gün</th>
+                  <th className="text-right">Öğrenci</th>
+                  <th className="text-right">Ücretli / öğretmen</th>
                   <th className="text-right">Toplam öğün</th>
                   <th className="text-right">Ortalama katılım</th>
                   <th>Genel ortalamaya göre</th>
@@ -84,7 +103,9 @@ export default async function YemekKatilimiPage() {
                     <tr key={s.ana_yemek}>
                       <td className="font-medium">{s.ana_yemek}</td>
                       <td className="text-right tabular-nums text-solgun">{s.gun_sayisi}</td>
-                      <td className="text-right tabular-nums text-solgun">{s.toplam_ogun}</td>
+                      <td className="text-right tabular-nums text-solgun">{s.ogrenci_ogun}</td>
+                      <td className="text-right tabular-nums text-solgun">{s.serbest_ogun}</td>
+                      <td className="text-right tabular-nums">{s.toplam_ogun}</td>
                       <td className="text-right font-semibold tabular-nums">{s.ortalama}</td>
                       <td>
                         {Math.abs(yuzde) < 5 ? (
