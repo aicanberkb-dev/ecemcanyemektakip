@@ -93,7 +93,12 @@ export function TopluEkran({
   }, [supabase, okulId, gun])
 
   /** Öğün dışı kasa hareketi — yemek yiyen sayısını etkilemez */
-  async function kasaKaydet(yon: 'giris' | 'cikis', tutar: number, aciklama: string) {
+  async function kasaKaydet(
+    yon: 'giris' | 'cikis',
+    tutar: number,
+    aciklama: string,
+    odeme: OgunOdeme,
+  ) {
     if (kaydediliyor) return
     setKaydediliyor(true)
 
@@ -103,6 +108,7 @@ export function TopluEkran({
       p_tutar: tutar,
       p_tarih: gun,
       p_aciklama: aciklama.trim() === '' ? null : aciklama.trim(),
+      p_odeme_yontemi: odeme,
     })
 
     setKaydediliyor(false)
@@ -113,7 +119,8 @@ export function TopluEkran({
     setMesaj({
       tip: 'ok',
       metin:
-        `Kasaya ${yon === 'giris' ? 'giriş' : 'çıkış'}: ${para(tutar)} — ` +
+        `Kasaya ${yon === 'giris' ? 'giriş' : 'çıkış'}: ${para(tutar)} ` +
+        `(${odeme === 'nakit' ? 'nakit' : 'kredi kartı'}) — ` +
         `${tarihBicim(gun)} tarihine işlendi.`,
     })
     setSifirlama((n) => n + 1)
@@ -591,7 +598,7 @@ export function TopluEkran({
               renk="bg-emerald-700 hover:bg-emerald-800"
               etkin={!kaydediliyor}
               kucuk
-              onGonder={(tutar, aciklama) => kasaKaydet('giris', tutar, aciklama)}
+              onGonder={(tutar, aciklama, odeme) => kasaKaydet('giris', tutar, aciklama, odeme)}
             >
               Kasaya Para Girişi
             </KasaButonu>
@@ -601,7 +608,7 @@ export function TopluEkran({
               renk="bg-rose-700 hover:bg-rose-800"
               etkin={!kaydediliyor}
               kucuk
-              onGonder={(tutar, aciklama) => kasaKaydet('cikis', tutar, aciklama)}
+              onGonder={(tutar, aciklama, odeme) => kasaKaydet('cikis', tutar, aciklama, odeme)}
             >
               Kasadan Para Çıkışı
             </KasaButonu>

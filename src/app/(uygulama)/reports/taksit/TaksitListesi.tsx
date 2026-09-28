@@ -6,21 +6,42 @@ import { useMemo, useState } from 'react'
 import { AramaKutusu } from '@/components/AramaKutusu'
 import { DenemeRozeti, OgrenciTipiRozeti } from '@/components/Rozetler'
 import { aramaEslesir } from '@/lib/arama'
-import { para } from '@/lib/format'
+import { para, tarih as tarihBicim } from '@/lib/format'
 import { OGRENCI_TIPI_ADLARI, type OgrenciTipi, type TaksitDurumu } from '@/lib/types'
+
+/** Vadesi bu kadar gün içinde gelen öğrenci uyarı ile işaretlenir */
+const YAKLASMA_ESIGI = 7
 
 export function TaksitListesi({
   satirlar,
+  bugun,
   denemeIdleri = [],
   notlar = {},
 }: {
   satirlar: TaksitDurumu[]
+  /** Sunucunun bugünü — simülasyon açıkken tarayıcı saatiyle ayrışmasın */
+  bugun: string
   /** Deneme öğrencilerinin id'leri: adın yanında rozet */
   denemeIdleri?: string[]
   /** öğrenci id → ana verideki özel not; satırın altında gösterilir */
   notlar?: Record<string, string>
 }) {
   const denemeler = useMemo(() => new Set(denemeIdleri), [denemeIdleri])
+
+  /**
+   * Vadeye kalan gün — eşiği aşıyorsa null.
+   *
+   * Vadesi geçmiş öğrenci zaten "ÖDEME ALINMALI" ile işaretleniyor; burası
+   * yalnızca henüz vadesi gelmemiş ama yaklaşmış olanları yakalar.
+   */
+  const kalanGun = (vade: string | null): number | null => {
+    if (!vade) return null
+    const b = new Date(`${bugun}T00:00:00`)
+    const v = new Date(`${vade}T00:00:00`)
+    if (Number.isNaN(b.getTime()) || Number.isNaN(v.getTime())) return null
+    const fark = Math.round((v.getTime() - b.getTime()) / 86_400_000)
+    return fark >= 0 && fark <= YAKLASMA_ESIGI ? fark : null
+  }
   const [arama, setArama] = useState('')
   const [seciliId, setSeciliId] = useState<string | null>(null)
   const [tip, setTip] = useState<OgrenciTipi | ''>('')
@@ -49,6 +70,10 @@ export function TaksitListesi({
 
   const borclu = suzulmus.filter((s) => s.odeme_alinmali)
   const toplamEksik = borclu.reduce((t, s) => t + Number(s.eksik), 0)
+  const yaklasanlar = suzulmus.filter(
+    (s) => !s.odeme_alinmali && kalanGun(s.yaklasan_vade) !== null,
+  )
+  const toplamYaklasan = yaklasanlar.reduce((t, s) => t + Number(s.yaklasan_tutar), 0)
   const toplamOdenen = suzulmus.reduce((t, s) => t + Number(s.odenen), 0)
 
   const tipler = [...new Set(satirlar.map((s) => s.ogrenci_tipi))]
@@ -110,7 +135,7 @@ export function TaksitListesi({
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Ozet baslik="Aylıkçı öğrenci" deger={String(suzulmus.length)} />
         <Ozet baslik="Toplanan" deger={para(toplamOdenen)} renk="text-emerald-700" />
         <Ozet
@@ -118,6 +143,13 @@ export function TaksitListesi({
           deger={para(toplamEksik)}
           alt={`${borclu.length} öğrenci`}
           renk="text-red-600"
+        />
+        {/* Vadesi gelmemiş ama yaklaşmış: önceden haber vermek için */}
+        <Ozet
+          baslik={`Vadesi yaklaşan (${YAKLASMA_ESIGI} gün)`}
+          deger={para(toplamYaklasan)}
+          alt={`${yaklasanlar.length} öğrenci`}
+          renk="text-amber-700"
         />
       </div>
 
@@ -138,7 +170,16 @@ export function TaksitListesi({
           </thead>
           <tbody>
             {suzulmus.map((s) => (
-              <tr key={s.student_id} className={s.odeme_alinmali ? 'bg-red-50/60' : ''}>
+              <tr
+                key={s.student_id}
+                className={
+                  s.odeme_alinmali
+                    ? 'bg-red-50/60'
+                    : kalanGun(s.yaklasan_vade) !== null
+                      ? 'bg-amber-50/60'
+                      : ''
+                }
+              >
                 <td className="tabular-nums text-solgun">{s.ogrenci_no}</td>
                 <td>
                   <Link
@@ -182,9 +223,19 @@ export function TaksitListesi({
                     <span className="text-slate-400">—</span>
                   )}
                 </td>
-                <td>
+                <td className="whitespace-nowrap">
                   {s.odeme_alinmali ? (
                     <span className="rozet bg-red-600 text-white">ÖDEME ALINMALI</span>
+                  ) : kalanGun(s.yaklasan_vade) !== null ? (
+                    <>
+                      <span className="rozet bg-amber-500 text-white">VADESİ YAKLAŞTI</span>
+                      <span className="mt-0.5 block text-xs text-amber-800">
+                        {tarihBicim(s.yaklasan_vade!)} · {para(s.yaklasan_tutar)} ·{' '}
+                        {kalanGun(s.yaklasan_vade) === 0
+                          ? 'bugün'
+                          : `${kalanGun(s.yaklasan_vade)} gün kaldı`}
+                      </span>
+                    </>
                   ) : (
                     <span className="rozet bg-emerald-100 text-emerald-800">Güncel</span>
                   )}

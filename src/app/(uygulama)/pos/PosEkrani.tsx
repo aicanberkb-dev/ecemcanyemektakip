@@ -299,7 +299,12 @@ export function PosEkrani({
    * Yemek yiyen sayısını etkilemez: ayrı tabloya yazılır. Kasadan alınan
    * bir ödeme ya da kasaya konan bozuk para gün sonunda sayımla tutsun diye.
    */
-  async function kasaKaydet(yon: 'giris' | 'cikis', tutar: number, aciklama: string) {
+  async function kasaKaydet(
+    yon: 'giris' | 'cikis',
+    tutar: number,
+    aciklama: string,
+    odeme: OgunOdeme,
+  ) {
     if (kaydediliyor) return
     setKaydediliyor(true)
 
@@ -309,6 +314,7 @@ export function PosEkrani({
       p_tutar: tutar,
       p_tarih: bugun,
       p_aciklama: aciklama.trim() === '' ? null : aciklama.trim(),
+      p_odeme_yontemi: odeme,
     })
 
     setKaydediliyor(false)
@@ -318,7 +324,9 @@ export function PosEkrani({
     }
     setMesaj({
       tip: 'ok',
-      metin: `Kasaya ${yon === 'giris' ? 'giriş' : 'çıkış'}: ${para(tutar)} kaydedildi.`,
+      metin:
+        `Kasaya ${yon === 'giris' ? 'giriş' : 'çıkış'}: ${para(tutar)} ` +
+        `(${odeme === 'nakit' ? 'nakit' : 'kredi kartı'}) kaydedildi.`,
     })
     setSifirlama((n) => n + 1)
     kasaYenile()
@@ -580,7 +588,7 @@ export function PosEkrani({
               key={`kasa-giris-${sifirlama}`}
               renk="bg-emerald-700 hover:bg-emerald-800"
               etkin={!kaydediliyor}
-              onGonder={(tutar, aciklama) => kasaKaydet('giris', tutar, aciklama)}
+              onGonder={(tutar, aciklama, odeme) => kasaKaydet('giris', tutar, aciklama, odeme)}
             >
               Kasaya Para Girişi
             </KasaButonu>
@@ -589,7 +597,7 @@ export function PosEkrani({
               key={`kasa-cikis-${sifirlama}`}
               renk="bg-rose-700 hover:bg-rose-800"
               etkin={!kaydediliyor}
-              onGonder={(tutar, aciklama) => kasaKaydet('cikis', tutar, aciklama)}
+              onGonder={(tutar, aciklama, odeme) => kasaKaydet('cikis', tutar, aciklama, odeme)}
             >
               Kasadan Para Çıkışı
             </KasaButonu>
@@ -742,7 +750,7 @@ export function PosEkrani({
             <Satir
               ad="Kasadaki nakit"
               deger={para(ozet?.kasa_nakit ?? 0)}
-              alt={`kart ayrı: ${para(ozet?.ogun_kart_tutar ?? 0)}`}
+              alt={`kart ayrı: ${para(ozet?.kasa_kart ?? 0)}`}
               kalin
             />
           </div>

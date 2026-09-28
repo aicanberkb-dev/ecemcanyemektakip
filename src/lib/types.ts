@@ -267,6 +267,10 @@ export type TaksitDurumu = {
   son_vade: string | null
   /** Öğrencinin okul planından sapan en az bir taksiti var */
   ozel_plan: boolean
+  /** Bugünden sonraki ilk taksit vadesi; hepsi geçtiyse null */
+  yaklasan_vade: string | null
+  /** O vadede ödenecek tutar */
+  yaklasan_tutar: number
 }
 
 export type DevamSatiri = {
@@ -306,8 +310,10 @@ export type GunSonu = {
   ogun_kart_tutar: number
   kasa_giris: number
   kasa_cikis: number
-  /** Kasada olması gereken nakit: nakit öğünler + elle giriş − çıkış */
+  /** Kasada olması gereken nakit: nakit öğünler + nakit giriş − nakit çıkış */
   kasa_nakit: number
+  /** Hesaba geçecek kart tutarı: kart öğünler + kart kasa hareketleri */
+  kasa_kart: number
 }
 
 /** Öğün dışı kasa hareketi; yemek yiyen sayısına girmez */
@@ -317,6 +323,8 @@ export type KasaHareketi = {
   tarih: string
   yon: 'giris' | 'cikis'
   tutar: number
+  /** Kasa hareketinin yöntemi; kart olanlar kasaya girmez */
+  odeme_yontemi: OgunOdeme
   aciklama: string | null
   islemi_yapan_user_id: string
   created_at: string

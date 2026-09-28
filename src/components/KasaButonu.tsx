@@ -24,11 +24,13 @@ export function KasaButonu({
   renk: string
   etkin: boolean
   kucuk?: boolean
-  onGonder: (tutar: number, aciklama: string) => void
+  onGonder: (tutar: number, aciklama: string, odeme: 'nakit' | 'kredi_karti') => void
 }) {
   const [tutar, setTutar] = useState('0')
   const [aciklama, setAciklama] = useState('')
   const [uyari, setUyari] = useState(false)
+  // Elden alınan para asıl hâl; kart geçmişe dönük tahsilatlar için.
+  const [odeme, setOdeme] = useState<'nakit' | 'kredi_karti'>('nakit')
 
   // Türkçe virgüllü giriş kabul edilir
   const sayi = Number(tutar.replace(/\./g, '').replace(',', '.'))
@@ -36,25 +38,53 @@ export function KasaButonu({
 
   // Buton tutar yazılmadan da renkli durur: sönük bir buton "bozuk" gibi
   // görünüyordu. Tutar yoksa basınca uyarı çıkar.
+  // Nakit/kart seçimi butonun kendi içinde duruyor: ayrı bir satır olsaydı
+  // yemekhane ekranı yine uzayacaktı. iç içe <button> geçersiz olduğu için
+  // dış kabuk div, tıklanan alan onun içindeki buton.
   return (
     <div className="flex flex-col gap-2">
-      <button
-        type="button"
-        disabled={!etkin}
-        onClick={() => {
-          if (!gecerli) {
-            setUyari(true)
-            return
-          }
-          setUyari(false)
-          onGonder(sayi, aciklama)
-        }}
-        className={`rounded-lg px-3 font-semibold whitespace-nowrap text-white transition
-          ${kucuk ? 'py-3 text-sm' : 'py-9 text-lg'}
-          disabled:cursor-not-allowed disabled:bg-slate-300 ${renk}`}
+      <div
+        className={`flex flex-col overflow-hidden rounded-lg transition
+          ${etkin ? renk : 'bg-slate-300'}`}
       >
-        {children}
-      </button>
+        <button
+          type="button"
+          disabled={!etkin}
+          onClick={() => {
+            if (!gecerli) {
+              setUyari(true)
+              return
+            }
+            setUyari(false)
+            onGonder(sayi, aciklama, odeme)
+          }}
+          className={`px-3 font-semibold whitespace-nowrap text-white
+            ${kucuk ? 'py-2.5 text-sm' : 'py-6 text-lg'}
+            disabled:cursor-not-allowed`}
+        >
+          {children}
+        </button>
+
+        <div className="flex gap-1 px-2 pb-2">
+          {(['nakit', 'kredi_karti'] as const).map((y) => (
+            <button
+              key={y}
+              type="button"
+              disabled={!etkin}
+              onClick={() => setOdeme(y)}
+              aria-pressed={odeme === y}
+              className={`flex-1 rounded px-2 py-1 text-xs font-semibold transition
+                ${
+                  odeme === y
+                    ? 'bg-white text-slate-900'
+                    : 'bg-white/20 text-white hover:bg-white/30'
+                }`}
+            >
+              {y === 'nakit' ? 'Nakit' : 'Kredi Kartı'}
+            </button>
+          ))}
+        </div>
+      </div>
       {/* Açıklama kutusu kalan bütün genişliği alır: "bu para neydi"
           sorusunun tek cevabı orası, dar bir kutuya sığmıyor. */}
       <div className="flex items-center gap-2">
@@ -98,7 +128,13 @@ export function KasaListesi({
   onSil,
   paraBicim,
 }: {
-  hareketler: { id: string; yon: 'giris' | 'cikis'; tutar: number; aciklama: string | null }[]
+  hareketler: {
+    id: string
+    yon: 'giris' | 'cikis'
+    tutar: number
+    aciklama: string | null
+    odeme_yontemi?: 'nakit' | 'kredi_karti'
+  }[]
   bekliyor: boolean
   onSil: (hareket: {
     id: string
@@ -125,6 +161,9 @@ export function KasaListesi({
             {h.yon === 'giris' ? 'Kasaya giriş' : 'Kasadan çıkış'}
           </span>
           <span className="font-semibold tabular-nums">{paraBicim(h.tutar)}</span>
+          <span className="rozet bg-slate-100 text-slate-700">
+            {h.odeme_yontemi === 'kredi_karti' ? 'Kredi Kartı' : 'Nakit'}
+          </span>
           <span className="text-solgun">{h.aciklama ?? '—'}</span>
           <button
             type="button"

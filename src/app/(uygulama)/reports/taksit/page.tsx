@@ -51,8 +51,9 @@ export default async function TaksitPage({
     )
   }
 
+  const bugun = await bugunSunucu()
   const [{ data, error }, { data: planVeri }, { data: notVeri }] = await Promise.all([
-    supabase.rpc('taksit_durumu', { p_sezon_id: sezon.id, p_tarih: await bugunSunucu() }),
+    supabase.rpc('taksit_durumu', { p_sezon_id: sezon.id, p_tarih: bugun }),
     supabase
       .from('taksit_plani')
       .select('*')
@@ -68,8 +69,6 @@ export default async function TaksitPage({
 
   const satirlar = (data ?? []) as TaksitDurumu[]
   const plan = (planVeri ?? []) as TaksitPlani[]
-
-  const bugun = new Date().toISOString().slice(0, 10)
 
   return (
     <div className="space-y-4">
@@ -201,6 +200,7 @@ export default async function TaksitPage({
 
           <TaksitListesi
             satirlar={satirlar}
+            bugun={bugun}
             denemeIdleri={await denemeIdleri(okul.id)}
             notlar={Object.fromEntries(
               ((notVeri ?? []) as { id: string; ozel_not: string | null }[])
