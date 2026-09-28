@@ -8,7 +8,14 @@ import { TaksitRozeti, type TaksitBilgisi } from '@/components/TaksitRozeti'
 import { para } from '@/lib/format'
 import { ogunAdi } from '@/lib/ogun'
 import { supabaseBrowser } from '@/lib/supabase/client'
-import type { GunSonu, KasaHareketi, OgunOdeme, PosSonuc, SerbestOgunTipi } from '@/lib/types'
+import type {
+  GunSonu,
+  KasaHareketi,
+  KayitsizOgun,
+  OgunOdeme,
+  PosSonuc,
+  SerbestOgunTipi,
+} from '@/lib/types'
 
 type Mesaj = { tip: 'ok' | 'hata'; metin: string }
 
@@ -45,6 +52,9 @@ export function PosEkrani({
   const [kaydediliyor, setKaydediliyor] = useState(false)
   const [ozet, setOzet] = useState<GunSonu | null>(null)
   const [kasaHareketleri, setKasaHareketleri] = useState<KasaHareketi[]>([])
+  const [kayitsizlar, setKayitsizlar] = useState<KayitsizOgun[]>([])
+  const [kayitsizAd, setKayitsizAd] = useState('')
+  const [kayitsizSinif, setKayitsizSinif] = useState('')
   // Her serbest öğün kaydından sonra artar; adet ve fiyat kutularını
   // varsayılana döndürmek için AdetliButon'a key olarak verilir.
   const [sifirlama, setSifirlama] = useState(0)
@@ -69,6 +79,16 @@ export function PosEkrani({
     setKasaHareketleri((data ?? []) as KasaHareketi[])
   }, [supabase, okulId, bugun])
 
+  const kayitsizYenile = useCallback(async () => {
+    const { data } = await supabase
+      .from('kayitsiz_ogunler')
+      .select('*')
+      .eq('okul_id', okulId)
+      .eq('tarih', bugun)
+      .order('created_at', { ascending: false })
+    setKayitsizlar((data ?? []) as KayitsizOgun[])
+  }, [supabase, okulId, bugun])
+
   // İlk açılışta bugünün sayacını çek ve odağı arama kutusuna ver.
   // Okul değişince bileşen key ile yeniden kurulur (bkz. pos/page.tsx).
   useEffect(() => {
@@ -84,6 +104,15 @@ export function PosEkrani({
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         if (!iptal) setKasaHareketleri((data ?? []) as KasaHareketi[])
+      })
+    supabase
+      .from('kayitsiz_ogunler')
+      .select('*')
+      .eq('okul_id', okulId)
+      .eq('tarih', bugun)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (!iptal) setKayitsizlar((data ?? []) as KayitsizOgun[])
       })
     aramaRef.current?.focus()
     return () => {
@@ -353,6 +382,53 @@ export function PosEkrani({
     }
     setMesaj({ tip: 'ok', metin: `${para(hareket.tutar)} kasa hareketi silindi.` })
     kasaYenile()
+    ozetYenile()
+  }
+
+  /**
+   * Kayıtsız öğrenci öğünü.
+   *
+   * Sisteme kayıtlı olmayan, günlük ücreti tanımlı olmayan çocuk. Öğrenci
+   * kaydı açılmıyor; adıyla ayrı tabloya yazılıyor. Ücret tahsil edilmiyor,
+   * yalnızca yiyen sayısına giriyor — mutfak kaç tabak çıkardığını bilmeli.
+   */
+  async function kayitsizKaydet() {
+    const ad = kayitsizAd.trim()
+    if (ad === '' || kaydediliyor) return
+    setKaydediliyor(true)
+
+    const { error } = await supabase.rpc('kayitsiz_ogun_kaydet', {
+      p_okul_id: okulId,
+      p_ad_soyad: ad,
+      p_tarih: bugun,
+      p_sinif: kayitsizSinif.trim() === '' ? null : kayitsizSinif.trim(),
+    })
+
+    setKaydediliyor(false)
+    if (error) {
+      setMesaj({ tip: 'hata', metin: error.message })
+      return
+    }
+    setMesaj({ tip: 'ok', metin: `${ad.toLocaleUpperCase('tr')} — kayıtsız öğün eklendi.` })
+    setKayitsizAd('')
+    setKayitsizSinif('')
+    kayitsizYenile()
+    ozetYenile()
+  }
+
+  async function kayitsizSil(kayit: KayitsizOgun) {
+    if (kaydediliyor) return
+    if (!confirm(`${kayit.ad_soyad} kayıtsız öğün kaydı silinsin mi?`)) return
+
+    setKaydediliyor(true)
+    const { error } = await supabase.rpc('kayitsiz_ogun_sil', { p_id: kayit.id })
+    setKaydediliyor(false)
+    if (error) {
+      setMesaj({ tip: 'hata', metin: error.message })
+      return
+    }
+    setMesaj({ tip: 'ok', metin: `${kayit.ad_soyad} — kayıt geri alındı.` })
+    kayitsizYenile()
     ozetYenile()
   }
 
@@ -714,8 +790,12 @@ export function PosEkrani({
         )}
       </div>
 
+      {/* Sağ sütun: sayaç ve altında kayıtsız öğrenci kutusu. Tek kapta
+          duruyorlar — ayrı ayrı yerleştirilince ikincisi sol sütunun
+          altına, sayfanın çok aşağısına düşüyordu. */}
+      <div className="h-fit space-y-4">
       {/* Bugünün sayacı */}
-      <aside className="kart h-fit p-4">
+      <aside className="kart p-4">
         <h2 className="mb-3 text-sm font-semibold text-solgun uppercase">Bugün</h2>
         <dl className="space-y-2 text-sm">
           <Satir ad="Günlükçü" deger={ozet?.gunlukcu ?? 0} />
@@ -731,6 +811,7 @@ export function PosEkrani({
             alt={`${ozet?.ogretmen_nakit ?? 0} nakit · ${ozet?.ogretmen_kart ?? 0} kart`}
           />
           <Satir ad="Misafir" deger={ozet?.misafir ?? 0} />
+          <Satir ad="Kayıtsız" deger={ozet?.kayitsiz ?? 0} alt="ücret alınmadı" />
           <div className="border-t border-cizgi pt-2">
             <Satir ad="Toplam" deger={ozet?.toplam ?? 0} kalin />
           </div>
@@ -756,6 +837,71 @@ export function PosEkrani({
           </div>
         </dl>
       </aside>
+
+      {/* Kayıtsız öğrenciler — sayacın altında, sağ sütunun devamı.
+          Sisteme kayıtlı olmayan çocuk da yemek yiyor; adı buraya yazılıp
+          yiyen sayısına katılıyor. Ücret alınmıyor, takibi kendi raporunda. */}
+      <aside className="kart p-4">
+        <h2 className="mb-1 text-sm font-semibold text-solgun uppercase">Kayıtsız Öğrenci</h2>
+        <p className="mb-3 text-xs text-solgun">
+          Sistemde kaydı olmayan öğrenci. Yiyen sayısına girer, ücret düşmez.
+        </p>
+
+        <div className="flex flex-col gap-2">
+          <input
+            value={kayitsizAd}
+            onChange={(e) => setKayitsizAd(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') kayitsizKaydet()
+            }}
+            placeholder="Öğrencinin adı soyadı"
+            className="rounded-md border border-cizgi bg-white px-3 py-2 text-sm
+                       text-metin outline-none focus:border-vurgu focus:ring-2 focus:ring-blue-100"
+          />
+          <div className="flex gap-2">
+            <input
+              value={kayitsizSinif}
+              onChange={(e) => setKayitsizSinif(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') kayitsizKaydet()
+              }}
+              placeholder="Sınıf (isteğe bağlı)"
+              className="w-32 rounded-md border border-cizgi bg-white px-3 py-2 text-sm
+                         text-metin outline-none focus:border-vurgu focus:ring-2 focus:ring-blue-100"
+            />
+            <button
+              type="button"
+              disabled={kayitsizAd.trim() === '' || kaydediliyor}
+              onClick={kayitsizKaydet}
+              className="flex-1 rounded-md bg-slate-700 px-3 py-2 text-sm font-semibold
+                         text-white transition hover:bg-slate-800
+                         disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              Yemek Yedi
+            </button>
+          </div>
+        </div>
+
+        {kayitsizlar.length > 0 && (
+          <ul className="mt-3 space-y-1 border-t border-cizgi pt-3 text-sm">
+            {kayitsizlar.map((k) => (
+              <li key={k.id} className="flex items-center gap-2">
+                <span className="font-medium">{k.ad_soyad}</span>
+                {k.sinif && <span className="text-xs text-solgun">{k.sinif}</span>}
+                <button
+                  type="button"
+                  disabled={kaydediliyor}
+                  onClick={() => kayitsizSil(k)}
+                  className="ml-auto text-xs text-red-600 hover:underline disabled:opacity-50"
+                >
+                  Geri al
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </aside>
+      </div>
     </div>
   )
 }

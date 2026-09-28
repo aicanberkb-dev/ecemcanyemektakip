@@ -126,7 +126,7 @@ export default async function GunSonuPage({
 
       {/* Ücretli ve öğretmen kutularında nakit/kart kırılımı da var: gün sonunda
           kasa sayılırken kartla ödenenin ayrı görünmesi gerekiyor. */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-7">
         <Sayac baslik="Günlükçü" adet={ozet?.gunlukcu ?? 0} alt={para(ozet?.gunlukcu_tutar ?? 0)} renk="bg-blue-50 text-blue-800" />
         <Sayac baslik="Aylıkçı" adet={ozet?.aylikci ?? 0} alt="ücret düşmez" renk="bg-amber-50 text-amber-800" />
         <Sayac
@@ -142,6 +142,12 @@ export default async function GunSonuPage({
           renk="bg-indigo-50 text-indigo-800"
         />
         <Sayac baslik="Misafir" adet={ozet?.misafir ?? 0} alt={para(ozet?.misafir_tutar ?? 0)} renk="bg-purple-50 text-purple-800" />
+        <Sayac
+          baslik="Kayıtsız"
+          adet={ozet?.kayitsiz ?? 0}
+          alt="ücret alınmadı"
+          renk="bg-slate-50 text-slate-700"
+        />
         <Sayac baslik="Toplam" adet={ozet?.toplam ?? 0} alt="kişi yemek yedi" renk="bg-slate-100 text-slate-800" />
       </div>
 

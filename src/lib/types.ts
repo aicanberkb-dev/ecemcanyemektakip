@@ -314,6 +314,29 @@ export type GunSonu = {
   kasa_nakit: number
   /** Hesaba geçecek kart tutarı: kart öğünler + kart kasa hareketleri */
   kasa_kart: number
+  /** Sisteme kayıtlı olmayan öğrencilerin öğünleri; ücret alınmaz */
+  kayitsiz: number
+}
+
+/**
+ * Sisteme kayıtlı olmayan öğrencinin yemek kaydı.
+ *
+ * Öğrenci kaydı açılmıyor: çocuk kayıtlı değil, adı dışında bilgisi yok ve
+ * öğrenci listesini kirletmemeli. Ücret tahsil edilmiyor; yalnızca kişi
+ * sayısına giriyor ve takip edilmesi gerekiyor.
+ */
+export type KayitsizOgun = {
+  id: string
+  okul_id: string
+  tarih: string
+  ad_soyad: string
+  sinif: string | null
+  aciklama: string | null
+  /** Takip işaretleri — yemekhane ekranını etkilemez, rapordaki bilgi */
+  veli_arandi: boolean
+  ucret_alindi: boolean
+  islemi_yapan_user_id: string
+  created_at: string
 }
 
 /** Öğün dışı kasa hareketi; yemek yiyen sayısına girmez */
