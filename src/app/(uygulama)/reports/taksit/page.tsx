@@ -5,7 +5,7 @@ import { CiktiBasligi } from '@/components/CiktiBasligi'
 import { SezonUyarisi } from '@/components/SezonUyarisi'
 import { YazdirButonu } from '@/components/Yazdir'
 import { denemeIdleri } from '@/lib/deneme-sunucu'
-import { para, tarih as tarihBicim } from '@/lib/format'
+import { gunAy, para, tarih as tarihBicim } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
 import { sezonSec } from '@/lib/sezon'
 import { sezonlar as sezonlariGetir } from '@/lib/sezon-sunucu'
@@ -166,7 +166,12 @@ export default async function TaksitPage({
                     {tipinPlani.map((t) => (
                       <tr key={t.id}>
                         <td className="font-medium">{t.ad}</td>
-                        <td>{tarihBicim(t.vade_tarihi)}</td>
+                        <td className="whitespace-nowrap">
+                          {tarihBicim(t.vade_tarihi)}
+                          <span className="ml-1 text-xs text-solgun">
+                            ({gunAy(t.vade_tarihi)})
+                          </span>
+                        </td>
                         <td className="text-right tabular-nums">{para(t.tutar)}</td>
                         <td>
                           {t.vade_tarihi <= bugun ? (

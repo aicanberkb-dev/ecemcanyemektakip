@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from 'react'
 
-import { para, tarih as tarihBicim } from '@/lib/format'
+import { gunAy, para, tarih as tarihBicim } from '@/lib/format'
 import {
   OGRENCI_TIPI_ADLARI,
   PLANLI_OGRENCI_TIPLERI,
@@ -189,7 +189,10 @@ function TaksitSatiri({ taksit }: { taksit: TaksitPlani }) {
   return (
     <tr>
       <td className="font-medium">{taksit.ad}</td>
-      <td>{tarihBicim(taksit.vade_tarihi)}</td>
+      <td className="whitespace-nowrap">
+        {tarihBicim(taksit.vade_tarihi)}
+        <span className="ml-1 text-xs text-solgun">({gunAy(taksit.vade_tarihi)})</span>
+      </td>
       <td className="text-right tabular-nums">{para(taksit.tutar)}</td>
       <td className="text-right whitespace-nowrap">
         <button

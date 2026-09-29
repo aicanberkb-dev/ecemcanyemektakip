@@ -7,7 +7,7 @@ import {
   OgrenciArama,
   type AramaOgrencisi,
 } from '@/app/(uygulama)/payments/ekstre/OgrenciArama'
-import { para, tarih as tarihBicim } from '@/lib/format'
+import { gunAy, para, tarih as tarihBicim } from '@/lib/format'
 import type { OgrenciTaksitSatiri } from '@/lib/types'
 
 import {
@@ -360,6 +360,7 @@ function TaksitSatiri({
       </td>
       <td className="whitespace-nowrap">
         {tarihBicim(satir.vade_tarihi)}
+        <span className="ml-1 text-xs text-solgun">({gunAy(satir.vade_tarihi)})</span>
         {satir.ozel_vade && satir.okul_vade && (
           <span className="ml-2 text-xs text-solgun line-through">
             {tarihBicim(satir.okul_vade)}

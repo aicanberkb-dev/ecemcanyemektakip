@@ -3,8 +3,14 @@
 import { useRouter } from 'next/navigation'
 import { useMemo, useRef, useState, useTransition } from 'react'
 
-import { useBugunTarihi } from '@/components/BugunSaglayici'
-import { para, tarih as tarihBicim } from '@/lib/format'
+import { useBugun, useBugunTarihi } from '@/components/BugunSaglayici'
+import {
+  gunAdi,
+  gunAraligi,
+  haftaSonuMu,
+  para,
+  tarih as tarihBicim,
+} from '@/lib/format'
 
 import { ciroKaydet, ciroSil, type FinansDurumu } from '../actions'
 
@@ -23,6 +29,16 @@ export type CiroSatiri = {
 type Tutarlar = Record<string, { nakit: string; kart: string }>
 
 const BOS = { nakit: '', kart: '' }
+
+/**
+ * Hafta sonu kapalı olan yerler.
+ *
+ * Cumartesi–pazar yalnızca TORİK çalışıyor; diğerlerinde "veri girilmedi"
+ * uyarısı çıkmasın, kapalı olduğu görünsün. Listede olmayan yeni bir yer
+ * her gün açık sayılır — kapalıyı açık göstermek, gerçek bir eksiği
+ * gizlemekten iyi.
+ */
+const HAFTA_SONU_KAPALI = ['GÖKSU', 'AKBABA']
 
 /** Virgüllü metni sayıya çevirir; boş ise 0 */
 function sayiya(metin: string): number {
@@ -45,6 +61,7 @@ export function CiroEkrani({
 }) {
   const router = useRouter()
   const [bekliyor, baslat] = useTransition()
+  const bugun = useBugun()
   const [tarih, setTarih] = useBugunTarihi()
   const [tutarlar, setTutarlar] = useState<Tutarlar>({})
   const [yeniYer, setYeniYer] = useState('')
@@ -60,7 +77,8 @@ export function CiroEkrani({
     [gelenYerler, tutarlar],
   )
 
-  // gün → yer → satır
+  // gün → yer → satır. Kaydı olmayan günler de listede: eksik gün boş
+  // satır olarak durmazsa "girilmedi mi, kapalı mıydı" ayrımı yapılamıyor.
   const gunler = useMemo(() => {
     const m = new Map<string, Map<string, CiroSatiri>>()
     for (const s of satirlar) {
@@ -70,8 +88,19 @@ export function CiroEkrani({
       gun.set(s.yer, s)
       m.set(s.tarih, gun)
     }
+
+    // Aralık verilmediyse ilk kayıttan bugüne kadar
+    const tarihler = [...m.keys()].sort()
+    const ilk = bas || tarihler[0]
+    const son = bit || (tarihler.length > 0 ? [tarihler.at(-1)!, bugun].sort().at(-1)! : bugun)
+    if (ilk) {
+      for (const g of gunAraligi(ilk, son)) {
+        if (!m.has(g)) m.set(g, new Map())
+      }
+    }
+
     return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0]))
-  }, [satirlar, bas, bit])
+  }, [satirlar, bas, bit, bugun])
 
   /** alan: hangi rakam toplanacak — toplam, nakit ya da kart */
   type Alan = 'tutar' | 'nakit' | 'kart'
@@ -339,10 +368,15 @@ export function CiroEkrani({
           </thead>
           <tbody>
             {gunler.map(([gun, kayitlar]) => (
-              <tr key={gun}>
-                <td className="whitespace-nowrap">{tarihBicim(gun)}</td>
+              <tr key={gun} className={haftaSonuMu(gun) ? 'bg-slate-50/70' : undefined}>
+                <td className="whitespace-nowrap">
+                  {tarihBicim(gun)}
+                  <span className="block text-xs text-solgun">{gunAdi(gun)}</span>
+                </td>
                 {yerler.map((y) => {
                   const s = kayitlar.get(y)
+                  // Hafta sonu kapalı yerde eksik veri uyarısı anlamsız
+                  const kapali = haftaSonuMu(gun) && HAFTA_SONU_KAPALI.includes(y)
                   return (
                     <td key={y} className="text-right tabular-nums">
                       {s ? (
@@ -355,19 +389,27 @@ export function CiroEkrani({
                             </span>
                           )}
                         </>
+                      ) : kapali ? (
+                        <span className="text-xs text-solgun">kapalı</span>
                       ) : (
-                        <span className="text-solgun">—</span>
+                        <span className="text-xs text-amber-700">veri girilmedi</span>
                       )}
                     </td>
                   )
                 })}
                 <td className="text-right font-semibold tabular-nums text-emerald-700">
-                  {para(gunToplami(kayitlar))}
-                  {gunToplami(kayitlar, 'nakit') + gunToplami(kayitlar, 'kart') > 0 && (
-                    <span className="block text-xs font-normal text-solgun">
-                      {para(gunToplami(kayitlar, 'nakit'))} nakit ·{' '}
-                      {para(gunToplami(kayitlar, 'kart'))} kart
-                    </span>
+                  {kayitlar.size === 0 ? (
+                    <span className="text-xs font-normal text-amber-700">veri girilmedi</span>
+                  ) : (
+                    <>
+                      {para(gunToplami(kayitlar))}
+                      {gunToplami(kayitlar, 'nakit') + gunToplami(kayitlar, 'kart') > 0 && (
+                        <span className="block text-xs font-normal text-solgun">
+                          {para(gunToplami(kayitlar, 'nakit'))} nakit ·{' '}
+                          {para(gunToplami(kayitlar, 'kart'))} kart
+                        </span>
+                      )}
+                    </>
                   )}
                 </td>
                 <td className="text-right whitespace-nowrap">
@@ -376,11 +418,13 @@ export function CiroEkrani({
                     className="text-xs text-vurgu hover:underline"
                     onClick={() => gunuYukle(gun)}
                   >
-                    Düzelt
+                    {kayitlar.size === 0 ? 'Gir' : 'Düzelt'}
                   </button>
                   <button
                     type="button"
-                    className="ml-3 text-xs text-red-600 hover:underline"
+                    className={`ml-3 text-xs text-red-600 hover:underline ${
+                      kayitlar.size === 0 ? 'hidden' : ''
+                    }`}
                     disabled={bekliyor}
                     onClick={() => {
                       if (!confirm(`${tarihBicim(gun)} kayıtları silinsin mi?`)) return
