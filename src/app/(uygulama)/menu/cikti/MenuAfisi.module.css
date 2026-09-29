@@ -209,6 +209,96 @@
   color: var(--footc);
 }
 
+/* ---------- Sıkışık düzen: uzun ay tek sayfaya sığsın ----------
+   Beş haftalık bir ay doğal boyutlarda A4'ü %10 taşırıyor ve ikinci sayfaya
+   tek bir şerit düşüyordu. Ölçüler afiş genişliğine bağlı (cqw) olduğu için
+   yüksekliği belirleyen değerler topluca küçültülüyor; düzen aynı kalıyor.
+   Altı haftalık aylarda ikinci kademe devreye giriyor. */
+.sikisik .bant {
+  padding: 2.4cqw 5cqw 2.2cqw;
+}
+.sikisik .logo {
+  width: 21cqw;
+}
+.sikisik .baslik {
+  gap: 0.8cqw;
+}
+.sikisik .ustYazi {
+  font-size: 1.3cqw;
+}
+.sikisik .ay {
+  font-size: 6.8cqw;
+}
+.sikisik .altYazi {
+  font-size: 1.8cqw;
+}
+.sikisik .gunler {
+  margin-top: 2.2cqw;
+}
+.sikisik .kart {
+  min-height: 10cqw;
+}
+.sikisik .kartUst {
+  padding: 0.9cqw 1.1cqw 0.6cqw;
+}
+.sikisik .no {
+  font-size: 3cqw;
+}
+.sikisik .kart ul {
+  padding: 0.6cqw 0 1cqw;
+  gap: 0.4cqw;
+}
+.sikisik .kart li {
+  font-size: 1.3cqw;
+}
+.sikisik .kart li.ana {
+  font-size: 1.48cqw;
+}
+.sikisik .not span {
+  font-size: 1.32cqw;
+}
+.sikisik .alt {
+  margin-top: 1.4cqw;
+  padding-top: 1.4cqw;
+  font-size: 1.7cqw;
+}
+.sikisik .cerceve {
+  padding-bottom: 2.4cqw;
+}
+
+.cokSikisik .bant {
+  padding: 1.8cqw 5cqw 1.6cqw;
+}
+.cokSikisik .logo {
+  width: 17cqw;
+}
+.cokSikisik .ay {
+  font-size: 5.4cqw;
+}
+.cokSikisik .altYazi {
+  font-size: 1.5cqw;
+}
+.cokSikisik .gunler {
+  margin-top: 1.6cqw;
+}
+.cokSikisik .kart {
+  min-height: 8cqw;
+}
+.cokSikisik .no {
+  font-size: 2.5cqw;
+}
+.cokSikisik .kart li {
+  font-size: 1.18cqw;
+}
+.cokSikisik .kart li.ana {
+  font-size: 1.32cqw;
+}
+.cokSikisik .alt {
+  margin-top: 1cqw;
+  padding-top: 1cqw;
+  font-size: 1.5cqw;
+}
+
 /* ---------- Renkli: Sarı Bant ---------- */
 .renkli {
   --bg: #111111;
@@ -273,8 +363,18 @@
   }
 
   .kagit .poster {
-    /* Tam 297 mm bazen yuvarlamayla ikinci sayfaya bir çizgi taşırıyor */
+    /* Tam 297 mm bazen yuvarlamayla ikinci sayfaya bir çizgi taşırıyor.
+       Yükseklik sabit ve taşma kesiliyor: afiş her durumda tek sayfa.
+       Uzun ayda ölçüler zaten küçülüyor (.sikisik), kesilecek bir şey
+       kalmıyor; bu kural yalnızca yuvarlama payına karşı. */
     aspect-ratio: auto;
-    min-height: 296mm;
+    height: 296mm;
+    overflow: hidden;
+    break-inside: avoid;
+    break-after: avoid;
+  }
+
+  .kagit {
+    break-inside: avoid;
   }
 }

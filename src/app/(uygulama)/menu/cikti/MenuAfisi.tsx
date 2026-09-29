@@ -106,9 +106,14 @@ export function MenuAfisi({
   const haftalar = haftalaraBol(gunler)
   const renkli = tur === 'afis'
 
+  // Afiş her durumda tek sayfa: hafta sayısı arttıkça ölçüler küçülür.
+  // Dört haftalık ay doğal boyutunda sığıyor, beşte taşıyordu.
+  const sikisma =
+    haftalar.length >= 6 ? `${s.sikisik} ${s.cokSikisik}` : haftalar.length >= 5 ? s.sikisik : ''
+
   return (
     <article
-      className={`${s.poster} ${renkli ? s.renkli : s.siyahBeyaz} ${slab.variable} ${sans.variable}`}
+      className={`${s.poster} ${renkli ? s.renkli : s.siyahBeyaz} ${sikisma} ${slab.variable} ${sans.variable}`}
       style={{ ['--fd' as string]: 'var(--afis-slab), Rockwell, serif', ['--fb' as string]: 'var(--afis-sans), system-ui, sans-serif' }}
     >
       <div className={s.cerceve}>
