@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 import { AboneRozeti, DenemeRozeti } from '@/components/Rozetler'
-import { para, tarih as tarihBicim, tarihSaat } from '@/lib/format'
+import { para, saat, tarih as tarihBicim } from '@/lib/format'
 import { ogunAdi } from '@/lib/ogun'
 import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { aktifOkul } from '@/lib/okul'
@@ -169,12 +169,7 @@ export default async function GunSonuPage({
             <tbody>
               {yiyenler.map((y) => (
                 <tr key={y.id}>
-                  <td className="whitespace-nowrap text-solgun">
-                    {new Date(y.created_at).toLocaleTimeString('tr-TR', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </td>
+                  <td className="whitespace-nowrap text-solgun">{saat(y.created_at)}</td>
                   <td>
                     <Link
                       href={`/students/${y.student_id}`}
@@ -217,7 +212,7 @@ export default async function GunSonuPage({
             <tbody>
               {serbestler.map((s) => (
                 <tr key={s.id}>
-                  <td className="whitespace-nowrap text-solgun">{tarihSaat(s.created_at).slice(11)}</td>
+                  <td className="whitespace-nowrap text-solgun">{saat(s.created_at)}</td>
                   <td>
                     <span className={`rozet ${SERBEST_ROZET[s.tip]}`}>{ogunAdi(s.tip)}</span>
                   </td>

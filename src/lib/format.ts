@@ -14,6 +14,15 @@ export function sayi(deger: number | string | null | undefined): string {
   return sayiFormat.format(Number(deger ?? 0))
 }
 
+/**
+ * Bütün tarih ve saatler Türkiye saatine göre gösterilir.
+ *
+ * Sunucu UTC'de çalışıyor: saat dilimi verilmezse kayıt saatleri üç saat
+ * geri görünüyordu ("bugün" de gece 03:00'e kadar bir önceki gün sayılıyordu).
+ * Kullanıcı da veri de Türkiye'de, sabitlemek doğrusu.
+ */
+export const SAAT_DILIMI = 'Europe/Istanbul'
+
 /** '2026-08-01' veya ISO timestamp → '01.08.2026' */
 export function tarih(deger: string | Date | null | undefined): string {
   if (!deger) return '—'
@@ -23,6 +32,7 @@ export function tarih(deger: string | Date | null | undefined): string {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
+    timeZone: SAAT_DILIMI,
   }).format(d)
 }
 
@@ -36,21 +46,40 @@ export function tarihSaat(deger: string | Date | null | undefined): string {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: SAAT_DILIMI,
   }).format(d)
 }
 
-/** Yerel saat diliminde bugünün ISO tarihi (yyyy-aa-gg) */
+/** ISO timestamp → '13:45' (Türkiye saati) */
+export function saat(deger: string | Date | null | undefined): string {
+  if (!deger) return '—'
+  const d = typeof deger === 'string' ? new Date(deger) : deger
+  if (Number.isNaN(d.getTime())) return '—'
+  return new Intl.DateTimeFormat('tr-TR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: SAAT_DILIMI,
+  }).format(d)
+}
+
+/** Türkiye saatine göre verilen anın ISO tarihi (yyyy-aa-gg) */
+export function isoTarih(d: Date = new Date()): string {
+  // en-CA biçimi zaten yyyy-aa-gg veriyor; elle parçalamaya gerek yok
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: SAAT_DILIMI,
+  }).format(d)
+}
+
+/** Türkiye saatine göre bugünün ISO tarihi (yyyy-aa-gg) */
 export function bugunISO(): string {
-  const d = new Date()
-  const ay = String(d.getMonth() + 1).padStart(2, '0')
-  const gun = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${ay}-${gun}`
+  return isoTarih()
 }
 
 export function ayBasiISO(): string {
-  const d = new Date()
-  const ay = String(d.getMonth() + 1).padStart(2, '0')
-  return `${d.getFullYear()}-${ay}-01`
+  return `${isoTarih().slice(0, 7)}-01`
 }
 
 export const AY_ADLARI = [

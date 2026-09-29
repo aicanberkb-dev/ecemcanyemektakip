@@ -977,7 +977,10 @@ const ciroSemasi = z.object({
     .trim()
     .min(1, 'Yer gerekli.')
     .transform((y) => y.replace(/\s+/g, ' ').toLocaleUpperCase('tr')),
-  tutar: trSayi({ min: 0 }),
+  // Hasılat nakit ve kart olarak ayrı giriliyor; toplam bunlardan çıkar,
+  // ayrıca yazılmıyor ki iki rakam birbirini tutmaz hâle gelmesin.
+  nakit: trSayi({ min: 0 }),
+  kart: trSayi({ min: 0 }),
   aciklama: bosNull,
 })
 
@@ -994,7 +997,10 @@ export async function ciroKaydet(veri: Record<string, string>): Promise<FinansDu
   const supabase = await supabaseServer()
   const { error } = await supabase
     .from('gunluk_ciro')
-    .upsert(sonuc.data, { onConflict: 'tarih,yer' })
+    .upsert(
+      { ...sonuc.data, tutar: sonuc.data.nakit + sonuc.data.kart },
+      { onConflict: 'tarih,yer' },
+    )
   if (error) return { hata: error.message }
 
   revalidatePath('/finans/ciro')

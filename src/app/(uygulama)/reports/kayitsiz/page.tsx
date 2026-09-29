@@ -1,5 +1,5 @@
 import { TarihAraligi } from '@/components/TarihAraligi'
-import { ayBasiISO, tarih as tarihBicim, tarihSaat } from '@/lib/format'
+import { ayBasiISO, saat, tarih as tarihBicim } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
 import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
@@ -97,7 +97,7 @@ export default async function KayitsizPage({
                 <td className="whitespace-nowrap">
                   {tarihBicim(s.tarih)}
                   <span className="block text-xs text-solgun">
-                    {tarihSaat(s.created_at).slice(11)}
+                    {saat(s.created_at)}
                   </span>
                 </td>
                 <td className="font-medium">{s.ad_soyad}</td>

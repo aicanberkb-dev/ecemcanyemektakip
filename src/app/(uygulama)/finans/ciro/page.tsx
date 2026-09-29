@@ -11,7 +11,7 @@ export default async function CiroPage() {
   const supabase = await supabaseServer()
   const { data, error } = await supabase
     .from('gunluk_ciro')
-    .select('id, tarih, yer, tutar, aciklama')
+    .select('id, tarih, yer, tutar, nakit, kart, aciklama')
     .order('tarih', { ascending: false })
 
   const satirlar = (data ?? []) as CiroSatiri[]
