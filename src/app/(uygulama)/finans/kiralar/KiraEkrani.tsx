@@ -79,17 +79,29 @@ const OKULLAR: { ad: string; birimler: Birim[] }[] = [
 /** Her birimin kendi soluk zemini: sütunlar birbirine karışmasın */
 type Birim = { ad: string; zemin: string; baslik: string }
 
-/** Sezon: Eylül 2026 – Haziran 2027 */
+/**
+ * Dönemler ikişer aylık: Eylül–Ekim, Ekim–Kasım, … Mayıs–Haziran.
+ *
+ * Sezon Eylül 2026 – Haziran 2027 olduğu için ardışık ay çiftleri dokuz
+ * tane. Kayıtta dönem olarak çiftin ilk ayı tutuluyor; ad yalnızca ekranda.
+ */
 function donemler(): { iso: string; ad: string }[] {
   const liste: { iso: string; ad: string }[] = []
-  for (let i = 0; i < 10; i++) {
-    const ay = 8 + i // 8 = Eylül (0 tabanlı)
-    const yil = 2026 + Math.floor(ay / 12)
-    const a = ay % 12
-    liste.push({
-      iso: `${yil}-${String(a + 1).padStart(2, '0')}-01`,
-      ad: `${AY_ADLARI[a]} ${yil}`,
-    })
+  for (let i = 0; i < 9; i++) {
+    const bas = 8 + i // 8 = Eylül (0 tabanlı)
+    const basYil = 2026 + Math.floor(bas / 12)
+    const basAy = bas % 12
+    const son = bas + 1
+    const sonYil = 2026 + Math.floor(son / 12)
+    const sonAy = son % 12
+
+    // Yıl değişiyorsa iki yıl da yazılır: "Aralık 2026 – Ocak 2027"
+    const ad =
+      basYil === sonYil
+        ? `${AY_ADLARI[basAy]}–${AY_ADLARI[sonAy]} ${basYil}`
+        : `${AY_ADLARI[basAy]} ${basYil} – ${AY_ADLARI[sonAy]} ${sonYil}`
+
+    liste.push({ iso: `${basYil}-${String(basAy + 1).padStart(2, '0')}-01`, ad })
   }
   return liste
 }
@@ -228,7 +240,7 @@ export function KiraEkrani({
                     <Bolum
                       baslik={KALEM_ADLARI.uc_aylik}
                       satirlar={TAKSITLER.map((t) => ({
-                        etiket: `${t}. taksit`,
+                        etiket: `${t}. 3 Aylık Arz`,
                         donem: null,
                         sira: t,
                       }))}
@@ -325,7 +337,10 @@ function Bolum({
                   k?.odendi ? 'bg-emerald-100' : ''
                 }`}
               >
-                <span className="w-28 shrink-0 text-xs font-medium">{s.etiket}</span>
+                {/* Dönem adı iki ay taşıyor: "Aralık 2026 – Ocak 2027" sığsın */}
+                <span className="w-40 shrink-0 text-xs leading-tight font-medium">
+                  {s.etiket}
+                </span>
 
                 <input
                   inputMode="decimal"
