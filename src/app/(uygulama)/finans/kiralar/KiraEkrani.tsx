@@ -37,11 +37,47 @@ const AYLIK_KALEMLER: Kalem[] = ['kira', 'il_payi', 'ilce_payi']
  * Yan yana sütun başına bir okul, altında o okulun birimleri. Yeni bir birim
  * açılırsa buraya eklemek yeterli — veritabanında önceden satır yok.
  */
-const OKULLAR: { ad: string; birimler: string[] }[] = [
-  { ad: 'GÖKSU', birimler: ['GÖKSU KANTİN', 'GÖKSU YEMEKHANE'] },
-  { ad: 'AKBABA', birimler: ['AKBABA KANTİN İLKOKUL', 'AKBABA KANTİN ORTAOKUL'] },
-  { ad: 'AHMET MİTHAT', birimler: ['AHMET MİTHAT YEMEKHANE'] },
+const OKULLAR: { ad: string; birimler: Birim[] }[] = [
+  {
+    ad: 'GÖKSU',
+    birimler: [
+      { ad: 'GÖKSU KANTİN', zemin: 'bg-amber-50/70', baslik: 'bg-amber-100 text-amber-900' },
+      {
+        ad: 'GÖKSU YEMEKHANE',
+        zemin: 'bg-teal-50/70',
+        baslik: 'bg-teal-100 text-teal-900',
+      },
+    ],
+  },
+  {
+    ad: 'AKBABA',
+    birimler: [
+      {
+        ad: 'AKBABA KANTİN İLKOKUL',
+        zemin: 'bg-sky-50/70',
+        baslik: 'bg-sky-100 text-sky-900',
+      },
+      {
+        ad: 'AKBABA KANTİN ORTAOKUL',
+        zemin: 'bg-indigo-50/70',
+        baslik: 'bg-indigo-100 text-indigo-900',
+      },
+    ],
+  },
+  {
+    ad: 'AHMET MİTHAT',
+    birimler: [
+      {
+        ad: 'AHMET MİTHAT YEMEKHANE',
+        zemin: 'bg-rose-50/70',
+        baslik: 'bg-rose-100 text-rose-900',
+      },
+    ],
+  },
 ]
+
+/** Her birimin kendi soluk zemini: sütunlar birbirine karışmasın */
+type Birim = { ad: string; zemin: string; baslik: string }
 
 /** Sezon: Eylül 2026 – Haziran 2027 */
 function donemler(): { iso: string; ad: string }[] {
@@ -157,9 +193,13 @@ export function KiraEkrani({
             </h2>
 
             <div className="space-y-4 p-3">
-              {okul.birimler.map((birim) => (
-                <div key={birim} className="rounded-lg border border-cizgi">
-                  <h3 className="border-b border-cizgi bg-slate-50/70 px-3 py-2 text-sm font-semibold">
+              {okul.birimler.map((b) => {
+                const birim = b.ad
+                return (
+                <div key={birim} className={`rounded-lg border border-cizgi ${b.zemin}`}>
+                  <h3
+                    className={`border-b border-cizgi px-3 py-2 text-sm font-semibold ${b.baslik}`}
+                  >
                     {birim}
                   </h3>
 
@@ -203,7 +243,8 @@ export function KiraEkrani({
                     />
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </section>
         ))}
@@ -248,14 +289,17 @@ function Bolum({
     hedefler: { donem: string | null; sira: number | null }[],
   ) => void
 }) {
-  const [acik, setAcik] = useState(kalem === 'kira')
+  // Bütün kalemler kapalı açılır: dört kalem × beş birim açık olunca ekran
+  // okunmuyordu. Başlıktaki özet zaten durumu söylüyor.
+  const [acik, setAcik] = useState(false)
 
   const kayitlar = satirlar.map((s) => mevcut.get(anahtar(birim, kalem, s.donem, s.sira)))
   const toplam = kayitlar.reduce((t, k) => t + Number(k?.tutar ?? 0), 0)
   const odenenSayi = kayitlar.filter((k) => k?.odendi).length
 
+  // Kalem kutusu beyaz zeminde: birimin rengi arkada kalsın, rakamlar okunsun
   return (
-    <div className="rounded-md border border-cizgi">
+    <div className="rounded-md border border-cizgi bg-white/55">
       <button
         type="button"
         onClick={() => setAcik(!acik)}
@@ -278,7 +322,7 @@ function Bolum({
               <div
                 key={s.etiket}
                 className={`flex flex-wrap items-center gap-1.5 rounded px-1.5 py-1 ${
-                  k?.odendi ? 'bg-emerald-50' : ''
+                  k?.odendi ? 'bg-emerald-100' : ''
                 }`}
               >
                 <span className="w-28 shrink-0 text-xs font-medium">{s.etiket}</span>
