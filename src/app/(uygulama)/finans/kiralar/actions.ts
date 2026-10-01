@@ -51,7 +51,7 @@ export async function kiraKaydet(veri: {
   const { error } = await supabase
     .from('kiralar')
     .upsert(sonuc.data, {
-      onConflict: sonuc.data.donem ? 'birim,kalem,donem' : 'birim,kalem,sira',
+      onConflict: 'birim,kalem,donem,sira',
     })
 
   if (error) return { hata: error.message }
@@ -91,7 +91,7 @@ export async function odendiDegistir(
 
   const { error } = await supabase.from('kiralar').upsert(
     { ...veri, ...tarih, odendi },
-    { onConflict: veri.donem ? 'birim,kalem,donem' : 'birim,kalem,sira' },
+    { onConflict: 'birim,kalem,donem,sira' },
   )
 
   if (error) return { hata: error.message }
