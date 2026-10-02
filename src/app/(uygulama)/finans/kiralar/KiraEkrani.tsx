@@ -28,8 +28,7 @@ const KALEM_ADLARI: Record<Kalem, string> = {
   uc_aylik: '3 Aylık Arz',
 }
 
-/** Aylık kalemler; üç aylık kalem ayrı çünkü dönem yerine taksit sırası var */
-const AYLIK_KALEMLER: Kalem[] = ['kira', 'il_payi', 'ilce_payi']
+/** Tüm kalemler; üç aylık arz dönem yerine sıra taşıdığı için ayrı işlenir */
 
 /**
  * Okullar ve altlarındaki birimler.
@@ -37,47 +36,85 @@ const AYLIK_KALEMLER: Kalem[] = ['kira', 'il_payi', 'ilce_payi']
  * Yan yana sütun başına bir okul, altında o okulun birimleri. Yeni bir birim
  * açılırsa buraya eklemek yeterli — veritabanında önceden satır yok.
  */
-const OKULLAR: { ad: string; birimler: Birim[] }[] = [
+/**
+ * Ekrandaki bir kutu.
+ *
+ * `anahtar` veritabanındaki birim adı, `ad` ekranda yazan başlık. İkisi
+ * ayrı: AKBABA'da il/ilçe payı ve üç aylık arz iki okul için ortak ödeniyor,
+ * yalnızca kira ayrı yatıyor. Ortak kalemler İLKOKUL anahtarında duruyor —
+ * gerçek kayıtlar orada açılmıştı, taşımaya gerek yok.
+ */
+type Bolum = {
+  ad: string
+  anahtar: string
+  zemin: string
+  baslik: string
+  kalemler: Kalem[]
+}
+
+const TUM_KALEMLER: Kalem[] = ['kira', 'il_payi', 'ilce_payi', 'uc_aylik']
+const ORTAK_KALEMLER: Kalem[] = ['il_payi', 'ilce_payi', 'uc_aylik']
+
+const OKULLAR: { ad: string; bolumler: Bolum[] }[] = [
   {
     ad: 'GÖKSU',
-    birimler: [
-      { ad: 'GÖKSU KANTİN', zemin: 'bg-amber-50/70', baslik: 'bg-amber-100 text-amber-900' },
+    bolumler: [
+      {
+        ad: 'GÖKSU KANTİN',
+        anahtar: 'GÖKSU KANTİN',
+        zemin: 'bg-amber-50/70',
+        baslik: 'bg-amber-100 text-amber-900',
+        kalemler: TUM_KALEMLER,
+      },
       {
         ad: 'GÖKSU YEMEKHANE',
+        anahtar: 'GÖKSU YEMEKHANE',
         zemin: 'bg-teal-50/70',
         baslik: 'bg-teal-100 text-teal-900',
+        kalemler: TUM_KALEMLER,
       },
     ],
   },
   {
     ad: 'AKBABA',
-    birimler: [
+    bolumler: [
       {
-        ad: 'AKBABA KANTİN İLKOKUL',
+        ad: 'AKBABA KANTİN İLKOKUL — Kira',
+        anahtar: 'AKBABA KANTİN İLKOKUL',
         zemin: 'bg-sky-50/70',
         baslik: 'bg-sky-100 text-sky-900',
+        kalemler: ['kira'],
       },
       {
-        ad: 'AKBABA KANTİN ORTAOKUL',
+        ad: 'AKBABA KANTİN ORTAOKUL — Kira',
+        anahtar: 'AKBABA KANTİN ORTAOKUL',
         zemin: 'bg-indigo-50/70',
         baslik: 'bg-indigo-100 text-indigo-900',
+        kalemler: ['kira'],
+      },
+      {
+        // İki okul için tek ödeme yapılıyor; ayrı ayrı girilmiyor
+        ad: 'AKBABA — ORTAK (ilkokul + ortaokul)',
+        anahtar: 'AKBABA KANTİN İLKOKUL',
+        zemin: 'bg-violet-50/70',
+        baslik: 'bg-violet-100 text-violet-900',
+        kalemler: ORTAK_KALEMLER,
       },
     ],
   },
   {
     ad: 'AHMET MİTHAT',
-    birimler: [
+    bolumler: [
       {
         ad: 'AHMET MİTHAT YEMEKHANE',
+        anahtar: 'AHMET MİTHAT YEMEKHANE',
         zemin: 'bg-rose-50/70',
         baslik: 'bg-rose-100 text-rose-900',
+        kalemler: TUM_KALEMLER,
       },
     ],
   },
 ]
-
-/** Her birimin kendi soluk zemini: sütunlar birbirine karışmasın */
-type Birim = { ad: string; zemin: string; baslik: string }
 
 /**
  * Dönemler ikişer aylık: Eylül–Ekim, Ekim–Kasım, … Mayıs–Haziran.
@@ -205,58 +242,58 @@ export function KiraEkrani({
             </h2>
 
             <div className="space-y-4 p-3">
-              {okul.birimler.map((b) => {
-                const birim = b.ad
-                return (
-                <div key={birim} className={`rounded-lg border border-cizgi ${b.zemin}`}>
+              {okul.bolumler.map((b) => (
+                <div key={b.ad} className={`rounded-lg border border-cizgi ${b.zemin}`}>
                   <h3
                     className={`border-b border-cizgi px-3 py-2 text-sm font-semibold ${b.baslik}`}
                   >
-                    {birim}
+                    {b.ad}
                   </h3>
 
                   <div className="space-y-3 p-3">
-                    {AYLIK_KALEMLER.map((kalem) => (
-                      <Bolum
-                        key={kalem}
-                        baslik={KALEM_ADLARI[kalem]}
-                        satirlar={DONEMLER.map((d) => ({
-                          etiket: d.ad,
-                          donem: d.iso,
-                          sira: null,
-                        }))}
-                        birim={birim}
-                        kalem={kalem}
-                        mevcut={mevcut}
-                        bekliyor={bekliyor}
-                        bugun={bugun}
-                        kaydet={kaydet}
-                        odendi={odendi}
-                        yay={yay}
-                      />
-                    ))}
-
-                    {/* Üç aylık kalem: dönem yok, 1./2./3. taksit var */}
-                    <Bolum
-                      baslik={KALEM_ADLARI.uc_aylik}
-                      satirlar={TAKSITLER.map((t) => ({
-                        etiket: `${t}. 3 Aylık Arz`,
-                        donem: null,
-                        sira: t,
-                      }))}
-                      birim={birim}
-                      kalem="uc_aylik"
-                      mevcut={mevcut}
-                      bekliyor={bekliyor}
-                      bugun={bugun}
-                      kaydet={kaydet}
-                      odendi={odendi}
-                      yay={yay}
-                    />
+                    {b.kalemler.map((kalem) =>
+                      kalem === 'uc_aylik' ? (
+                        // Üç aylık kalemde dönem yok, 1./2./3. arz var
+                        <Bolum
+                          key={kalem}
+                          baslik={KALEM_ADLARI.uc_aylik}
+                          satirlar={TAKSITLER.map((t) => ({
+                            etiket: `${t}. 3 Aylık Arz`,
+                            donem: null,
+                            sira: t,
+                          }))}
+                          birim={b.anahtar}
+                          kalem="uc_aylik"
+                          mevcut={mevcut}
+                          bekliyor={bekliyor}
+                          bugun={bugun}
+                          kaydet={kaydet}
+                          odendi={odendi}
+                          yay={yay}
+                        />
+                      ) : (
+                        <Bolum
+                          key={kalem}
+                          baslik={KALEM_ADLARI[kalem]}
+                          satirlar={DONEMLER.map((d) => ({
+                            etiket: d.ad,
+                            donem: d.iso,
+                            sira: null,
+                          }))}
+                          birim={b.anahtar}
+                          kalem={kalem}
+                          mevcut={mevcut}
+                          bekliyor={bekliyor}
+                          bugun={bugun}
+                          kaydet={kaydet}
+                          odendi={odendi}
+                          yay={yay}
+                        />
+                      ),
+                    )}
                   </div>
                 </div>
-                )
-              })}
+              ))}
             </div>
           </section>
         ))}
