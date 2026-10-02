@@ -4,8 +4,8 @@ import { redirect } from 'next/navigation'
 
 import { BugunSaglayici } from '@/components/BugunSaglayici'
 import { SimulasyonSeridi } from '@/components/SimulasyonSeridi'
+import { TemaKabi } from '@/components/TemaKabi'
 import { UstMenu } from '@/components/UstMenu'
-import { YanSeritler } from '@/components/YanSeritler'
 import { aktifOkul, genelModu, GENEL, okullar } from '@/lib/okul'
 import { GORUNUM_CEREZI, gorunumCozumle } from '@/lib/gorunum'
 import { okulTemasi } from '@/lib/okul-tema'
@@ -55,8 +55,7 @@ export default async function UygulamaLayout({
 
   return (
     <BugunSaglayici bugun={bugun} simulasyon={!!simulasyon}>
-      <div data-tema={tema ?? undefined} data-orta={gorunum} className="contents">
-        <YanSeritler tema={tema} okulAdi={genel ? 'YÖNETİM' : (aktif?.ad ?? '')} />
+      <TemaKabi tema={tema} okulAdi={genel ? 'YÖNETİM' : (aktif?.ad ?? '')} gorunum={gorunum}>
         {simulasyon && (
           <SimulasyonSeridi tarih={simulasyon} gercekTarih={gercekBugun()} />
         )}
@@ -68,7 +67,7 @@ export default async function UygulamaLayout({
           kisitli={!!oturum.okulId}
         />
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">{children}</main>
-      </div>
+      </TemaKabi>
     </BugunSaglayici>
   )
 }
