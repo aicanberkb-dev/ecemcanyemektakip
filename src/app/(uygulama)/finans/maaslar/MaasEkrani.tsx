@@ -596,7 +596,12 @@ function PersonelSatiri({
   // varsa onu göstermek, ağustosa bakarken eylül rakamını düzenlettirirdi.
   const donemSonu = `${yil}-${String(ay).padStart(2, '0')}-${new Date(yil, ay, 0).getDate()}`
   const guncelUcret = ucretGecmisi.find((u) => u.gecerli_baslangic <= donemSonu)
-  const [tutar, setTutar] = useState(String(beklenen).replace('.', ','))
+  // Ödenmişse kutuda ödenen rakam durur, ücret değil: ödemeden sonra maaş
+  // değişince kutu bir şey, üstteki "Ödenen" toplamı başka bir şey
+  // gösteriyordu. Kutudaki rakam her zaman toplama giren rakam.
+  const [tutar, setTutar] = useState(
+    String(odeme ? Number(odeme.tutar) : beklenen).replace('.', ','),
+  )
   // Ödeme tarihi elle değiştirilebilsin: maaş çoğu zaman vade gününde değil,
   // birkaç gün önce ya da sonra veriliyor.
   const [odemeTarihi, setOdemeTarihi] = useState(odeme?.odeme_tarihi ?? bugun)
@@ -759,11 +764,27 @@ function PersonelSatiri({
           <input
             value={tutar}
             onChange={(e) => setTutar(e.target.value)}
+            onBlur={() => {
+              // Ödenmiş satırda rakam değişirse ödeme kaydı da değişir;
+              // yoksa yukarıdaki toplam eski rakamda kalıyordu.
+              if (!odeme) return
+              const t = sayiOku(tutar)
+              if (Number.isNaN(t) || t < 0 || t === Number(odeme.tutar)) return
+              calistir(() => maasOde(personel.id, yil, ay, t, odeme.odeme_tarihi ?? bugun))
+            }}
             inputMode="decimal"
-            title="Bu ay ödenecek tutar — avans/eksik ödeme için değiştirilebilir"
+            title={
+              odeme
+                ? 'Ödenen tutar — düzeltirsen üstteki toplam da düzelir'
+                : 'Bu ay ödenecek tutar — avans/eksik ödeme için değiştirilebilir'
+            }
             className="w-28 rounded border border-cizgi px-2 py-1 text-right text-sm font-semibold
                        tabular-nums outline-none focus:border-vurgu focus:ring-2 focus:ring-blue-100"
           />
+          {/* Ödenen, o ayın ücretinden farklıysa ikisi de görünsün */}
+          {odeme && Number(odeme.tutar) !== beklenen && (
+            <div className="text-[11px] text-solgun">ücret {para(beklenen)}</div>
+          )}
         </td>
         <td>
           {odeme ? (
