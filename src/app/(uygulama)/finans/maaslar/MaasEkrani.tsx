@@ -69,6 +69,13 @@ function sayiOku(metin: string): number {
   return Number.isFinite(n) ? n : NaN
 }
 
+/** Bugünden kaç gün sonra (eksiyse önce) olduğunu verir. */
+function gunFarki(iso: string, bugun: string): number {
+  const a = new Date(`${iso}T00:00:00`).getTime()
+  const b = new Date(`${bugun}T00:00:00`).getTime()
+  return Math.round((a - b) / 86400000)
+}
+
 /** Dönem içindeki maaş gününün tam tarihi — ayın son gününü aşmaz. */
 function maasTarihi(yil: number, ay: number, gun: number | null): string | null {
   if (!gun) return null
@@ -131,19 +138,28 @@ export function MaasEkrani({
     const ucret = ucretBul(p.id)
     const beklenen = Number(ucret?.tutar ?? 0)
     const vade = maasTarihi(yil, ay, p.maas_gunu)
+    // Vadeye kalan gün: ödenmemişlerde bir hafta kalınca uyarı verilir,
+    // maaş günü sabah hatırlanacak bir şey olmaktan çıksın.
+    const kalanGun = !odeme && vade ? gunFarki(vade, bugun) : null
     return {
       personel: p,
       odeme,
       beklenen,
       vade,
-      gecikti: !odeme && !!vade && vade < bugun,
-      bugunMu: !odeme && vade === bugun,
+      kalanGun,
+      gecikti: kalanGun !== null && kalanGun < 0,
+      bugunMu: kalanGun === 0,
+      yaklasti: kalanGun !== null && kalanGun > 0 && kalanGun <= 7,
     }
   })
 
   const toplamBeklenen = satirlar.reduce((t, s) => t + s.beklenen, 0)
   const toplamOdenen = satirlar.reduce((t, s) => t + Number(s.odeme?.tutar ?? 0), 0)
   const gecikenSayisi = satirlar.filter((s) => s.gecikti).length
+  // Vadesi bugün ya da bir hafta içinde olan ödenmemiş maaşlar
+  const haftadakiler = satirlar.filter((s) => s.bugunMu || s.yaklasti)
+  const haftaSayisi = haftadakiler.length
+  const haftaTutari = haftadakiler.reduce((t, s) => t + s.beklenen, 0)
   const giderToplam = giderler.reduce((t, g) => t + Number(g.tutar), 0)
 
   // SGK sabit şablon, geri kalanı o aya özel ekstra gider
@@ -167,7 +183,14 @@ export function MaasEkrani({
           renk={
             gecikenSayisi > 0 ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-800'
           }
-          alt={gecikenSayisi > 0 ? `${gecikenSayisi} kişi gecikmiş` : undefined}
+          alt={
+            // Gecikmiş yoksa bu hafta ödenecekleri yaz: farkındalık için
+            gecikenSayisi > 0
+              ? `${gecikenSayisi} kişi gecikmiş`
+              : haftaSayisi > 0
+                ? `${haftaSayisi} kişi bu hafta (${para(haftaTutari)})`
+                : undefined
+          }
         />
         <Ozet baslik="SSK / Vergi" tutar={giderToplam} renk="bg-slate-50 text-slate-700" />
       </div>
@@ -294,9 +317,11 @@ export function MaasEkrani({
           <tbody>
             {CALISMA_YERLERI.map((yer, i) => {
               // Listede olmayan eski serbest metin değerler de DİĞER altında
-              const grubun = satirlar.filter(
-                (s) => calismaYeriSirasi(s.personel.calistigi_yer) === i,
-              )
+              // Maaş günü küçükten büyüğe: en yakın ödeme üstte dursun.
+              // Günü girilmemiş olan en sona.
+              const grubun = satirlar
+                .filter((s) => calismaYeriSirasi(s.personel.calistigi_yer) === i)
+                .sort((a, b) => (a.personel.maas_gunu ?? 99) - (b.personel.maas_gunu ?? 99))
               if (grubun.length === 0) return null
               const grupToplam = grubun.reduce((t, s) => t + s.beklenen, 0)
 
@@ -573,6 +598,8 @@ function PersonelSatiri({
   vade,
   gecikti,
   bugunMu,
+  yaklasti,
+  kalanGun,
   yil,
   ay,
   bugun,
@@ -584,6 +611,10 @@ function PersonelSatiri({
   vade: string | null
   gecikti: boolean
   bugunMu: boolean
+  /** Vadeye bir hafta ya da daha az kaldı */
+  yaklasti: boolean
+  /** Vadeye kalan gün; ödenmişse ya da vade yoksa null */
+  kalanGun: number | null
   yil: number
   ay: number
   bugun: string
@@ -742,9 +773,11 @@ function PersonelSatiri({
               ? 'bg-red-50'
               : bugunMu
                 ? 'bg-amber-50'
-                : personel.aktif
-                  ? undefined
-                  : 'opacity-50'
+                : yaklasti
+                  ? 'bg-yellow-50'
+                  : personel.aktif
+                    ? undefined
+                    : 'opacity-50'
         }
       >
         <td className="font-medium">
@@ -757,8 +790,16 @@ function PersonelSatiri({
         <td className="text-solgun">{personel.sigorta_yeri ?? '—'}</td>
         <td className="text-right tabular-nums">
           {personel.maas_gunu ?? '—'}
-          {gecikti && <span className="rozet ml-2 bg-red-100 text-red-800">geçti</span>}
+          {gecikti && (
+            <span className="rozet ml-2 bg-red-100 text-red-800">
+              {kalanGun !== null ? `${-kalanGun} gün geçti` : 'geçti'}
+            </span>
+          )}
           {bugunMu && <span className="rozet ml-2 bg-amber-100 text-amber-800">bugün</span>}
+          {/* Bir hafta kala uyarı: maaş günü sürpriz olmasın */}
+          {yaklasti && (
+            <span className="rozet ml-2 bg-yellow-200 text-yellow-900">{kalanGun} gün kaldı</span>
+          )}
         </td>
         <td className="text-right">
           <input
@@ -803,7 +844,10 @@ function PersonelSatiri({
               maaş girilmemiş
             </button>
           ) : vade ? (
-            <span className="text-xs text-solgun">vade {tarihBicim(vade)}</span>
+            <span className={`text-xs ${yaklasti ? 'font-semibold text-yellow-800' : 'text-solgun'}`}>
+              {yaklasti ? 'bu hafta ödenecek · ' : 'vade '}
+              {tarihBicim(vade)}
+            </span>
           ) : (
             <span className="text-xs text-solgun">—</span>
           )}
