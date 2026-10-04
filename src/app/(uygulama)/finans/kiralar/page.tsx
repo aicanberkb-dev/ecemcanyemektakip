@@ -19,18 +19,21 @@ export default async function KiralarPage() {
     supabase
       .from('kiralar')
       .select('id, birim, kalem, sira, tutar, odeme_tarihi, belge_no, odendi'),
-    supabase.from('kira_tabanlari').select('anahtar, tutar'),
+    supabase.from('kira_tabanlari').select('anahtar, sira, tutar').order('sira'),
   ])
 
   const satirlar = (data ?? []) as KiraSatiri[]
 
-  // Taban kira bedelleri: ekran kalemleri bunlardan hesaplıyor
-  const tabanKaydi = Object.fromEntries(
-    ((tabanlar ?? []) as { anahtar: string; tutar: number | string }[]).map((t) => [
-      t.anahtar,
-      Number(t.tutar),
-    ]),
-  )
+  // Taban kira kademeleri: "şu taksitten itibaren kira şu". Ekran kalemleri
+  // bunlardan hesaplıyor; yıl ortasındaki zam yeni bir kademe oluyor.
+  const tabanKaydi: Record<string, { sira: number; tutar: number }[]> = {}
+  for (const t of (tabanlar ?? []) as {
+    anahtar: string
+    sira: number
+    tutar: number | string
+  }[]) {
+    ;(tabanKaydi[t.anahtar] ??= []).push({ sira: t.sira, tutar: Number(t.tutar) })
+  }
 
   return (
     <div className="space-y-4">

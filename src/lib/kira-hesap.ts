@@ -21,19 +21,18 @@ export const TAKSIT_SAYISI = 8
 /** Arz üç ödemede yatıyor; her ödeme birkaç taksitin arz payını kapatır */
 export const ARZ_ODEME_SAYISI = 3
 
+/**
+ * Taban kira kademesi: "bu taksitten itibaren kira şu".
+ *
+ * Yıl ortasında zam gelebiliyor; eski kademe duruyor, yenisi sonrasını
+ * değiştiriyor. Ödenmiş taksitlerin dayandığı rakam böylece bozulmuyor.
+ */
+export type Kademe = { sira: number; tutar: number }
+
 export type KiraKirilimi = {
   taban: number
   /** Taksit başına arz payı (taban × %3) */
   arzTaksit: number
-  /**
-   * Arzın üç ödemesi.
-   *
-   * Her ödeme kapattığı taksit sayısı kadar: sekiz taksit üçe bölününce
-   * 3 + 3 + 2 oluyor, yani 15.000 tabanda 1.350 · 1.350 · 900. Oran
-   * değişmiyor, yalnızca son ödeme iki taksiti kapatıyor — toplandığında
-   * sekiz taksitin arz payı tam çıkıyor.
-   */
-  arzOdemeleri: number[]
   /** Arz düşülmüş tutar — payların matrahı */
   kalan: number
   ilPayi: number
@@ -44,20 +43,11 @@ export type KiraKirilimi = {
   kiraBirimBasina: number
   /** Sağlama: bir taksitte yatan her şeyin toplamı, tabana eşit olmalı */
   taksitToplami: number
-  /** Sekiz taksitin toplamı */
-  yillikToplam: number
 }
 
 /** Kuruşa yuvarlar; kayan nokta artığı tutarları bozmasın */
 function kurus(n: number): number {
   return Math.round(n * 100) / 100
-}
-
-/** Taksitleri arz ödemelerine paylaştırır: 8 taksit, 3 ödeme → 3 + 3 + 2 */
-function arzBolumleri(taksitSayisi = TAKSIT_SAYISI, odemeSayisi = ARZ_ODEME_SAYISI): number[] {
-  const esit = Math.floor(taksitSayisi / odemeSayisi)
-  const artan = taksitSayisi % odemeSayisi
-  return Array.from({ length: odemeSayisi }, (_, i) => esit + (i < artan ? 1 : 0))
 }
 
 export function kiraKirilimi(taban: number, kiraBirimSayisi = 1): KiraKirilimi {
@@ -70,13 +60,65 @@ export function kiraKirilimi(taban: number, kiraBirimSayisi = 1): KiraKirilimi {
   return {
     taban,
     arzTaksit,
-    arzOdemeleri: arzBolumleri().map((adet) => kurus(arzTaksit * adet)),
     kalan,
     ilPayi,
     ilcePayi,
     kiraToplam,
     kiraBirimBasina: kurus(kiraToplam / Math.max(1, kiraBirimSayisi)),
     taksitToplami: kurus(arzTaksit + ilPayi + ilcePayi + kiraToplam),
-    yillikToplam: kurus(taban * TAKSIT_SAYISI),
   }
+}
+
+/**
+ * Arz ödemelerinin kapsadığı taksitler: sekiz taksit üç ödemeye bölününce
+ * [1,2,3] · [4,5,6] · [7,8] oluyor.
+ */
+export function arzKapsamlari(
+  taksitSayisi = TAKSIT_SAYISI,
+  odemeSayisi = ARZ_ODEME_SAYISI,
+): number[][] {
+  const esit = Math.floor(taksitSayisi / odemeSayisi)
+  const artan = taksitSayisi % odemeSayisi
+
+  const kapsamlar: number[][] = []
+  let sira = 1
+  for (let i = 0; i < odemeSayisi; i++) {
+    const adet = esit + (i < artan ? 1 : 0)
+    kapsamlar.push(Array.from({ length: adet }, () => sira++))
+  }
+  return kapsamlar
+}
+
+/**
+ * Her taksitin tabanı: o taksitten sonra başlamayan son kademe geçerli.
+ *
+ * İlk kademeden önceki taksitler null kalır — rakam girilmemiş demektir,
+ * uydurmak yerine boş bırakılıyor.
+ */
+export function taksitTabanlari(
+  kademeler: Kademe[],
+  taksitSayisi = TAKSIT_SAYISI,
+): (number | null)[] {
+  const sirali = [...kademeler].sort((a, b) => a.sira - b.sira)
+
+  return Array.from({ length: taksitSayisi }, (_, i) => {
+    const taksit = i + 1
+    const gecerli = sirali.filter((k) => k.sira <= taksit).at(-1)
+    return gecerli?.tutar ?? null
+  })
+}
+
+/**
+ * Arz ödemeleri: her ödeme kapsadığı taksitlerin arz paylarının toplamı.
+ *
+ * Tek taban varsa 15.000'de 1.350 · 1.350 · 900 çıkar; yıl ortasında kira
+ * değişirse ödeme, kapsadığı taksitlerin kendi tabanlarından hesaplanır.
+ * Kapsadığı taksitlerden birinin tabanı yoksa o ödeme hesaplanamaz (null).
+ */
+export function arzOdemeleri(tabanlar: (number | null)[]): (number | null)[] {
+  return arzKapsamlari(tabanlar.length).map((kapsam) => {
+    const paylar = kapsam.map((t) => tabanlar[t - 1])
+    if (paylar.some((p) => p == null)) return null
+    return kurus((paylar as number[]).reduce((toplam, p) => toplam + p * ARZ_ORANI, 0))
+  })
 }

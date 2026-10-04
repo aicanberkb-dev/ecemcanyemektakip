@@ -4,7 +4,13 @@ import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 
 import { para } from '@/lib/format'
-import { kiraKirilimi } from '@/lib/kira-hesap'
+import {
+  arzKapsamlari,
+  arzOdemeleri,
+  type Kademe,
+  kiraKirilimi,
+  taksitTabanlari,
+} from '@/lib/kira-hesap'
 
 import { hesaplaDoldur, kiraKaydet, odendiDegistir, tutarYay } from './actions'
 
@@ -186,8 +192,8 @@ export function KiraEkrani({
   bugun,
 }: {
   satirlar: KiraSatiri[]
-  /** Grup anahtarına göre kayıtlı kira bedelleri */
-  tabanlar: Record<string, number>
+  /** Grup anahtarına göre kayıtlı kira bedeli kademeleri */
+  tabanlar: Record<string, Kademe[]>
   /** Sunucunun bugünü — boş tarih kutularına varsayılan olarak yazılır */
   bugun: string
 }) {
@@ -236,16 +242,15 @@ export function KiraEkrani({
     })
   }
 
-  /** Kira bedelini saklar, bütün kalemleri ondan hesaplayıp yazar */
-  function hesapla(grup: Grup, taban: string) {
+  /** Kira bedelini saklar, o taksitten sonrasını ondan hesaplayıp yazar */
+  function hesapla(grup: Grup, taban: string, baslangic: number) {
     baslat(async () => {
       const sonuc = await hesaplaDoldur({
         tabanAnahtari: grup.anahtar,
         kiraAnahtarlari: grup.kiraAnahtarlari,
         paylarAnahtari: grup.paylarAnahtari,
         taban,
-        taksitler: TAKSITLER,
-        arzTaksitleri: ARZ_TAKSITLERI,
+        baslangic,
       })
       if (sonuc.hata) setMesaj({ tip: 'hata', metin: sonuc.hata })
       else setMesaj({ tip: 'ok', metin: `${grup.ad}: ${sonuc.basari ?? 'Hesaplandı.'}` })
@@ -288,7 +293,7 @@ export function KiraEkrani({
                 <div key={grup.anahtar} className="space-y-3">
                   <TabanKutusu
                     grup={grup}
-                    taban={tabanlar[grup.anahtar] ?? 0}
+                    kademeler={tabanlar[grup.anahtar] ?? []}
                     bekliyor={bekliyor}
                     hesapla={hesapla}
                   />
@@ -338,21 +343,35 @@ export function KiraEkrani({
  */
 function TabanKutusu({
   grup,
-  taban,
+  kademeler,
   bekliyor,
   hesapla,
 }: {
   grup: Grup
-  taban: number
+  kademeler: Kademe[]
   bekliyor: boolean
-  hesapla: (grup: Grup, taban: string) => void
+  hesapla: (grup: Grup, taban: string, baslangic: number) => void
 }) {
-  const [deger, setDeger] = useState(taban > 0 ? String(taban).replace('.', ',') : '')
+  const [baslangic, setBaslangic] = useState(1)
+  const [deger, setDeger] = useState(() => {
+    const ilk = [...kademeler].sort((a, b) => a.sira - b.sira)[0]
+    return ilk ? String(ilk.tutar).replace('.', ',') : ''
+  })
 
   const sayi = Number(deger.replace(/\./g, '').replace(',', '.'))
   const gecerli = Number.isFinite(sayi) && sayi > 0
   const k = gecerli ? kiraKirilimi(sayi, grup.kiraAnahtarlari.length) : null
   const bolunuyor = grup.kiraAnahtarlari.length > 1
+  const etkilenen = TAKSITLER.length - baslangic + 1
+
+  // Arz ödemeleri kapsadıkları taksitlerin tabanlarından çıkıyor: yeni kademe
+  // yılın ortasında başlıyorsa o ödeme kısmen eski kısmen yeni tabandan
+  // hesaplanır. Önizleme de kaydedilecek hâli göstersin diye aynı hesap.
+  const yeniKademeler = gecerli
+    ? [...kademeler.filter((x) => x.sira !== baslangic), { sira: baslangic, tutar: sayi }]
+    : kademeler
+  const odemeler = arzOdemeleri(taksitTabanlari(yeniKademeler))
+  const kapsamlar = arzKapsamlari()
 
   return (
     <div className="rounded-lg border border-slate-300 bg-slate-50 p-3">
@@ -366,17 +385,30 @@ function TabanKutusu({
           placeholder="Kira bedeli"
           className="girdi w-32 !py-1 text-right text-sm tabular-nums"
         />
+        <select
+          value={baslangic}
+          onChange={(e) => setBaslangic(Number(e.target.value))}
+          className="girdi !py-1 text-xs"
+          aria-label="Yeni kiranın geçerli olduğu ilk taksit"
+        >
+          {TAKSITLER.map((t) => (
+            <option key={t} value={t}>
+              {t}. taksitten itibaren
+            </option>
+          ))}
+        </select>
         <button
           type="button"
           disabled={bekliyor || !gecerli}
           onClick={() => {
             if (
               window.confirm(
-                `${grup.ad}: ${para(sayi)} üzerinden bütün taksitler yeniden yazılacak. ` +
-                  'Ödendi işaretli satırlara dokunulmayacak. Onaylıyor musun?',
+                `${grup.ad}: ${baslangic}. taksitten 8. taksite kadar ${para(sayi)} üzerinden ` +
+                  'yeniden yazılacak. Öncesine ve ödendi işaretli satırlara dokunulmayacak. ' +
+                  'Onaylıyor musun?',
               )
             ) {
-              hesapla(grup, deger)
+              hesapla(grup, deger, baslangic)
             }
           }}
           className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-900 disabled:opacity-40"
@@ -385,13 +417,19 @@ function TabanKutusu({
         </button>
       </div>
 
+      {kademeler.length > 0 && (
+        <p className="mt-1.5 text-[11px] text-solgun">
+          Girili:{' '}
+          {[...kademeler]
+            .sort((a, b) => a.sira - b.sira)
+            .map((x) => `${x.sira}. taksitten ${para(x.tutar)}`)
+            .join(' · ')}
+        </p>
+      )}
+
       {k && (
         <dl className="mt-2 space-y-0.5 text-xs text-slate-700">
-          <Satir
-            ad="Arz payı"
-            deger={para(k.arzTaksit)}
-            not={`taksit başına · %3 · ödemeler ${k.arzOdemeleri.map((o) => para(o)).join(' · ')}`}
-          />
+          <Satir ad="Arz payı" deger={para(k.arzTaksit)} not="taksit başına · %3" />
           <Satir ad="İl Payı" deger={para(k.ilPayi)} not="taksit başına" />
           <Satir ad="İlçe Payı" deger={para(k.ilcePayi)} not="taksit başına" />
           <Satir
@@ -404,9 +442,22 @@ function TabanKutusu({
           <Satir
             ad="Taksit toplamı"
             deger={para(k.taksitToplami)}
-            not={`8 taksit · yıllık ${para(k.yillikToplam)}`}
+            not={`${baslangic}–8. taksit · ${etkilenen} taksit · toplam ${para(
+              k.taksitToplami * etkilenen,
+            )}`}
             kalin
           />
+          <p className="pt-1 text-[11px] text-solgun">
+            Arz ödemeleri:{' '}
+            {odemeler
+              .map((o, i) => {
+                const kapsam = kapsamlar[i]
+                const aralik =
+                  kapsam.length > 1 ? `${kapsam[0]}–${kapsam.at(-1)}. taksit` : `${kapsam[0]}. taksit`
+                return `${i + 1}. ${o == null ? '—' : para(o)} (${aralik})`
+              })
+              .join(' · ')}
+          </p>
         </dl>
       )}
     </div>

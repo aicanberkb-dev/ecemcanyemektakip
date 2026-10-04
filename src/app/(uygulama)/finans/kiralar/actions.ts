@@ -3,7 +3,13 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
-import { kiraKirilimi } from '@/lib/kira-hesap'
+import {
+  arzKapsamlari,
+  arzOdemeleri,
+  kiraKirilimi,
+  taksitTabanlari,
+  TAKSIT_SAYISI,
+} from '@/lib/kira-hesap'
 import { supabaseServer } from '@/lib/supabase/server'
 import { bosNull, trSayi } from '@/lib/zod-tr'
 
@@ -161,10 +167,8 @@ export async function hesaplaDoldur(veri: {
   /** İl payı, ilçe payı ve arz bu birimde durur */
   paylarAnahtari: string
   taban: string
-  /** Kira, il payı, ilçe payı taksitleri */
-  taksitler: number[]
-  /** Üç aylık arz taksitleri */
-  arzTaksitleri: number[]
+  /** Yeni tabanın geçerli olduğu ilk taksit; öncesi olduğu gibi kalır */
+  baslangic: number
 }): Promise<KiraDurumu> {
   const sonuc = z
     .object({
@@ -172,8 +176,7 @@ export async function hesaplaDoldur(veri: {
       kiraAnahtarlari: z.array(z.string().trim().min(1)).min(1),
       paylarAnahtari: z.string().trim().min(1),
       taban: trSayi({ min: 1 }),
-      taksitler: z.array(z.number().int().min(1).max(8)).min(1),
-      arzTaksitleri: z.array(z.number().int().min(1).max(3)).min(1),
+      baslangic: z.number().int().min(1).max(TAKSIT_SAYISI),
     })
     .safeParse(veri)
 
@@ -181,35 +184,49 @@ export async function hesaplaDoldur(veri: {
     return { hata: sonuc.error.issues[0]?.message ?? 'Kira bedelini kontrol et.' }
   }
 
-  const { tabanAnahtari, kiraAnahtarlari, paylarAnahtari, taban, taksitler, arzTaksitleri } =
-    sonuc.data
+  const { tabanAnahtari, kiraAnahtarlari, paylarAnahtari, taban, baslangic } = sonuc.data
   const kirilim = kiraKirilimi(taban, kiraAnahtarlari.length)
+  const hedefler = Array.from({ length: TAKSIT_SAYISI - baslangic + 1 }, (_, i) => baslangic + i)
 
   const supabase = await supabaseServer()
 
+  // Taban kademe olarak saklanıyor: "bu taksitten itibaren kira şu"
   const { error: tabanHatasi } = await supabase
     .from('kira_tabanlari')
-    .upsert({ anahtar: tabanAnahtari, tutar: taban }, { onConflict: 'anahtar' })
+    .upsert({ anahtar: tabanAnahtari, sira: baslangic, tutar: taban }, { onConflict: 'anahtar,sira' })
   if (tabanHatasi) return { hata: tabanHatasi.message }
+
+  const { data: kademeVerisi, error: kademeHatasi } = await supabase
+    .from('kira_tabanlari')
+    .select('sira, tutar')
+    .eq('anahtar', tabanAnahtari)
+  if (kademeHatasi) return { hata: kademeHatasi.message }
+
+  const kademeler = ((kademeVerisi ?? []) as { sira: number; tutar: number | string }[]).map(
+    (k) => ({ sira: k.sira, tutar: Number(k.tutar) }),
+  )
 
   const isler = [
     ...kiraAnahtarlari.map((birim) => ({
       birim,
       kalem: 'kira',
       tutar: kirilim.kiraBirimBasina,
-      siralar: taksitler,
+      siralar: hedefler,
     })),
-    { birim: paylarAnahtari, kalem: 'il_payi', tutar: kirilim.ilPayi, siralar: taksitler },
-    { birim: paylarAnahtari, kalem: 'ilce_payi', tutar: kirilim.ilcePayi, siralar: taksitler },
-    // Arz ödemeleri eşit değil: son ödeme kalan taksitleri kapatıyor,
-    // bu yüzden her biri kendi tutarıyla yazılıyor.
-    ...arzTaksitleri.map((sira, i) => ({
-      birim: paylarAnahtari,
-      kalem: 'uc_aylik',
-      tutar: kirilim.arzOdemeleri[i] ?? 0,
-      siralar: [sira],
-    })),
+    { birim: paylarAnahtari, kalem: 'il_payi', tutar: kirilim.ilPayi, siralar: hedefler },
+    { birim: paylarAnahtari, kalem: 'ilce_payi', tutar: kirilim.ilcePayi, siralar: hedefler },
   ]
+
+  // Arz ödemeleri kapsadıkları taksitlerin tabanlarından çıkıyor; yıl
+  // ortasında kira değişirse o ödeme kısmen eski kısmen yeni tabandan
+  // hesaplanır. Yalnız değişen taksitlere dokunan ödemeler yazılır.
+  const tabanlar = taksitTabanlari(kademeler)
+  const odemeler = arzOdemeleri(tabanlar)
+  arzKapsamlari().forEach((kapsam, i) => {
+    const tutar = odemeler[i]
+    if (tutar == null || !kapsam.some((t) => t >= baslangic)) return
+    isler.push({ birim: paylarAnahtari, kalem: 'uc_aylik', tutar, siralar: [i + 1] })
+  })
 
   let yazilan = 0
   let atlanan = 0
@@ -223,7 +240,7 @@ export async function hesaplaDoldur(veri: {
   revalidatePath('/finans/kiralar')
   return {
     basari:
-      `${yazilan} satır hesaplandı.` +
+      `${baslangic}. taksitten itibaren ${yazilan} satır hesaplandı.` +
       (atlanan > 0 ? ` ${atlanan} ödenmiş satıra dokunulmadı.` : ''),
   }
 }
