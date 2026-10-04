@@ -71,31 +71,18 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
     ad: 'GÖKSU',
     gruplar: [
       {
-        anahtar: 'GÖKSU KANTİN',
-        ad: 'Kantin Kira Bedeli',
-        kiraAnahtarlari: ['GÖKSU KANTİN'],
-        paylarAnahtari: 'GÖKSU KANTİN',
+        // Kantin ve yemekhane kirası aynı yere, tek kalemde yatıyor;
+        // ayrı ayrı girmek hem fazladan iş hem de yanıltıcıydı.
+        anahtar: 'GÖKSU',
+        ad: 'Kira Bedeli (Yemekhane + Kantin)',
+        kiraAnahtarlari: ['GÖKSU'],
+        paylarAnahtari: 'GÖKSU',
         bolumler: [
           {
-            ad: 'GÖKSU KANTİN',
-            anahtar: 'GÖKSU KANTİN',
+            ad: 'GÖKSU — Kira (Yemekhane + Kantin)',
+            anahtar: 'GÖKSU',
             zemin: 'bg-amber-50/70',
             baslik: 'bg-amber-100 text-amber-900',
-            kalemler: TUM_KALEMLER,
-          },
-        ],
-      },
-      {
-        anahtar: 'GÖKSU YEMEKHANE',
-        ad: 'Yemekhane Kira Bedeli',
-        kiraAnahtarlari: ['GÖKSU YEMEKHANE'],
-        paylarAnahtari: 'GÖKSU YEMEKHANE',
-        bolumler: [
-          {
-            ad: 'GÖKSU YEMEKHANE',
-            anahtar: 'GÖKSU YEMEKHANE',
-            zemin: 'bg-teal-50/70',
-            baslik: 'bg-teal-100 text-teal-900',
             kalemler: TUM_KALEMLER,
           },
         ],
@@ -128,7 +115,7 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
           },
           {
             // İki okul için tek ödeme yapılıyor; ayrı ayrı girilmiyor
-            ad: 'AKBABA — ORTAK (ilkokul + ortaokul)',
+            ad: 'AKBABA — Ortak (İlkokul + Ortaokul)',
             anahtar: 'AKBABA KANTİN İLKOKUL',
             zemin: 'bg-violet-50/70',
             baslik: 'bg-violet-100 text-violet-900',
@@ -308,6 +295,8 @@ export function KiraEkrani({
             </h2>
 
             <div className="space-y-4 p-3">
+              <OkulOzeti okul={okul} satirlar={satirlar} />
+
               {okul.gruplar.map((grup) => (
                 <div key={grup.anahtar} className="space-y-3">
                   <TabanKutusu
@@ -351,6 +340,65 @@ export function KiraEkrani({
           </section>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Okulun yıllık toplamı: ödenecek, ödenen, kalan.
+ *
+ * Kapalı açılır; kalem kutularında taksit taksit duran rakamların tek
+ * yerden görünmesi için. Toplam, o okulun bütün birimlerindeki satırlardan
+ * çıkıyor — hangi kalem olduğu burada önemli değil, kasadan çıkacak para
+ * sorusunun cevabı.
+ */
+function OkulOzeti({
+  okul,
+  satirlar,
+}: {
+  okul: (typeof OKULLAR)[number]
+  satirlar: KiraSatiri[]
+}) {
+  const [acik, setAcik] = useState(false)
+
+  const { odenecek, odenen } = useMemo(() => {
+    const birimler = new Set(
+      okul.gruplar.flatMap((g) => [
+        ...g.kiraAnahtarlari,
+        g.paylarAnahtari,
+        ...g.bolumler.map((b) => b.anahtar),
+      ]),
+    )
+
+    let odenecek = 0
+    let odenen = 0
+    for (const s of satirlar) {
+      if (!birimler.has(s.birim)) continue
+      const tutar = Number(s.tutar)
+      odenecek += tutar
+      if (s.odendi) odenen += tutar
+    }
+    return { odenecek, odenen }
+  }, [okul, satirlar])
+
+  return (
+    <div className="rounded-lg border border-slate-300 bg-white">
+      <button
+        type="button"
+        onClick={() => setAcik(!acik)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50"
+      >
+        <span>{acik ? '▾' : '▸'}</span>
+        <span>Yıllık Özet</span>
+      </button>
+
+      {acik && (
+        <dl className="space-y-0.5 border-t border-slate-300 p-3 text-xs text-slate-700">
+          <Satir ad="Ödenecek" deger={para(odenecek)} not="8 taksit · bütün kalemler" />
+          <Satir ad="Ödenen" deger={para(odenen)} not="ödendi işaretli satırlar" />
+          <Satir ad="Kalan" deger={para(odenecek - odenen)} not="ödenmemiş satırlar" kalin />
+        </dl>
+      )}
     </div>
   )
 }
