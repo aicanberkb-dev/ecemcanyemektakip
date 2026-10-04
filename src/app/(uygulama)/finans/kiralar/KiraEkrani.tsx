@@ -72,7 +72,7 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
     gruplar: [
       {
         anahtar: 'GÖKSU KANTİN',
-        ad: 'Kantin kira bedeli',
+        ad: 'Kantin Kira Bedeli',
         kiraAnahtarlari: ['GÖKSU KANTİN'],
         paylarAnahtari: 'GÖKSU KANTİN',
         bolumler: [
@@ -87,7 +87,7 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
       },
       {
         anahtar: 'GÖKSU YEMEKHANE',
-        ad: 'Yemekhane kira bedeli',
+        ad: 'Yemekhane Kira Bedeli',
         kiraAnahtarlari: ['GÖKSU YEMEKHANE'],
         paylarAnahtari: 'GÖKSU YEMEKHANE',
         bolumler: [
@@ -108,7 +108,7 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
       {
         // Kira iki okula bölünüyor, paylar tek ödeme olarak yatıyor
         anahtar: 'AKBABA',
-        ad: 'Kantin kira bedeli (ilkokul + ortaokul)',
+        ad: 'Kantin Kira Bedeli (İlkokul + Ortaokul)',
         kiraAnahtarlari: ['AKBABA KANTİN İLKOKUL', 'AKBABA KANTİN ORTAOKUL'],
         paylarAnahtari: 'AKBABA KANTİN İLKOKUL',
         bolumler: [
@@ -143,7 +143,7 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
     gruplar: [
       {
         anahtar: 'AHMET MİTHAT YEMEKHANE',
-        ad: 'Yemekhane kira bedeli',
+        ad: 'Yemekhane Kira Bedeli',
         kiraAnahtarlari: ['AHMET MİTHAT YEMEKHANE'],
         paylarAnahtari: 'AHMET MİTHAT YEMEKHANE',
         bolumler: [
@@ -244,12 +244,35 @@ export function KiraEkrani({
     })
   }
 
-  /** Bir kira değişikliğini kaldırır; yazılmış taksitlere dokunmaz */
-  function kademeKaldir(grup: Grup, sira: number) {
+  /**
+   * Bir kira değişikliğini kaldırır ve önceki kirayı o taksitlere yazar.
+   *
+   * Yalnız kademeyi silmek yetmiyordu: kaldırılan rakamla yazılmış taksitler
+   * ekranda öylece kalıyor, hangi kiradan geldiği anlaşılmıyordu. Artık
+   * önceki kademe kendi uzamış aralığını yeniden hesaplıyor.
+   */
+  function kademeKaldir(grup: Grup, sira: number, onceki?: Kademe) {
     baslat(async () => {
       const sonuc = await kademeSil(grup.anahtar, sira)
-      if (sonuc.hata) setMesaj({ tip: 'hata', metin: sonuc.hata })
-      else setMesaj({ tip: 'ok', metin: `${grup.ad}: ${sonuc.basari ?? 'Kaldırıldı.'}` })
+      if (sonuc.hata) {
+        setMesaj({ tip: 'hata', metin: sonuc.hata })
+        router.refresh()
+        return
+      }
+
+      let metin = sonuc.basari ?? 'Kaldırıldı.'
+      if (onceki) {
+        const yeniden = await hesaplaDoldur({
+          tabanAnahtari: grup.anahtar,
+          kiraAnahtarlari: grup.kiraAnahtarlari,
+          paylarAnahtari: grup.paylarAnahtari,
+          taban: String(onceki.tutar).replace('.', ','),
+          baslangic: onceki.sira,
+        })
+        metin = yeniden.hata ? yeniden.hata : `${metin} ${yeniden.basari ?? ''}`.trim()
+      }
+
+      setMesaj({ tip: 'ok', metin: `${grup.ad}: ${metin}` })
       router.refresh()
     })
   }
@@ -355,7 +378,7 @@ function TabanKutusu({
   kademeler: Kademe[]
   bekliyor: boolean
   hesapla: (grup: Grup, taban: string, baslangic: number) => void
-  kademeKaldir: (grup: Grup, sira: number) => void
+  kademeKaldir: (grup: Grup, sira: number, onceki?: Kademe) => void
 }) {
   const araliklar = kademeAraliklari(kademeler)
   // Kutu kapalı açılır: kalem kutuları gibi, ekran kalabalıklaşmasın.
@@ -435,13 +458,19 @@ function TabanKutusu({
                         type="button"
                         disabled={bekliyor}
                         onClick={() => {
+                          const onceki = araliklar[i - 1]
                           if (
                             window.confirm(
                               `${a.baslangic}. taksitteki kira değişikliği kaldırılsın mı? ` +
-                                'Yazılmış taksitlere dokunulmaz.',
+                                `${aralikAdi(a.baslangic, a.bitis)} yeniden ` +
+                                `${para(onceki.tutar)} üzerinden hesaplanacak; ödendi ` +
+                                'işaretli satırlara dokunulmayacak.',
                             )
                           ) {
-                            kademeKaldir(grup, a.baslangic)
+                            kademeKaldir(grup, a.baslangic, {
+                              sira: onceki.baslangic,
+                              tutar: onceki.tutar,
+                            })
                           }
                         }}
                         className="rounded px-1.5 py-0.5 text-[11px] text-solgun hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
@@ -465,7 +494,7 @@ function TabanKutusu({
                   inputMode="decimal"
                   value={deger}
                   onChange={(e) => setDeger(e.target.value)}
-                  placeholder="Yeni kira bedeli"
+                  placeholder="Yeni Kira Bedeli"
                   className="girdi w-32 !py-1 text-right text-sm tabular-nums"
                   aria-label="Yeni kira bedeli"
                 />
@@ -508,7 +537,7 @@ function TabanKutusu({
                   }}
                   className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-900 disabled:opacity-40"
                 >
-                  Kaydet ve hesapla
+                  Kaydet ve Hesapla
                 </button>
                 {araliklar.length > 0 && (
                   <button
@@ -530,7 +559,7 @@ function TabanKutusu({
               onClick={() => setFormAcik(true)}
               className="mt-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
             >
-              + Kira değişikliği
+              + Kira Değişikliği
             </button>
           )}
         </div>
@@ -560,12 +589,12 @@ function Kirilim({
       <Satir ad="İl Payı" deger={para(k.ilPayi)} not="taksit başına" />
       <Satir ad="İlçe Payı" deger={para(k.ilcePayi)} not="taksit başına" />
       <Satir
-        ad="Okula kira"
+        ad="Okula Kira"
         deger={para(k.kiraToplam)}
         not={bolunuyor ? `taksit başına · birim başına ${para(k.kiraBirimBasina)}` : 'taksit başına'}
       />
       <Satir
-        ad="Taksit toplamı"
+        ad="Taksit Toplamı"
         deger={para(k.taksitToplami)}
         not={`${aralikAdi(aralik.baslangic, aralik.bitis)} · ${adet} taksit · toplam ${para(
           k.taksitToplami * adet,
