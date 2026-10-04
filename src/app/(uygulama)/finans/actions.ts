@@ -638,7 +638,17 @@ export async function personelCikar(id: string, aktif: boolean): Promise<FinansD
   return { basari: aktif ? 'Personel aktifleştirildi.' : 'Personel listeden çıkarıldı.' }
 }
 
-/** Zam: yeni tarihten itibaren geçerli ücret. Geçmiş aylar bozulmaz. */
+/**
+ * Zam: yeni tarihten itibaren geçerli ücret. Geçmiş aylar bozulmaz.
+ *
+ * Her ay ücretini kendinden önce başlayan en yeni satırdan okur; yani bir
+ * kez girilen rakam sonraki aylarda da geçerlidir, zam gelince o aydan
+ * sonrası yeni rakama döner.
+ *
+ * Yeni rakam, o aydan itibaren **ödenmiş** maaş kayıtlarına da işlenir.
+ * Yoksa ekranda ücret bir şey, üstteki "Ödenen" toplamı başka bir şey
+ * gösteriyordu: maaşı düzeltmek toplamı düzeltmiyordu.
+ */
 export async function ucretEkle(
   personelId: string,
   _onceki: FinansDurumu,
@@ -661,8 +671,69 @@ export async function ucretEkle(
     )
   if (error) return { hata: error.message }
 
+  const duzelen = await odemeleriUcreteUydur(personelId, sonuc.data.gecerli_baslangic)
+
   tazele()
-  return { basari: 'Ücret kaydedildi.' }
+  return {
+    basari:
+      duzelen > 0
+        ? `Ücret kaydedildi. ${duzelen} ödenmiş ay yeni rakama göre düzeltildi.`
+        : 'Ücret kaydedildi.',
+  }
+}
+
+/**
+ * Ücret değişince, o aydan sonraki ödenmiş maaşları yeni rakama çeker.
+ *
+ * Ücret tek doğru kaynak: maaşı düzeltmek ekrandaki her rakamı düzeltmeli.
+ * Avans ya da eksik ödeme girmek isteyen, ücreti kaydettikten sonra o ayın
+ * kutusuna kendi rakamını yazar — orası yalnızca o ödemeyi değiştirir.
+ */
+async function odemeleriUcreteUydur(personelId: string, baslangic: string): Promise<number> {
+  const supabase = await supabaseServer()
+
+  const [{ data: ucretVeri }, { data: odemeVeri }] = await Promise.all([
+    supabase
+      .from('personel_ucretleri')
+      .select('gecerli_baslangic, tutar')
+      .eq('personel_id', personelId)
+      .order('gecerli_baslangic', { ascending: false }),
+    supabase
+      .from('maas_odemeleri')
+      .select('id, donem_yil, donem_ay, tutar')
+      .eq('personel_id', personelId),
+  ])
+
+  const ucretler = ((ucretVeri ?? []) as { gecerli_baslangic: string; tutar: number | string }[])
+    .map((u) => ({ baslangic: u.gecerli_baslangic, tutar: Number(u.tutar) }))
+  const odemeler = (odemeVeri ?? []) as {
+    id: string
+    donem_yil: number
+    donem_ay: number
+    tutar: number | string
+  }[]
+
+  const ayBasi = baslangic.slice(0, 7)
+  let duzelen = 0
+
+  for (const o of odemeler) {
+    const donem = `${o.donem_yil}-${String(o.donem_ay).padStart(2, '0')}`
+    if (donem < ayBasi) continue
+
+    const sonGun = `${donem}-${String(new Date(o.donem_yil, o.donem_ay, 0).getDate()).padStart(2, '0')}`
+    const gecerli = ucretler.find((u) => u.baslangic <= sonGun)
+    if (!gecerli) continue
+
+    if (Number(o.tutar) === gecerli.tutar) continue
+
+    const { error } = await supabase
+      .from('maas_odemeleri')
+      .update({ tutar: gecerli.tutar })
+      .eq('id', o.id)
+    if (!error) duzelen++
+  }
+
+  return duzelen
 }
 
 export async function ucretSil(id: string): Promise<FinansDurumu> {
