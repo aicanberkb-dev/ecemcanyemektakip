@@ -358,7 +358,9 @@ function TabanKutusu({
   kademeKaldir: (grup: Grup, sira: number) => void
 }) {
   const araliklar = kademeAraliklari(kademeler)
-  // Kademe yoksa kutu doğrudan açık gelir: ilk rakamı girmek için
+  // Kutu kapalı açılır: kalem kutuları gibi, ekran kalabalıklaşmasın.
+  // Başlıkta geçerli kira zaten yazıyor.
+  const [kutuAcik, setKutuAcik] = useState(false)
   const [formAcik, setFormAcik] = useState(araliklar.length === 0)
   const [secili, setSecili] = useState(() => Math.max(0, araliklar.length - 1))
   const [deger, setDeger] = useState('')
@@ -368,152 +370,170 @@ function TabanKutusu({
   const gecerli = Number.isFinite(sayi) && sayi > 0
   const bolunuyor = grup.kiraAnahtarlari.length > 1
   const acik = araliklar[secili]
+  // Başlıktaki özet: yürürlükteki kira, yani son kademe
+  const son = araliklar.at(-1)
 
   return (
-    <div className="rounded-lg border border-slate-300 bg-slate-50 p-3">
-      <h4 className="text-xs font-semibold text-slate-700">{grup.ad}</h4>
+    <div className="rounded-lg border border-slate-300 bg-slate-50">
+      <button
+        type="button"
+        onClick={() => setKutuAcik(!kutuAcik)}
+        className="flex w-full flex-wrap items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100"
+      >
+        <span>{kutuAcik ? '▾' : '▸'}</span>
+        <span>{grup.ad}</span>
+        <span className="ml-auto font-normal text-solgun">
+          {son
+            ? `${para(son.tutar)}${araliklar.length > 1 ? ` · ${araliklar.length} kademe` : ''}`
+            : 'girilmedi'}
+        </span>
+      </button>
 
-      {araliklar.length > 0 && (
-        <ul className="mt-1.5 space-y-1">
-          {araliklar.map((a, i) => (
-            <li
-              key={a.baslangic}
-              className={`flex flex-wrap items-center gap-2 rounded px-2 py-1 text-xs ${
-                i === secili ? 'bg-white ring-1 ring-slate-300' : ''
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => setSecili(i)}
-                className="flex items-center gap-2 text-left"
-              >
-                <span className="w-24 shrink-0 font-medium">
-                  {aralikAdi(a.baslangic, a.bitis)}
-                </span>
-                <span className="font-semibold tabular-nums">{para(a.tutar)}</span>
-              </button>
+      {kutuAcik && (
+        <div className="border-t border-slate-300 p-3">
+          {araliklar.length > 0 && (
+            <ul className="mt-1.5 space-y-1">
+              {araliklar.map((a, i) => (
+                <li
+                  key={a.baslangic}
+                  className={`flex flex-wrap items-center gap-2 rounded px-2 py-1 text-xs ${
+                    i === secili ? 'bg-white ring-1 ring-slate-300' : ''
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSecili(i)}
+                    className="flex items-center gap-2 text-left"
+                  >
+                    <span className="w-24 shrink-0 font-medium">
+                      {aralikAdi(a.baslangic, a.bitis)}
+                    </span>
+                    <span className="font-semibold tabular-nums">{para(a.tutar)}</span>
+                  </button>
 
-              <span className="ml-auto flex items-center gap-1">
+                  <span className="ml-auto flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={bekliyor}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `${grup.ad}: ${aralikAdi(a.baslangic, a.bitis)} ${para(a.tutar)} ` +
+                              'üzerinden yeniden yazılacak. Ödendi işaretli satırlara ' +
+                              'dokunulmayacak. Onaylıyor musun?',
+                          )
+                        ) {
+                          hesapla(grup, String(a.tutar).replace('.', ','), a.baslangic)
+                        }
+                      }}
+                      className="rounded border border-cizgi bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      Hesapla
+                    </button>
+                    {a.baslangic > 1 && (
+                      <button
+                        type="button"
+                        disabled={bekliyor}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `${a.baslangic}. taksitteki kira değişikliği kaldırılsın mı? ` +
+                                'Yazılmış taksitlere dokunulmaz.',
+                            )
+                          ) {
+                            kademeKaldir(grup, a.baslangic)
+                          }
+                        }}
+                        className="rounded px-1.5 py-0.5 text-[11px] text-solgun hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
+                        aria-label={`${a.baslangic}. taksitteki değişikliği kaldır`}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {acik && <Kirilim taban={acik.tutar} grup={grup} bolunuyor={bolunuyor} aralik={acik} />}
+
+          {formAcik ? (
+            <div className="mt-2 space-y-2 rounded-md border border-slate-300 bg-white p-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  inputMode="decimal"
+                  value={deger}
+                  onChange={(e) => setDeger(e.target.value)}
+                  placeholder="Yeni kira bedeli"
+                  className="girdi w-32 !py-1 text-right text-sm tabular-nums"
+                  aria-label="Yeni kira bedeli"
+                />
+                <select
+                  value={baslangic}
+                  onChange={(e) => setBaslangic(Number(e.target.value))}
+                  className="girdi !py-1 text-xs"
+                  aria-label="Yeni kiranın geçerli olduğu ilk taksit"
+                >
+                  {TAKSITLER.map((t) => (
+                    <option key={t} value={t}>
+                      {t}. taksitten itibaren
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {gecerli && (
+                <p className="text-[11px] text-solgun">
+                  {aralikAdi(baslangic, TAKSIT_SAYISI)} {para(sayi)} üzerinden yazılacak.
+                </p>
+              )}
+
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  disabled={bekliyor}
+                  disabled={bekliyor || !gecerli}
                   onClick={() => {
                     if (
                       window.confirm(
-                        `${grup.ad}: ${aralikAdi(a.baslangic, a.bitis)} ${para(a.tutar)} ` +
-                          'üzerinden yeniden yazılacak. Ödendi işaretli satırlara ' +
+                        `${grup.ad}: ${baslangic}. taksitten itibaren kira ${para(sayi)} olacak ve ` +
+                          'o taksitler yeniden yazılacak. Öncesine ve ödendi işaretli satırlara ' +
                           'dokunulmayacak. Onaylıyor musun?',
                       )
                     ) {
-                      hesapla(grup, String(a.tutar).replace('.', ','), a.baslangic)
+                      hesapla(grup, deger, baslangic)
+                      setDeger('')
+                      if (araliklar.length > 0) setFormAcik(false)
                     }
                   }}
-                  className="rounded border border-cizgi bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                  className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-900 disabled:opacity-40"
                 >
-                  Hesapla
+                  Kaydet ve hesapla
                 </button>
-                {a.baslangic > 1 && (
+                {araliklar.length > 0 && (
                   <button
                     type="button"
-                    disabled={bekliyor}
                     onClick={() => {
-                      if (
-                        window.confirm(
-                          `${a.baslangic}. taksitteki kira değişikliği kaldırılsın mı? ` +
-                            'Yazılmış taksitlere dokunulmaz.',
-                        )
-                      ) {
-                        kademeKaldir(grup, a.baslangic)
-                      }
+                      setFormAcik(false)
+                      setDeger('')
                     }}
-                    className="rounded px-1.5 py-0.5 text-[11px] text-solgun hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
-                    aria-label={`${a.baslangic}. taksitteki değişikliği kaldır`}
+                    className="rounded-md px-2 py-1.5 text-xs text-solgun hover:bg-slate-100"
                   >
-                    ✕
+                    Vazgeç
                   </button>
                 )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {acik && <Kirilim taban={acik.tutar} grup={grup} bolunuyor={bolunuyor} aralik={acik} />}
-
-      {formAcik ? (
-        <div className="mt-2 space-y-2 rounded-md border border-slate-300 bg-white p-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              inputMode="decimal"
-              value={deger}
-              onChange={(e) => setDeger(e.target.value)}
-              placeholder="Yeni kira bedeli"
-              className="girdi w-32 !py-1 text-right text-sm tabular-nums"
-              aria-label="Yeni kira bedeli"
-            />
-            <select
-              value={baslangic}
-              onChange={(e) => setBaslangic(Number(e.target.value))}
-              className="girdi !py-1 text-xs"
-              aria-label="Yeni kiranın geçerli olduğu ilk taksit"
-            >
-              {TAKSITLER.map((t) => (
-                <option key={t} value={t}>
-                  {t}. taksitten itibaren
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {gecerli && (
-            <p className="text-[11px] text-solgun">
-              {aralikAdi(baslangic, TAKSIT_SAYISI)} {para(sayi)} üzerinden yazılacak.
-            </p>
-          )}
-
-          <div className="flex flex-wrap gap-2">
+              </div>
+            </div>
+          ) : (
             <button
               type="button"
-              disabled={bekliyor || !gecerli}
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `${grup.ad}: ${baslangic}. taksitten itibaren kira ${para(sayi)} olacak ve ` +
-                      'o taksitler yeniden yazılacak. Öncesine ve ödendi işaretli satırlara ' +
-                      'dokunulmayacak. Onaylıyor musun?',
-                  )
-                ) {
-                  hesapla(grup, deger, baslangic)
-                  setDeger('')
-                  if (araliklar.length > 0) setFormAcik(false)
-                }
-              }}
-              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-900 disabled:opacity-40"
+              onClick={() => setFormAcik(true)}
+              className="mt-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
             >
-              Kaydet ve hesapla
+              + Kira değişikliği
             </button>
-            {araliklar.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setFormAcik(false)
-                  setDeger('')
-                }}
-                className="rounded-md px-2 py-1.5 text-xs text-solgun hover:bg-slate-100"
-              >
-                Vazgeç
-              </button>
-            )}
-          </div>
+          )}
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setFormAcik(true)}
-          className="mt-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-        >
-          + Kira değişikliği
-        </button>
       )}
     </div>
   )
