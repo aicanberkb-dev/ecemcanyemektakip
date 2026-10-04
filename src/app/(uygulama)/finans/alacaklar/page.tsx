@@ -1,3 +1,4 @@
+import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 
 import { AlacakEkrani, type Cari, type Fatura, type Tahsilat } from './AlacakEkrani'
@@ -10,9 +11,15 @@ export default async function AlacaklarPage({
   searchParams: Promise<{ yil?: string; ay?: string }>
 }) {
   const q = await searchParams
-  const simdi = new Date()
-  const yil = Number(q.yil) || simdi.getFullYear()
-  const ay = Number(q.ay) || simdi.getMonth() + 1
+
+  // Sayfa bir önceki ayla açılır: fatura kesilip tahsilat beklenen ay geçen
+  // aydır, içinde bulunulan ay çoğu zaman daha boştur. Ekimde girince eylül.
+  const bugun = await bugunSunucu()
+  const [buYil, buAy] = bugun.split('-').map(Number)
+  const varsayilan = buAy === 1 ? { yil: buYil - 1, ay: 12 } : { yil: buYil, ay: buAy - 1 }
+
+  const yil = Number(q.yil) || varsayilan.yil
+  const ay = Number(q.ay) || varsayilan.ay
 
   const supabase = await supabaseServer()
 
