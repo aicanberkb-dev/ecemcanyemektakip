@@ -58,8 +58,8 @@ type Grup = {
   ad: string
   /** Kira bu birimlere eşit bölünür */
   kiraAnahtarlari: string[]
-  /** İl payı, ilçe payı ve arz bu birimde durur */
-  paylarAnahtari: string
+  /** İl payı, ilçe payı ve arz bu birimlere eşit bölünür */
+  paylarAnahtarlari: string[]
   bolumler: Bolum[]
 }
 
@@ -71,19 +71,34 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
     ad: 'GÖKSU',
     gruplar: [
       {
-        // Kantin ve yemekhane kirası aynı yere, tek kalemde yatıyor;
-        // ayrı ayrı girmek hem fazladan iş hem de yanıltıcıydı.
+        // Kira kantin ve yemekhane için ortak, tek kalemde yatıyor; il,
+        // ilçe ve arz ise her birim için ayrı ayrı ödeniyor. AKBABA'nın
+        // tam tersi, orada kira bölünüyor paylar birleşiyor.
         anahtar: 'GÖKSU',
         ad: 'Kira Bedeli (Yemekhane + Kantin)',
         kiraAnahtarlari: ['GÖKSU'],
-        paylarAnahtari: 'GÖKSU',
+        paylarAnahtarlari: ['GÖKSU KANTİN', 'GÖKSU YEMEKHANE'],
         bolumler: [
           {
             ad: 'GÖKSU — Kira (Yemekhane + Kantin)',
             anahtar: 'GÖKSU',
             zemin: 'bg-amber-50/70',
             baslik: 'bg-amber-100 text-amber-900',
-            kalemler: TUM_KALEMLER,
+            kalemler: ['kira'],
+          },
+          {
+            ad: 'GÖKSU KANTİN — Paylar',
+            anahtar: 'GÖKSU KANTİN',
+            zemin: 'bg-lime-50/70',
+            baslik: 'bg-lime-100 text-lime-900',
+            kalemler: ORTAK_KALEMLER,
+          },
+          {
+            ad: 'GÖKSU YEMEKHANE — Paylar',
+            anahtar: 'GÖKSU YEMEKHANE',
+            zemin: 'bg-teal-50/70',
+            baslik: 'bg-teal-100 text-teal-900',
+            kalemler: ORTAK_KALEMLER,
           },
         ],
       },
@@ -97,7 +112,7 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
         anahtar: 'AKBABA',
         ad: 'Kantin Kira Bedeli (İlkokul + Ortaokul)',
         kiraAnahtarlari: ['AKBABA KANTİN İLKOKUL', 'AKBABA KANTİN ORTAOKUL'],
-        paylarAnahtari: 'AKBABA KANTİN İLKOKUL',
+        paylarAnahtarlari: ['AKBABA KANTİN İLKOKUL'],
         bolumler: [
           {
             ad: 'AKBABA KANTİN İLKOKUL — Kira',
@@ -132,7 +147,7 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
         anahtar: 'AHMET MİTHAT YEMEKHANE',
         ad: 'Yemekhane Kira Bedeli',
         kiraAnahtarlari: ['AHMET MİTHAT YEMEKHANE'],
-        paylarAnahtari: 'AHMET MİTHAT YEMEKHANE',
+        paylarAnahtarlari: ['AHMET MİTHAT YEMEKHANE'],
         bolumler: [
           {
             ad: 'AHMET MİTHAT YEMEKHANE',
@@ -221,7 +236,7 @@ export function KiraEkrani({
       const sonuc = await hesaplaDoldur({
         tabanAnahtari: grup.anahtar,
         kiraAnahtarlari: grup.kiraAnahtarlari,
-        paylarAnahtari: grup.paylarAnahtari,
+        paylarAnahtarlari: grup.paylarAnahtarlari,
         taban,
         baslangic,
       })
@@ -252,7 +267,7 @@ export function KiraEkrani({
         const yeniden = await hesaplaDoldur({
           tabanAnahtari: grup.anahtar,
           kiraAnahtarlari: grup.kiraAnahtarlari,
-          paylarAnahtari: grup.paylarAnahtari,
+          paylarAnahtarlari: grup.paylarAnahtarlari,
           taban: String(onceki.tutar).replace('.', ','),
           baslangic: onceki.sira,
         })
@@ -365,7 +380,7 @@ function OkulOzeti({
     const birimler = new Set(
       okul.gruplar.flatMap((g) => [
         ...g.kiraAnahtarlari,
-        g.paylarAnahtari,
+        ...g.paylarAnahtarlari,
         ...g.bolumler.map((b) => b.anahtar),
       ]),
     )
@@ -395,8 +410,19 @@ function OkulOzeti({
       {acik && (
         <dl className="space-y-0.5 border-t border-slate-300 p-3 text-xs text-slate-700">
           <Satir ad="Ödenecek" deger={para(odenecek)} not="8 taksit · bütün kalemler" />
-          <Satir ad="Ödenen" deger={para(odenen)} not="ödendi işaretli satırlar" />
-          <Satir ad="Kalan" deger={para(odenecek - odenen)} not="ödenmemiş satırlar" kalin />
+          <Satir
+            ad="Ödenen"
+            deger={para(odenen)}
+            not="ödendi işaretli satırlar"
+            renk="yesil"
+          />
+          <Satir
+            ad="Kalan"
+            deger={para(odenecek - odenen)}
+            not="ödenmemiş satırlar"
+            renk="kirmizi"
+            kalin
+          />
         </dl>
       )}
     </div>
@@ -628,14 +654,22 @@ function Kirilim({
   bolunuyor: boolean
   aralik: { baslangic: number; bitis: number }
 }) {
-  const k = kiraKirilimi(taban, grup.kiraAnahtarlari.length)
+  const k = kiraKirilimi(taban, grup.kiraAnahtarlari.length, grup.paylarAnahtarlari.length)
   const adet = aralik.bitis - aralik.baslangic + 1
+  // Paylar birden çok birimde ayrı yatıyorsa birim başına düşeni de yaz
+  const paylarBolunuyor = grup.paylarAnahtarlari.length > 1
+  const payNotu = (birim: number) =>
+    paylarBolunuyor ? `taksit başına · birim başına ${para(birim)}` : 'taksit başına'
 
   return (
     <dl className="mt-2 space-y-0.5 text-xs text-slate-700">
-      <Satir ad="Arz Bedeli" deger={para(k.arzTaksit)} not="taksit başına · %3" />
-      <Satir ad="İl Payı" deger={para(k.ilPayi)} not="taksit başına" />
-      <Satir ad="İlçe Payı" deger={para(k.ilcePayi)} not="taksit başına" />
+      <Satir
+        ad="Arz Bedeli"
+        deger={para(k.arzTaksit)}
+        not={`${payNotu(k.arzBirim)} · %3`}
+      />
+      <Satir ad="İl Payı" deger={para(k.ilPayi)} not={payNotu(k.ilPayiBirim)} />
+      <Satir ad="İlçe Payı" deger={para(k.ilcePayi)} not={payNotu(k.ilcePayiBirim)} />
       <Satir
         ad="Okula Kira"
         deger={para(k.kiraToplam)}
@@ -658,11 +692,14 @@ function Satir({
   deger,
   not,
   kalin,
+  renk,
 }: {
   ad: string
   deger: string
   not: string
   kalin?: boolean
+  /** Ödenen yeşil, ödenmemiş kalan kırmızı */
+  renk?: 'yesil' | 'kirmizi'
 }) {
   return (
     <div
@@ -671,7 +708,13 @@ function Satir({
       }`}
     >
       <dt className="w-24 shrink-0">{ad}</dt>
-      <dd className="tabular-nums">{deger}</dd>
+      <dd
+        className={`font-semibold tabular-nums ${
+          renk === 'yesil' ? 'text-emerald-700' : renk === 'kirmizi' ? 'text-red-700' : ''
+        }`}
+      >
+        {deger}
+      </dd>
       <dd className="text-[11px] text-solgun">{not}</dd>
     </div>
   )
@@ -713,6 +756,7 @@ function Kutu({
 
   const kayitlar = siralar.map((s) => mevcut.get(anahtar(birim, kalem, s)))
   const toplam = kayitlar.reduce((t, k) => t + Number(k?.tutar ?? 0), 0)
+  const odenen = kayitlar.reduce((t, k) => t + (k?.odendi ? Number(k.tutar) : 0), 0)
   const odenenSayi = kayitlar.filter((k) => k?.odendi).length
 
   // Kalem kutusu beyaz zeminde: birimin rengi arkada kalsın, rakamlar okunsun
@@ -725,8 +769,15 @@ function Kutu({
       >
         <span>{acik ? '▾' : '▸'}</span>
         <span>{baslik}</span>
-        <span className="ml-auto text-xs font-normal text-solgun">
-          {odenenSayi}/{siralar.length} ödendi · {para(toplam)}
+        {/* Kapalıyken de kalem bazında durum görünsün: toplam, ödenen,
+            kalan. Üstteki yıllık özetin kalem kalem dağılımı bu. */}
+        <span className="ml-auto flex flex-wrap items-baseline justify-end gap-x-2 text-xs font-normal">
+          <span className="text-solgun">
+            {odenenSayi}/{siralar.length} ödendi
+          </span>
+          <span className="tabular-nums">{para(toplam)}</span>
+          <span className="text-emerald-700 tabular-nums">{para(odenen)}</span>
+          <span className="text-red-700 tabular-nums">{para(toplam - odenen)}</span>
         </span>
       </button>
 

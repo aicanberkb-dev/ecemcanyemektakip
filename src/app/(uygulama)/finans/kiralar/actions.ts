@@ -158,8 +158,8 @@ export async function hesaplaDoldur(veri: {
   tabanAnahtari: string
   /** Kira bu birimlere eşit bölünür */
   kiraAnahtarlari: string[]
-  /** İl payı, ilçe payı ve arz bu birimde durur */
-  paylarAnahtari: string
+  /** İl payı, ilçe payı ve arz bu birimlere eşit bölünür */
+  paylarAnahtarlari: string[]
   taban: string
   /** Yeni tabanın geçerli olduğu ilk taksit; öncesi olduğu gibi kalır */
   baslangic: number
@@ -168,7 +168,7 @@ export async function hesaplaDoldur(veri: {
     .object({
       tabanAnahtari: z.string().trim().min(1),
       kiraAnahtarlari: z.array(z.string().trim().min(1)).min(1),
-      paylarAnahtari: z.string().trim().min(1),
+      paylarAnahtarlari: z.array(z.string().trim().min(1)).min(1),
       taban: trSayi({ min: 1 }),
       baslangic: z.number().int().min(1).max(TAKSIT_SAYISI),
     })
@@ -178,8 +178,8 @@ export async function hesaplaDoldur(veri: {
     return { hata: sonuc.error.issues[0]?.message ?? 'Kira bedelini kontrol et.' }
   }
 
-  const { tabanAnahtari, kiraAnahtarlari, paylarAnahtari, taban, baslangic } = sonuc.data
-  const kirilim = kiraKirilimi(taban, kiraAnahtarlari.length)
+  const { tabanAnahtari, kiraAnahtarlari, paylarAnahtarlari, taban, baslangic } = sonuc.data
+  const kirilim = kiraKirilimi(taban, kiraAnahtarlari.length, paylarAnahtarlari.length)
 
   const supabase = await supabaseServer()
 
@@ -216,10 +216,12 @@ export async function hesaplaDoldur(veri: {
       tutar: kirilim.kiraBirimBasina,
       siralar: hedefler,
     })),
-    { birim: paylarAnahtari, kalem: 'il_payi', tutar: kirilim.ilPayi, siralar: hedefler },
-    { birim: paylarAnahtari, kalem: 'ilce_payi', tutar: kirilim.ilcePayi, siralar: hedefler },
-    // Arz da öbür kalemler gibi: her taksitte aynı rakam
-    { birim: paylarAnahtari, kalem: 'uc_aylik', tutar: kirilim.arzTaksit, siralar: hedefler },
+    ...paylarAnahtarlari.flatMap((birim) => [
+      { birim, kalem: 'il_payi', tutar: kirilim.ilPayiBirim, siralar: hedefler },
+      { birim, kalem: 'ilce_payi', tutar: kirilim.ilcePayiBirim, siralar: hedefler },
+      // Arz da öbür kalemler gibi: her taksitte aynı rakam
+      { birim, kalem: 'uc_aylik', tutar: kirilim.arzBirim, siralar: hedefler },
+    ]),
   ]
 
   let yazilan = 0

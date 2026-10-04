@@ -39,6 +39,10 @@ export type KiraKirilimi = {
   kiraToplam: number
   /** Kira birden fazla birime bölünüyorsa birim başına düşen */
   kiraBirimBasina: number
+  /** Paylar birden fazla birimde ayrı yatıyorsa birim başına düşen */
+  ilPayiBirim: number
+  ilcePayiBirim: number
+  arzBirim: number
   /** Sağlama: bir taksitte yatan her şeyin toplamı, tabana eşit olmalı */
   taksitToplami: number
 }
@@ -48,12 +52,22 @@ function kurus(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-export function kiraKirilimi(taban: number, kiraBirimSayisi = 1): KiraKirilimi {
+/**
+ * Kalemler birden fazla birime bölünebiliyor ve hangi kalemin bölündüğü
+ * okula göre değişiyor: AKBABA'da kira iki okula ayrı yatıyor, paylar tek
+ * ödeme; GÖKSU'da ise kira kantin ve yemekhane için ortak, paylar ayrı.
+ */
+export function kiraKirilimi(
+  taban: number,
+  kiraBirimSayisi = 1,
+  payBirimSayisi = 1,
+): KiraKirilimi {
   const arzTaksit = kurus(taban * ARZ_ORANI)
   const kalan = kurus(taban - arzTaksit)
   const ilPayi = kurus(kalan * IL_ORANI)
   const ilcePayi = kurus(kalan * ILCE_ORANI)
   const kiraToplam = kurus(kalan - ilPayi - ilcePayi)
+  const payBolen = Math.max(1, payBirimSayisi)
 
   return {
     taban,
@@ -63,6 +77,9 @@ export function kiraKirilimi(taban: number, kiraBirimSayisi = 1): KiraKirilimi {
     ilcePayi,
     kiraToplam,
     kiraBirimBasina: kurus(kiraToplam / Math.max(1, kiraBirimSayisi)),
+    ilPayiBirim: kurus(ilPayi / payBolen),
+    ilcePayiBirim: kurus(ilcePayi / payBolen),
+    arzBirim: kurus(arzTaksit / payBolen),
     taksitToplami: kurus(arzTaksit + ilPayi + ilcePayi + kiraToplam),
   }
 }
