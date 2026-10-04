@@ -4,15 +4,9 @@ import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 
 import { para } from '@/lib/format'
-import {
-  arzKapsamlari,
-  arzOdemeleri,
-  type Kademe,
-  kiraKirilimi,
-  taksitTabanlari,
-} from '@/lib/kira-hesap'
+import { kademeAraliklari, type Kademe, kiraKirilimi, TAKSIT_SAYISI } from '@/lib/kira-hesap'
 
-import { hesaplaDoldur, kiraKaydet, odendiDegistir, tutarYay } from './actions'
+import { hesaplaDoldur, kademeSil, kiraKaydet, odendiDegistir, tutarYay } from './actions'
 
 export type KiraSatiri = {
   id: string
@@ -27,11 +21,12 @@ export type KiraSatiri = {
 
 type Kalem = 'kira' | 'il_payi' | 'ilce_payi' | 'uc_aylik'
 
+/** Kalem adı; `uc_aylik` kodu eski adından kalma, ekranda Arz Bedeli */
 const KALEM_ADLARI: Record<Kalem, string> = {
   kira: 'Kira',
   il_payi: 'İl Payı',
   ilce_payi: 'İlçe Payı',
-  uc_aylik: '3 Aylık Arz',
+  uc_aylik: 'Arz Bedeli',
 }
 
 /**
@@ -166,20 +161,11 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
 ]
 
 /**
- * Kira, il payı ve ilçe payı sekiz taksit olarak yatıyor; ay takvimiyle
- * ilgisi yok, bu yüzden dönem değil taksit sırası tutuluyor.
+ * Bütün kalemler sekiz taksit; ay takvimiyle ilgisi yok, bu yüzden dönem
+ * değil taksit sırası tutuluyor. Arz bedeli de aynı: üç taksiti birden
+ * yatıran, üç satırı tek tek ödendi işaretler.
  */
-const TAKSITLER = [1, 2, 3, 4, 5, 6, 7, 8]
-/** Üç aylık arz yılda üç kez */
-const ARZ_TAKSITLERI = [1, 2, 3]
-
-function taksitleri(kalem: Kalem) {
-  return kalem === 'uc_aylik' ? ARZ_TAKSITLERI : TAKSITLER
-}
-
-function etiket(kalem: Kalem, sira: number) {
-  return kalem === 'uc_aylik' ? `${sira}. 3 Aylık Arz` : `${sira}. Taksit`
-}
+const TAKSITLER = Array.from({ length: TAKSIT_SAYISI }, (_, i) => i + 1)
 
 /** Satır anahtarı: birim + kalem + taksit sırası */
 function anahtar(birim: string, kalem: Kalem, sira: number) {
@@ -258,6 +244,16 @@ export function KiraEkrani({
     })
   }
 
+  /** Bir kira değişikliğini kaldırır; yazılmış taksitlere dokunmaz */
+  function kademeKaldir(grup: Grup, sira: number) {
+    baslat(async () => {
+      const sonuc = await kademeSil(grup.anahtar, sira)
+      if (sonuc.hata) setMesaj({ tip: 'hata', metin: sonuc.hata })
+      else setMesaj({ tip: 'ok', metin: `${grup.ad}: ${sonuc.basari ?? 'Kaldırıldı.'}` })
+      router.refresh()
+    })
+  }
+
   /** Girilen tutarı sonraki taksitlere yayar; ödenmiş satırlara dokunmaz */
   function yay(birim: string, kalem: Kalem, tutar: number, hedefler: number[]) {
     baslat(async () => {
@@ -296,6 +292,7 @@ export function KiraEkrani({
                     kademeler={tabanlar[grup.anahtar] ?? []}
                     bekliyor={bekliyor}
                     hesapla={hesapla}
+                    kademeKaldir={kademeKaldir}
                   />
 
                   {grup.bolumler.map((b) => (
@@ -311,7 +308,7 @@ export function KiraEkrani({
                           <Kutu
                             key={kalem}
                             baslik={KALEM_ADLARI[kalem]}
-                            siralar={taksitleri(kalem)}
+                            siralar={TAKSITLER}
                             birim={b.anahtar}
                             kalem={kalem}
                             mevcut={mevcut}
@@ -335,132 +332,227 @@ export function KiraEkrani({
   )
 }
 
+/** "5–8. taksit" ya da tek taksitse "5. taksit" */
+function aralikAdi(baslangic: number, bitis: number) {
+  return baslangic === bitis ? `${baslangic}. taksit` : `${baslangic}–${bitis}. taksit`
+}
+
 /**
  * Kira bedeli ve ondan çıkan kırılım.
  *
- * Rakam yazıldıkça kırılım anında güncelleniyor; kaydetmek için düğmeye
- * basmak gerekiyor çünkü bütün taksitleri yeniden yazıyor.
+ * Kira yıl içinde değişebildiği için tek rakam değil kademe listesi var:
+ * "1–3. taksit 15.000", "4–8. taksit 18.000". Eski rakam gözden kaybolmasın
+ * diye hepsi listede duruyor; tıklanınca o kademenin kırılımı açılıyor.
  */
 function TabanKutusu({
   grup,
   kademeler,
   bekliyor,
   hesapla,
+  kademeKaldir,
 }: {
   grup: Grup
   kademeler: Kademe[]
   bekliyor: boolean
   hesapla: (grup: Grup, taban: string, baslangic: number) => void
+  kademeKaldir: (grup: Grup, sira: number) => void
 }) {
-  const [baslangic, setBaslangic] = useState(1)
-  const [deger, setDeger] = useState(() => {
-    const ilk = [...kademeler].sort((a, b) => a.sira - b.sira)[0]
-    return ilk ? String(ilk.tutar).replace('.', ',') : ''
-  })
+  const araliklar = kademeAraliklari(kademeler)
+  // Kademe yoksa kutu doğrudan açık gelir: ilk rakamı girmek için
+  const [formAcik, setFormAcik] = useState(araliklar.length === 0)
+  const [secili, setSecili] = useState(() => Math.max(0, araliklar.length - 1))
+  const [deger, setDeger] = useState('')
+  const [baslangic, setBaslangic] = useState(() => (araliklar.length === 0 ? 1 : 2))
 
   const sayi = Number(deger.replace(/\./g, '').replace(',', '.'))
   const gecerli = Number.isFinite(sayi) && sayi > 0
-  const k = gecerli ? kiraKirilimi(sayi, grup.kiraAnahtarlari.length) : null
   const bolunuyor = grup.kiraAnahtarlari.length > 1
-  const etkilenen = TAKSITLER.length - baslangic + 1
-
-  // Arz ödemeleri kapsadıkları taksitlerin tabanlarından çıkıyor: yeni kademe
-  // yılın ortasında başlıyorsa o ödeme kısmen eski kısmen yeni tabandan
-  // hesaplanır. Önizleme de kaydedilecek hâli göstersin diye aynı hesap.
-  const yeniKademeler = gecerli
-    ? [...kademeler.filter((x) => x.sira !== baslangic), { sira: baslangic, tutar: sayi }]
-    : kademeler
-  const odemeler = arzOdemeleri(taksitTabanlari(yeniKademeler))
-  const kapsamlar = arzKapsamlari()
+  const acik = araliklar[secili]
 
   return (
     <div className="rounded-lg border border-slate-300 bg-slate-50 p-3">
-      <label className="block text-xs font-semibold text-slate-700">{grup.ad}</label>
+      <h4 className="text-xs font-semibold text-slate-700">{grup.ad}</h4>
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-2">
-        <input
-          inputMode="decimal"
-          value={deger}
-          onChange={(e) => setDeger(e.target.value)}
-          placeholder="Kira bedeli"
-          className="girdi w-32 !py-1 text-right text-sm tabular-nums"
-        />
-        <select
-          value={baslangic}
-          onChange={(e) => setBaslangic(Number(e.target.value))}
-          className="girdi !py-1 text-xs"
-          aria-label="Yeni kiranın geçerli olduğu ilk taksit"
-        >
-          {TAKSITLER.map((t) => (
-            <option key={t} value={t}>
-              {t}. taksitten itibaren
-            </option>
+      {araliklar.length > 0 && (
+        <ul className="mt-1.5 space-y-1">
+          {araliklar.map((a, i) => (
+            <li
+              key={a.baslangic}
+              className={`flex flex-wrap items-center gap-2 rounded px-2 py-1 text-xs ${
+                i === secili ? 'bg-white ring-1 ring-slate-300' : ''
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => setSecili(i)}
+                className="flex items-center gap-2 text-left"
+              >
+                <span className="w-24 shrink-0 font-medium">
+                  {aralikAdi(a.baslangic, a.bitis)}
+                </span>
+                <span className="font-semibold tabular-nums">{para(a.tutar)}</span>
+              </button>
+
+              <span className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={bekliyor}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `${grup.ad}: ${aralikAdi(a.baslangic, a.bitis)} ${para(a.tutar)} ` +
+                          'üzerinden yeniden yazılacak. Ödendi işaretli satırlara ' +
+                          'dokunulmayacak. Onaylıyor musun?',
+                      )
+                    ) {
+                      hesapla(grup, String(a.tutar).replace('.', ','), a.baslangic)
+                    }
+                  }}
+                  className="rounded border border-cizgi bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  Hesapla
+                </button>
+                {a.baslangic > 1 && (
+                  <button
+                    type="button"
+                    disabled={bekliyor}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `${a.baslangic}. taksitteki kira değişikliği kaldırılsın mı? ` +
+                            'Yazılmış taksitlere dokunulmaz.',
+                        )
+                      ) {
+                        kademeKaldir(grup, a.baslangic)
+                      }
+                    }}
+                    className="rounded px-1.5 py-0.5 text-[11px] text-solgun hover:bg-red-50 hover:text-red-700 disabled:opacity-40"
+                    aria-label={`${a.baslangic}. taksitteki değişikliği kaldır`}
+                  >
+                    ✕
+                  </button>
+                )}
+              </span>
+            </li>
           ))}
-        </select>
+        </ul>
+      )}
+
+      {acik && <Kirilim taban={acik.tutar} grup={grup} bolunuyor={bolunuyor} aralik={acik} />}
+
+      {formAcik ? (
+        <div className="mt-2 space-y-2 rounded-md border border-slate-300 bg-white p-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              inputMode="decimal"
+              value={deger}
+              onChange={(e) => setDeger(e.target.value)}
+              placeholder="Yeni kira bedeli"
+              className="girdi w-32 !py-1 text-right text-sm tabular-nums"
+              aria-label="Yeni kira bedeli"
+            />
+            <select
+              value={baslangic}
+              onChange={(e) => setBaslangic(Number(e.target.value))}
+              className="girdi !py-1 text-xs"
+              aria-label="Yeni kiranın geçerli olduğu ilk taksit"
+            >
+              {TAKSITLER.map((t) => (
+                <option key={t} value={t}>
+                  {t}. taksitten itibaren
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {gecerli && (
+            <p className="text-[11px] text-solgun">
+              {aralikAdi(baslangic, TAKSIT_SAYISI)} {para(sayi)} üzerinden yazılacak.
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={bekliyor || !gecerli}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `${grup.ad}: ${baslangic}. taksitten itibaren kira ${para(sayi)} olacak ve ` +
+                      'o taksitler yeniden yazılacak. Öncesine ve ödendi işaretli satırlara ' +
+                      'dokunulmayacak. Onaylıyor musun?',
+                  )
+                ) {
+                  hesapla(grup, deger, baslangic)
+                  setDeger('')
+                  if (araliklar.length > 0) setFormAcik(false)
+                }
+              }}
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-900 disabled:opacity-40"
+            >
+              Kaydet ve hesapla
+            </button>
+            {araliklar.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFormAcik(false)
+                  setDeger('')
+                }}
+                className="rounded-md px-2 py-1.5 text-xs text-solgun hover:bg-slate-100"
+              >
+                Vazgeç
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
         <button
           type="button"
-          disabled={bekliyor || !gecerli}
-          onClick={() => {
-            if (
-              window.confirm(
-                `${grup.ad}: ${baslangic}. taksitten 8. taksite kadar ${para(sayi)} üzerinden ` +
-                  'yeniden yazılacak. Öncesine ve ödendi işaretli satırlara dokunulmayacak. ' +
-                  'Onaylıyor musun?',
-              )
-            ) {
-              hesapla(grup, deger, baslangic)
-            }
-          }}
-          className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-900 disabled:opacity-40"
+          onClick={() => setFormAcik(true)}
+          className="mt-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
         >
-          Hesapla ve doldur
+          + Kira değişikliği
         </button>
-      </div>
-
-      {kademeler.length > 0 && (
-        <p className="mt-1.5 text-[11px] text-solgun">
-          Girili:{' '}
-          {[...kademeler]
-            .sort((a, b) => a.sira - b.sira)
-            .map((x) => `${x.sira}. taksitten ${para(x.tutar)}`)
-            .join(' · ')}
-        </p>
-      )}
-
-      {k && (
-        <dl className="mt-2 space-y-0.5 text-xs text-slate-700">
-          <Satir ad="Arz payı" deger={para(k.arzTaksit)} not="taksit başına · %3" />
-          <Satir ad="İl Payı" deger={para(k.ilPayi)} not="taksit başına" />
-          <Satir ad="İlçe Payı" deger={para(k.ilcePayi)} not="taksit başına" />
-          <Satir
-            ad="Okula kira"
-            deger={para(k.kiraToplam)}
-            not={
-              bolunuyor ? `taksit başına · birim başına ${para(k.kiraBirimBasina)}` : 'taksit başına'
-            }
-          />
-          <Satir
-            ad="Taksit toplamı"
-            deger={para(k.taksitToplami)}
-            not={`${baslangic}–8. taksit · ${etkilenen} taksit · toplam ${para(
-              k.taksitToplami * etkilenen,
-            )}`}
-            kalin
-          />
-          <p className="pt-1 text-[11px] text-solgun">
-            Arz ödemeleri:{' '}
-            {odemeler
-              .map((o, i) => {
-                const kapsam = kapsamlar[i]
-                const aralik =
-                  kapsam.length > 1 ? `${kapsam[0]}–${kapsam.at(-1)}. taksit` : `${kapsam[0]}. taksit`
-                return `${i + 1}. ${o == null ? '—' : para(o)} (${aralik})`
-              })
-              .join(' · ')}
-          </p>
-        </dl>
       )}
     </div>
+  )
+}
+
+/** Bir kademenin taksit başına kırılımı */
+function Kirilim({
+  taban,
+  grup,
+  bolunuyor,
+  aralik,
+}: {
+  taban: number
+  grup: Grup
+  bolunuyor: boolean
+  aralik: { baslangic: number; bitis: number }
+}) {
+  const k = kiraKirilimi(taban, grup.kiraAnahtarlari.length)
+  const adet = aralik.bitis - aralik.baslangic + 1
+
+  return (
+    <dl className="mt-2 space-y-0.5 text-xs text-slate-700">
+      <Satir ad="Arz Bedeli" deger={para(k.arzTaksit)} not="taksit başına · %3" />
+      <Satir ad="İl Payı" deger={para(k.ilPayi)} not="taksit başına" />
+      <Satir ad="İlçe Payı" deger={para(k.ilcePayi)} not="taksit başına" />
+      <Satir
+        ad="Okula kira"
+        deger={para(k.kiraToplam)}
+        not={bolunuyor ? `taksit başına · birim başına ${para(k.kiraBirimBasina)}` : 'taksit başına'}
+      />
+      <Satir
+        ad="Taksit toplamı"
+        deger={para(k.taksitToplami)}
+        not={`${aralikAdi(aralik.baslangic, aralik.bitis)} · ${adet} taksit · toplam ${para(
+          k.taksitToplami * adet,
+        )}`}
+        kalin
+      />
+    </dl>
   )
 }
 
@@ -555,7 +647,7 @@ function Kutu({
                 }`}
               >
                 <span className="w-28 shrink-0 text-xs leading-tight font-medium">
-                  {etiket(kalem, sira)}
+                  {sira}. Taksit
                 </span>
 
                 <input

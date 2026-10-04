@@ -16,10 +16,8 @@ export const ARZ_ORANI = 0.03
 export const IL_ORANI = 0.1
 export const ILCE_ORANI = 0.1
 
-/** Kira, il payı ve ilçe payı sekiz taksit olarak yatıyor */
+/** Bütün kalemler sekiz taksit olarak yatıyor — arz bedeli de dahil */
 export const TAKSIT_SAYISI = 8
-/** Arz üç ödemede yatıyor; her ödeme birkaç taksitin arz payını kapatır */
-export const ARZ_ODEME_SAYISI = 3
 
 /**
  * Taban kira kademesi: "bu taksitten itibaren kira şu".
@@ -70,26 +68,6 @@ export function kiraKirilimi(taban: number, kiraBirimSayisi = 1): KiraKirilimi {
 }
 
 /**
- * Arz ödemelerinin kapsadığı taksitler: sekiz taksit üç ödemeye bölününce
- * [1,2,3] · [4,5,6] · [7,8] oluyor.
- */
-export function arzKapsamlari(
-  taksitSayisi = TAKSIT_SAYISI,
-  odemeSayisi = ARZ_ODEME_SAYISI,
-): number[][] {
-  const esit = Math.floor(taksitSayisi / odemeSayisi)
-  const artan = taksitSayisi % odemeSayisi
-
-  const kapsamlar: number[][] = []
-  let sira = 1
-  for (let i = 0; i < odemeSayisi; i++) {
-    const adet = esit + (i < artan ? 1 : 0)
-    kapsamlar.push(Array.from({ length: adet }, () => sira++))
-  }
-  return kapsamlar
-}
-
-/**
  * Her taksitin tabanı: o taksitten sonra başlamayan son kademe geçerli.
  *
  * İlk kademeden önceki taksitler null kalır — rakam girilmemiş demektir,
@@ -109,16 +87,21 @@ export function taksitTabanlari(
 }
 
 /**
- * Arz ödemeleri: her ödeme kapsadığı taksitlerin arz paylarının toplamı.
+ * Kademelerin kapsadığı taksit aralıkları.
  *
- * Tek taban varsa 15.000'de 1.350 · 1.350 · 900 çıkar; yıl ortasında kira
- * değişirse ödeme, kapsadığı taksitlerin kendi tabanlarından hesaplanır.
- * Kapsadığı taksitlerden birinin tabanı yoksa o ödeme hesaplanamaz (null).
+ * Bir kademe, kendisinden sonraki kademe başlayana kadar geçerli; sonuncusu
+ * sekizinci taksite kadar gider. Ekranda "4–8. taksit · 18.000" diye bunun
+ * için yazılıyor.
  */
-export function arzOdemeleri(tabanlar: (number | null)[]): (number | null)[] {
-  return arzKapsamlari(tabanlar.length).map((kapsam) => {
-    const paylar = kapsam.map((t) => tabanlar[t - 1])
-    if (paylar.some((p) => p == null)) return null
-    return kurus((paylar as number[]).reduce((toplam, p) => toplam + p * ARZ_ORANI, 0))
-  })
+export function kademeAraliklari(
+  kademeler: Kademe[],
+  taksitSayisi = TAKSIT_SAYISI,
+): { baslangic: number; bitis: number; tutar: number }[] {
+  const sirali = [...kademeler].sort((a, b) => a.sira - b.sira)
+
+  return sirali.map((k, i) => ({
+    baslangic: k.sira,
+    bitis: (sirali[i + 1]?.sira ?? taksitSayisi + 1) - 1,
+    tutar: k.tutar,
+  }))
 }

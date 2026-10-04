@@ -3,13 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
-import {
-  arzKapsamlari,
-  arzOdemeleri,
-  kiraKirilimi,
-  taksitTabanlari,
-  TAKSIT_SAYISI,
-} from '@/lib/kira-hesap'
+import { kademeAraliklari, kiraKirilimi, TAKSIT_SAYISI } from '@/lib/kira-hesap'
 import { supabaseServer } from '@/lib/supabase/server'
 import { bosNull, trSayi } from '@/lib/zod-tr'
 
@@ -186,14 +180,16 @@ export async function hesaplaDoldur(veri: {
 
   const { tabanAnahtari, kiraAnahtarlari, paylarAnahtari, taban, baslangic } = sonuc.data
   const kirilim = kiraKirilimi(taban, kiraAnahtarlari.length)
-  const hedefler = Array.from({ length: TAKSIT_SAYISI - baslangic + 1 }, (_, i) => baslangic + i)
 
   const supabase = await supabaseServer()
 
   // Taban kademe olarak saklanıyor: "bu taksitten itibaren kira şu"
   const { error: tabanHatasi } = await supabase
     .from('kira_tabanlari')
-    .upsert({ anahtar: tabanAnahtari, sira: baslangic, tutar: taban }, { onConflict: 'anahtar,sira' })
+    .upsert(
+      { anahtar: tabanAnahtari, sira: baslangic, tutar: taban },
+      { onConflict: 'anahtar,sira' },
+    )
   if (tabanHatasi) return { hata: tabanHatasi.message }
 
   const { data: kademeVerisi, error: kademeHatasi } = await supabase
@@ -206,6 +202,13 @@ export async function hesaplaDoldur(veri: {
     (k) => ({ sira: k.sira, tutar: Number(k.tutar) }),
   )
 
+  // Bu kademe yalnız kendi aralığını yazar: sonraki kademe başlıyorsa orada
+  // durur, yoksa son taksite kadar gider. Aksi hâlde eski kademeyi
+  // hesaplatmak sonraki zammı silip süpürürdü.
+  const aralik = kademeAraliklari(kademeler).find((a) => a.baslangic === baslangic)
+  const bitis = aralik?.bitis ?? TAKSIT_SAYISI
+  const hedefler = Array.from({ length: bitis - baslangic + 1 }, (_, i) => baslangic + i)
+
   const isler = [
     ...kiraAnahtarlari.map((birim) => ({
       birim,
@@ -215,18 +218,9 @@ export async function hesaplaDoldur(veri: {
     })),
     { birim: paylarAnahtari, kalem: 'il_payi', tutar: kirilim.ilPayi, siralar: hedefler },
     { birim: paylarAnahtari, kalem: 'ilce_payi', tutar: kirilim.ilcePayi, siralar: hedefler },
+    // Arz da öbür kalemler gibi: her taksitte aynı rakam
+    { birim: paylarAnahtari, kalem: 'uc_aylik', tutar: kirilim.arzTaksit, siralar: hedefler },
   ]
-
-  // Arz ödemeleri kapsadıkları taksitlerin tabanlarından çıkıyor; yıl
-  // ortasında kira değişirse o ödeme kısmen eski kısmen yeni tabandan
-  // hesaplanır. Yalnız değişen taksitlere dokunan ödemeler yazılır.
-  const tabanlar = taksitTabanlari(kademeler)
-  const odemeler = arzOdemeleri(tabanlar)
-  arzKapsamlari().forEach((kapsam, i) => {
-    const tutar = odemeler[i]
-    if (tutar == null || !kapsam.some((t) => t >= baslangic)) return
-    isler.push({ birim: paylarAnahtari, kalem: 'uc_aylik', tutar, siralar: [i + 1] })
-  })
 
   let yazilan = 0
   let atlanan = 0
@@ -240,9 +234,32 @@ export async function hesaplaDoldur(veri: {
   revalidatePath('/finans/kiralar')
   return {
     basari:
-      `${baslangic}. taksitten itibaren ${yazilan} satır hesaplandı.` +
+      `${baslangic}–${bitis}. taksit hesaplandı (${yazilan} satır).` +
       (atlanan > 0 ? ` ${atlanan} ödenmiş satıra dokunulmadı.` : ''),
   }
+}
+
+/**
+ * Bir kira değişikliğini (kademeyi) kaldırır.
+ *
+ * Yazılmış taksit satırlarına dokunulmuyor: hangi rakamın geçerli olacağına
+ * kullanıcı karar versin, kaldırdıktan sonra önceki kademeyi hesaplatarak
+ * aralığı yeniden yazabilir.
+ */
+export async function kademeSil(anahtar: string, sira: number): Promise<KiraDurumu> {
+  if (sira === 1) return { hata: 'İlk kademe kaldırılamaz; rakamı değiştirebilirsiniz.' }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase
+    .from('kira_tabanlari')
+    .delete()
+    .eq('anahtar', anahtar)
+    .eq('sira', sira)
+
+  if (error) return { hata: error.message }
+
+  revalidatePath('/finans/kiralar')
+  return { basari: `${sira}. taksitteki kira değişikliği kaldırıldı.` }
 }
 
 /**
