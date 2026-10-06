@@ -62,6 +62,17 @@ function kurus(n: number): number {
 }
 
 /**
+ * Kuruşu aşağı atar.
+ *
+ * Arzsız tutarda sözleşmenin yaptığı da bu: 50.030,63 ÷ 1,03 = 48.573,4272
+ * sözleşmeye 48.573,42 diye geçmiş, arz da aradaki fark olan 1.457,21
+ * olmuş. Yukarı yuvarlansa arz bir kuruş eksik çıkardı.
+ */
+function kurusAsagi(n: number): number {
+  return Math.floor(n * 100 + 1e-6) / 100
+}
+
+/**
  * Kalemler birden fazla birime bölünebiliyor ve hangi kalemin bölündüğü
  * okula göre değişiyor: AKBABA'da kira iki okula ayrı yatıyor, paylar tek
  * ödeme; GÖKSU'da ise kira kantin ve yemekhane için ortak, paylar ayrı.
@@ -71,28 +82,36 @@ export function kiraKirilimi(
   kiraBirimSayisi = 1,
   payBirimSayisi = 1,
 ): KiraKirilimi {
-  // Önce arzsız tutar: taban onun %3 fazlası olduğu için 1,03'e bölünür.
-  // Arz, ikisi arasındaki fark.
-  const kalan = kurus(taban / ARZ_CARPANI)
-  const arzTaksit = kurus(taban - kalan)
-  const ilPayi = kurus(kalan * IL_ORANI)
-  const ilcePayi = kurus(kalan * ILCE_ORANI)
+  const payBolen = Math.max(1, payBirimSayisi)
+
+  // Hesap birim başına yapılır, sonra toplanır. Sözleşmede rakamlar tek
+  // birimin kira bedeli üzerinden yazılı; önce toplayıp sonra bölmek
+  // kuruşu kaydırıyordu (GÖKSU'da il payı 4.857,34 yerine 4.857,35).
+  const birimTaban = kurus(taban / payBolen)
+  const birimArzsiz = kurusAsagi(birimTaban / ARZ_CARPANI)
+  const arzBirim = kurus(birimTaban - birimArzsiz)
+  const ilPayiBirim = kurus(birimArzsiz * IL_ORANI)
+  const ilcePayiBirim = kurus(birimArzsiz * ILCE_ORANI)
   // Okula kalan %80; paylardan arta kalan olarak alınıyor ki kuruş
   // yuvarlaması toplamı tabandan kaydırmasın
-  const kiraToplam = kurus(kalan - ilPayi - ilcePayi)
-  const payBolen = Math.max(1, payBirimSayisi)
+  const okulBirim = kurus(birimArzsiz - ilPayiBirim - ilcePayiBirim)
+
+  const arzTaksit = kurus(arzBirim * payBolen)
+  const ilPayi = kurus(ilPayiBirim * payBolen)
+  const ilcePayi = kurus(ilcePayiBirim * payBolen)
+  const kiraToplam = kurus(okulBirim * payBolen)
 
   return {
     taban,
     arzTaksit,
-    kalan,
+    kalan: kurus(birimArzsiz * payBolen),
     ilPayi,
     ilcePayi,
     kiraToplam,
     kiraBirimBasina: kurus(kiraToplam / Math.max(1, kiraBirimSayisi)),
-    ilPayiBirim: kurus(ilPayi / payBolen),
-    ilcePayiBirim: kurus(ilcePayi / payBolen),
-    arzBirim: kurus(arzTaksit / payBolen),
+    ilPayiBirim,
+    ilcePayiBirim,
+    arzBirim,
     taksitToplami: kurus(arzTaksit + ilPayi + ilcePayi + kiraToplam),
   }
 }
