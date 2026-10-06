@@ -1,20 +1,29 @@
 /**
  * Kira bedelinden kalemlerin hesabı.
  *
- * Sıra önemli: önce arz düşülür, il ve ilçe payı **arz düşülmüş tutar**
- * üzerinden hesaplanır. Tersi sırayla yapılırsa paylar büyük çıkıyor ve
- * okula yatan kira tutmuyor.
+ * Taban kira, arzsız tutarın %3 fazlasıdır: önce taban 1,03'e bölünüp
+ * arzsız tutar bulunur, aradaki fark arz olur. İl payı ve ilçe payı arzsız
+ * tutarın %10'u, kalan %80 okula yatar.
  *
- * Sağlaması AKBABA'nın gerçek ödemeleriyle yapıldı: taban 15.000, üç taksit
- * ödenmiş ve sistemdeki toplam tam 45.000 — kira 34.920 (iki okul),
- * il 4.365, ilçe 4.365, arz 1.350. Yani bir taksitte yatan her şey tabana,
- * sekiz taksit de yıllık tutara (120.000) eşit.
+ * Tabanın doğrudan %3'ünü almak başka rakam verir (15.000'de 450 yerine
+ * 436,89 doğrusu) — ilk kurguda öyle yapılmıştı, sonradan düzeltildi.
+ *
+ * Sağlama her zaman aynı: bir taksitte yatan her şeyin toplamı tabana,
+ * sekiz taksit de yıllık tutara eşit olmalı.
  */
 
-/** Arz oranı — her taksitin arz payı; değişmez */
-export const ARZ_ORANI = 0.03
+/**
+ * Arz çarpanı: taban kira, arzsız tutarın %3 fazlasıdır.
+ *
+ * Yani arz, tabandan %3 düşülerek değil, taban 1,03'e bölünerek bulunur.
+ * Aradaki fark arz tutarıdır. 15.000 tabanda arzsız tutar 14.563,11 ve arz
+ * 436,89 — tabanın %3'ü (450) değil.
+ */
+export const ARZ_CARPANI = 1.03
 export const IL_ORANI = 0.1
 export const ILCE_ORANI = 0.1
+/** Arzsız tutarın okula kalan kısmı */
+export const OKUL_ORANI = 0.8
 
 /** Bütün kalemler sekiz taksit olarak yatıyor — arz bedeli de dahil */
 export const TAKSIT_SAYISI = 8
@@ -29,9 +38,9 @@ export type Kademe = { sira: number; tutar: number }
 
 export type KiraKirilimi = {
   taban: number
-  /** Taksit başına arz payı (taban × %3) */
+  /** Taksit başına arz payı: taban ile arzsız tutar arasındaki fark */
   arzTaksit: number
-  /** Arz düşülmüş tutar — payların matrahı */
+  /** Arzsız tutar (taban ÷ 1,03) — payların matrahı */
   kalan: number
   ilPayi: number
   ilcePayi: number
@@ -62,10 +71,14 @@ export function kiraKirilimi(
   kiraBirimSayisi = 1,
   payBirimSayisi = 1,
 ): KiraKirilimi {
-  const arzTaksit = kurus(taban * ARZ_ORANI)
-  const kalan = kurus(taban - arzTaksit)
+  // Önce arzsız tutar: taban onun %3 fazlası olduğu için 1,03'e bölünür.
+  // Arz, ikisi arasındaki fark.
+  const kalan = kurus(taban / ARZ_CARPANI)
+  const arzTaksit = kurus(taban - kalan)
   const ilPayi = kurus(kalan * IL_ORANI)
   const ilcePayi = kurus(kalan * ILCE_ORANI)
+  // Okula kalan %80; paylardan arta kalan olarak alınıyor ki kuruş
+  // yuvarlaması toplamı tabandan kaydırmasın
   const kiraToplam = kurus(kalan - ilPayi - ilcePayi)
   const payBolen = Math.max(1, payBirimSayisi)
 

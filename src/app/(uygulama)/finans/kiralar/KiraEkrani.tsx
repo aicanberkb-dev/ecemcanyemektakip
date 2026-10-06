@@ -663,17 +663,18 @@ function Kirilim({
 
   return (
     <dl className="mt-2 space-y-0.5 text-xs text-slate-700">
-      <Satir
-        ad="Arz Bedeli"
-        deger={para(k.arzTaksit)}
-        not={`${payNotu(k.arzBirim)} · %3`}
-      />
-      <Satir ad="İl Payı" deger={para(k.ilPayi)} not={payNotu(k.ilPayiBirim)} />
-      <Satir ad="İlçe Payı" deger={para(k.ilcePayi)} not={payNotu(k.ilcePayiBirim)} />
+      <Satir ad="Arzsız Tutar" deger={para(k.kalan)} not="taban ÷ 1,03 · payların matrahı" />
+      <Satir ad="Arz Bedeli" deger={para(k.arzTaksit)} not={`${payNotu(k.arzBirim)} · taban farkı`} />
+      <Satir ad="İl Payı" deger={para(k.ilPayi)} not={`${payNotu(k.ilPayiBirim)} · %10`} />
+      <Satir ad="İlçe Payı" deger={para(k.ilcePayi)} not={`${payNotu(k.ilcePayiBirim)} · %10`} />
       <Satir
         ad="Okula Kira"
         deger={para(k.kiraToplam)}
-        not={bolunuyor ? `taksit başına · birim başına ${para(k.kiraBirimBasina)}` : 'taksit başına'}
+        not={
+          bolunuyor
+            ? `%80 · birim başına ${para(k.kiraBirimBasina)}`
+            : 'taksit başına · %80'
+        }
       />
       <Satir
         ad="Taksit Toplamı"
