@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 
 import { supabaseServer } from '@/lib/supabase/server'
 
+import type { AliciTipi } from './alici'
+
 export type FaturaDurumu = { hata?: string; basari?: string }
 
 /**
@@ -41,4 +43,51 @@ export async function faturaKesildiDegistir(
 
   revalidatePath('/reports/fatura')
   return { basari: kesildi ? 'Kesildi olarak işaretlendi.' : 'İşaret kaldırıldı.' }
+}
+
+/**
+ * Faturanın kime kesileceğini kaydeder.
+ *
+ * Veli seçildiyse ad ve vergi numarası anaveriden okunuyor, burada
+ * saklanmıyor: veli bilgisi değişince fatura alıcısı da kendiliğinden
+ * güncellensin. "Diğer" ise ad ve vergi bilgileri burada duruyor.
+ */
+export async function faturaAliciKaydet(
+  studentId: string,
+  veri: {
+    tip: AliciTipi
+    ad?: string
+    vergi_no?: string
+    vergi_dairesi?: string
+    adres?: string
+  },
+): Promise<FaturaDurumu> {
+  const bosNull = (d?: string) => {
+    const t = (d ?? '').trim()
+    return t === '' ? null : t
+  }
+
+  if (veri.tip === 'diger' && !bosNull(veri.ad)) {
+    return { hata: 'Başka kişi/kurum seçtiyseniz ad ya da unvan gerekli.' }
+  }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase.from('fatura_alicilari').upsert(
+    {
+      student_id: studentId,
+      tip: veri.tip,
+      // Veli ya da öğrenci seçildiyse serbest alanlar temizlenir;
+      // yarım kalmış eski bilgi faturaya sızmasın
+      ad: veri.tip === 'diger' ? bosNull(veri.ad) : null,
+      vergi_no: veri.tip === 'diger' ? bosNull(veri.vergi_no) : null,
+      vergi_dairesi: veri.tip === 'diger' ? bosNull(veri.vergi_dairesi) : null,
+      adres: veri.tip === 'diger' ? bosNull(veri.adres) : null,
+    },
+    { onConflict: 'student_id' },
+  )
+
+  if (error) return { hata: error.message }
+
+  revalidatePath('/reports/fatura')
+  return { basari: 'Fatura alıcısı kaydedildi.' }
 }

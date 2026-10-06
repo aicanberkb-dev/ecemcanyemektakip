@@ -9,6 +9,7 @@ import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { OdemeYontemi, StudentBalance } from '@/lib/types'
 
+import type { FaturaAlicisi } from './alici'
 import { FaturaListesi, type FaturaSatiri } from './FaturaListesi'
 
 export const metadata = { title: 'Fatura İstenenler — Yemek Takip' }
@@ -95,6 +96,23 @@ export default async function FaturaPage({
     kesilenler.set(f.student_id, { tarih: f.kesildi_tarih, tutar: Number(f.tutar) })
   }
 
+  // Faturanın kime kesileceği: kayıt yoksa birinci veli sayılıyor
+  const { data: aliciVeri } = await supabase
+    .from('fatura_alicilari')
+    .select('student_id, tip, ad, vergi_no, vergi_dairesi, adres, students!inner(okul_id)')
+    .eq('students.okul_id', okul.id)
+
+  const alicilar = new Map<string, FaturaAlicisi>()
+  for (const a of (aliciVeri ?? []) as unknown as ({ student_id: string } & FaturaAlicisi)[]) {
+    alicilar.set(a.student_id, {
+      tip: a.tip,
+      ad: a.ad,
+      vergi_no: a.vergi_no,
+      vergi_dairesi: a.vergi_dairesi,
+      adres: a.adres,
+    })
+  }
+
   const satirlar: FaturaSatiri[] = ogrenciler
     .filter((o) => o.fatura_istiyor)
     .map((o) => ({
@@ -104,9 +122,14 @@ export default async function FaturaPage({
       sinif: o.sinif,
       abone_tipi: o.abone_tipi,
       aktif: o.aktif,
+      kimlik_no: o.kimlik_no,
       veli_adi: o.veli_adi,
+      veli_tc: o.veli_tc,
+      veli2_adi: o.veli2_adi,
+      veli2_tc: o.veli2_tc,
       fatura_bilgisi: o.fatura_bilgisi,
       ozel_not: o.ozel_not,
+      alici: alicilar.get(o.student_id) ?? null,
       odemeler: odemeler.get(o.student_id) ?? [],
       kesildi: kesilenler.get(o.student_id) ?? null,
     }))

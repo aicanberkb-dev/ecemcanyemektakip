@@ -8,7 +8,8 @@ import { AboneRozeti } from '@/components/Rozetler'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import { ODEME_YONTEMI_ADLARI, type AboneTipi, type OdemeYontemi } from '@/lib/types'
 
-import { faturaKesildiDegistir } from './actions'
+import { faturaAliciKaydet, faturaKesildiDegistir } from './actions'
+import { ALICI_ADLARI, aliciCoz, type AliciTipi, type FaturaAlicisi } from './alici'
 
 export type FaturaOdemesi = {
   id: string
@@ -25,9 +26,15 @@ export type FaturaSatiri = {
   sinif: string | null
   abone_tipi: AboneTipi
   aktif: boolean
+  kimlik_no: string | null
   veli_adi: string | null
+  veli_tc: string | null
+  veli2_adi: string | null
+  veli2_tc: string | null
   fatura_bilgisi: string | null
   ozel_not: string | null
+  /** Seçilmiş fatura alıcısı; yoksa birinci veli sayılır */
+  alici: FaturaAlicisi | null
   odemeler: FaturaOdemesi[]
   /** Bu dönem için kesilmişse kesildiği tarih ve o anki tutar */
   kesildi: { tarih: string; tutar: number } | null
@@ -54,7 +61,7 @@ export function FaturaListesi({
             <th>Öğrenci</th>
             <th>Sınıf</th>
             <th>Abone</th>
-            <th>Veli</th>
+            <th>Fatura Alıcısı</th>
             <th>Fatura Bilgileri</th>
             <th className="text-right">Dönem Tahsilatı</th>
           </tr>
@@ -124,6 +131,9 @@ function FaturaSatir({
   const router = useRouter()
   const [bekliyor, baslat] = useTransition()
   const [hata, setHata] = useState<string | null>(null)
+  const [aliciAcik, setAliciAcik] = useState(false)
+
+  const cozulmus = aliciCoz(satir.alici, satir)
 
   function degistir(kesildi: boolean) {
     setHata(null)
@@ -165,7 +175,26 @@ function FaturaSatir({
         <td>
           <AboneRozeti tip={satir.abone_tipi} />
         </td>
-        <td className="text-solgun">{satir.veli_adi ?? '—'}</td>
+        {/* Faturanın kime kesileceği: Luca'da bu adla ve vergi numarasıyla
+            aranacak, o yüzden ikisi de görünüyor. */}
+        <td>
+          <span className={cozulmus.eksik ? 'text-red-600' : 'font-medium'}>
+            {cozulmus.ad || '— ad girilmemiş —'}
+          </span>
+          <span className="ml-1.5 text-[11px] text-solgun">{ALICI_ADLARI[cozulmus.tip]}</span>
+          {cozulmus.vergiNo && (
+            <span className="block text-[11px] tabular-nums text-solgun">
+              VKN/TC {cozulmus.vergiNo}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setAliciAcik(!aliciAcik)}
+            className="yazdirma-gizle text-xs text-vurgu hover:underline"
+          >
+            {aliciAcik ? 'kapat' : 'değiştir'}
+          </button>
+        </td>
         <td className="max-w-80 text-xs whitespace-pre-wrap">
           {satir.fatura_bilgisi ?? (
             <span className="text-solgun">
@@ -189,6 +218,19 @@ function FaturaSatir({
           )}
         </td>
       </tr>
+
+      {aliciAcik && (
+        <tr className="yazdirma-gizle">
+          <td />
+          <td colSpan={7} className="bg-slate-50">
+            <AliciFormu
+              satir={satir}
+              secili={cozulmus.tip}
+              kapat={() => setAliciAcik(false)}
+            />
+          </td>
+        </tr>
+      )}
 
       {/* Ödeme dökümü: fatura tutarı hangi tahsilatlardan geliyor */}
       {(acik || satir.kesildi) && satir.odemeler.length > 0 && (
@@ -217,5 +259,145 @@ function FaturaSatir({
         </tr>
       )}
     </>
+  )
+}
+
+/**
+ * Fatura alıcısını seçme kutusu.
+ *
+ * Veli seçeneklerinde ad anaveriden okunuyor; burada saklanmıyor ki veli
+ * bilgisi değişince fatura alıcısı da kendiliğinden güncellensin. Başka
+ * kişi/kurum seçilirse ad ve vergi bilgileri elle giriliyor.
+ */
+function AliciFormu({
+  satir,
+  secili,
+  kapat,
+}: {
+  satir: FaturaSatiri
+  secili: AliciTipi
+  kapat: () => void
+}) {
+  const router = useRouter()
+  const [bekliyor, baslat] = useTransition()
+  const [tip, setTip] = useState<AliciTipi>(secili)
+  const [ad, setAd] = useState(satir.alici?.ad ?? '')
+  const [vergiNo, setVergiNo] = useState(satir.alici?.vergi_no ?? '')
+  const [vergiDairesi, setVergiDairesi] = useState(satir.alici?.vergi_dairesi ?? '')
+  const [adres, setAdres] = useState(satir.alici?.adres ?? '')
+  const [hata, setHata] = useState<string | null>(null)
+
+  const secenekler: { tip: AliciTipi; ad: string; alt: string | null }[] = [
+    { tip: 'veli1', ad: ALICI_ADLARI.veli1, alt: satir.veli_adi },
+    { tip: 'veli2', ad: ALICI_ADLARI.veli2, alt: satir.veli2_adi },
+    { tip: 'ogrenci', ad: ALICI_ADLARI.ogrenci, alt: satir.ad_soyad },
+    { tip: 'diger', ad: ALICI_ADLARI.diger, alt: null },
+  ]
+
+  function kaydet() {
+    setHata(null)
+    baslat(async () => {
+      const sonuc = await faturaAliciKaydet(satir.student_id, {
+        tip,
+        ad,
+        vergi_no: vergiNo,
+        vergi_dairesi: vergiDairesi,
+        adres,
+      })
+      if (sonuc.hata) {
+        setHata(sonuc.hata)
+        return
+      }
+      kapat()
+      router.refresh()
+    })
+  }
+
+  return (
+    <div className="space-y-3 p-3">
+      <p className="text-xs font-semibold text-slate-700">Fatura kime kesilecek?</p>
+
+      <div className="flex flex-wrap gap-3">
+        {secenekler.map((s) => (
+          <label
+            key={s.tip}
+            className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm ${
+              tip === s.tip ? 'border-vurgu bg-white' : 'border-cizgi bg-white/60'
+            }`}
+          >
+            <input
+              type="radio"
+              name={`alici-${satir.student_id}`}
+              checked={tip === s.tip}
+              onChange={() => setTip(s.tip)}
+              className="accent-blue-600"
+            />
+            <span>
+              {s.ad}
+              {s.alt ? (
+                <span className="ml-1 text-xs text-solgun">{s.alt}</span>
+              ) : s.tip !== 'diger' ? (
+                <span className="ml-1 text-xs text-red-600">girilmemiş</span>
+              ) : null}
+            </span>
+          </label>
+        ))}
+      </div>
+
+      {tip === 'diger' && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <label className="etiket">Ad / Unvan</label>
+            <input
+              value={ad}
+              onChange={(e) => setAd(e.target.value)}
+              placeholder="Faturadaki ad ya da şirket unvanı"
+              className="girdi w-full"
+            />
+          </div>
+          <div>
+            <label className="etiket">VKN / TC</label>
+            <input
+              value={vergiNo}
+              onChange={(e) => setVergiNo(e.target.value)}
+              inputMode="numeric"
+              className="girdi w-full tabular-nums"
+            />
+          </div>
+          <div>
+            <label className="etiket">Vergi dairesi</label>
+            <input
+              value={vergiDairesi}
+              onChange={(e) => setVergiDairesi(e.target.value)}
+              className="girdi w-full"
+            />
+          </div>
+          <div>
+            <label className="etiket">Adres</label>
+            <input
+              value={adres}
+              onChange={(e) => setAdres(e.target.value)}
+              className="girdi w-full"
+            />
+          </div>
+        </div>
+      )}
+
+      {hata && <p className="text-xs text-red-600">{hata}</p>}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={bekliyor}
+          onClick={kaydet}
+          className="btn-birincil !py-1.5 text-xs disabled:opacity-40"
+        >
+          Kaydet
+        </button>
+        <button type="button" onClick={kapat} className="btn-ikincil !py-1.5 text-xs">
+          Vazgeç
+        </button>
+      </div>
+    </div>
   )
 }
