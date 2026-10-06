@@ -27,3 +27,42 @@ export async function isaretle(
   if (error) throw new Error(error.message)
   revalidatePath('/reports/kayitsiz')
 }
+
+export type AktarimSonucu = {
+  hata?: string
+  basari?: string
+}
+
+/**
+ * Kayıtsız gelişleri öğrencinin kaydına aktarır.
+ *
+ * Çocuğun kaydı sonradan açılınca geldiği günler hesabına geçsin diye.
+ * Öğünler o günün tarifesinden fiyatlanır; öğrencinin o gün zaten yemek
+ * kaydı varsa o gün atlanır, satır yine de aktarılmış sayılır.
+ */
+export async function kayitsizAktar(
+  studentId: string,
+  ids: string[],
+): Promise<AktarimSonucu> {
+  if (ids.length === 0) return { hata: 'Aktarılacak gün yok.' }
+
+  const supabase = await supabaseServer()
+  const { data, error } = await supabase
+    .rpc('kayitsiz_ogun_aktar', { p_student_id: studentId, p_ids: ids })
+    .maybeSingle()
+
+  if (error) return { hata: error.message }
+
+  const sonuc = (data ?? { eklenen: 0, atlanan: 0, aktarilan: 0 }) as {
+    eklenen: number
+    atlanan: number
+    aktarilan: number
+  }
+
+  revalidatePath('/reports/kayitsiz')
+  return {
+    basari:
+      `${sonuc.eklenen} güne yemek kaydı atıldı.` +
+      (sonuc.atlanan > 0 ? ` ${sonuc.atlanan} günde zaten kayıt vardı.` : ''),
+  }
+}

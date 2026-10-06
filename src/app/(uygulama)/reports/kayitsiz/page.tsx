@@ -5,6 +5,8 @@ import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { KayitsizOgun } from '@/lib/types'
 
+import { adaylar } from './aday'
+import { AktarKutusu, type AktarilacakAd } from './AktarKutusu'
 import { IsaretButonu } from './IsaretButonu'
 
 export const metadata = { title: 'Kayıtsız Öğrenciler — Yemek Takip' }
@@ -47,6 +49,47 @@ export default async function KayitsizPage({
   // Aynı çocuk birden fazla gün gelmiş olabilir; kaç ayrı isim var
   const kisiSayisi = new Set(satirlar.map((s) => s.ad_soyad)).size
 
+  // Okulun öğrencileri: aktarım önerileri ve arama için
+  const { data: ogrenciVerisi } = await supabase
+    .from('students')
+    .select('id, ad_soyad, sinif')
+    .eq('okul_id', okul.id)
+    .eq('aktif', true)
+    .order('ad_soyad')
+
+  const ogrenciler = (ogrenciVerisi ?? []) as {
+    id: string
+    ad_soyad: string
+    sinif: string | null
+  }[]
+
+  // Aktarılmamış gelişler isim bazında toplanıyor: çocuğun kaydı açılınca
+  // bütün günleri tek seferde aktarılsın.
+  const bekleyenAdlar = new Map<string, AktarilacakAd>()
+  for (const s of satirlar) {
+    if (s.aktarilan_student_id) continue
+    const mevcut = bekleyenAdlar.get(s.ad_soyad)
+    if (mevcut) {
+      mevcut.ids.push(s.id)
+      mevcut.tarihler.push(s.tarih)
+      continue
+    }
+    bekleyenAdlar.set(s.ad_soyad, {
+      ad: s.ad_soyad,
+      sinif: s.sinif,
+      ids: [s.id],
+      tarihler: [s.tarih],
+      adaylar: adaylar(s.ad_soyad, ogrenciler),
+    })
+  }
+
+  const bekleyenler = [...bekleyenAdlar.values()].sort((a, b) =>
+    a.ad.localeCompare(b.ad, 'tr'),
+  )
+
+  // Aktarılan satırlarda hangi öğrenciye gittiği yazsın
+  const ogrenciAdi = new Map(ogrenciler.map((o) => [o.id, o.ad_soyad]))
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -79,6 +122,8 @@ export default async function KayitsizPage({
         />
       </div>
 
+      <AktarKutusu bekleyenler={bekleyenler} ogrenciler={ogrenciler} />
+
       <div className="kart overflow-x-auto">
         <table className="tablo">
           <thead>
@@ -87,6 +132,7 @@ export default async function KayitsizPage({
               <th>Öğrenci</th>
               <th>Sınıf</th>
               <th>Not</th>
+              <th>Kayda aktarım</th>
               <th className="text-right">Veli</th>
               <th className="text-right">Ücret</th>
             </tr>
@@ -103,6 +149,18 @@ export default async function KayitsizPage({
                 <td className="font-medium">{s.ad_soyad}</td>
                 <td>{s.sinif ?? '—'}</td>
                 <td className="text-solgun">{s.aciklama ?? '—'}</td>
+                <td>
+                  {s.aktarilan_student_id ? (
+                    <span className="rozet bg-emerald-100 text-emerald-800">
+                      ✓ kayıtlar atıldı
+                      {ogrenciAdi.get(s.aktarilan_student_id)
+                        ? ` · ${ogrenciAdi.get(s.aktarilan_student_id)}`
+                        : ''}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-solgun">—</span>
+                  )}
+                </td>
                 <td className="text-right">
                   <IsaretButonu
                     id={s.id}
@@ -125,7 +183,7 @@ export default async function KayitsizPage({
             ))}
             {satirlar.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-solgun">
+                <td colSpan={7} className="py-8 text-center text-solgun">
                   Bu aralıkta kayıtsız öğrenci öğünü yok.
                 </td>
               </tr>

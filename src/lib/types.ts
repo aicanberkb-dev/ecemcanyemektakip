@@ -335,6 +335,9 @@ export type KayitsizOgun = {
   /** Takip işaretleri — yemekhane ekranını etkilemez, rapordaki bilgi */
   veli_arandi: boolean
   ucret_alindi: boolean
+  /** Kaydı sonradan açılınca bu geliş hangi öğrenciye aktarıldı */
+  aktarilan_student_id: string | null
+  aktarildi_at: string | null
   islemi_yapan_user_id: string
   created_at: string
 }
