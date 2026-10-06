@@ -7,6 +7,8 @@ import { para } from '@/lib/format'
 import { kademeAraliklari, type Kademe, kiraKirilimi, TAKSIT_SAYISI } from '@/lib/kira-hesap'
 
 import { hesaplaDoldur, kademeSil, kiraKaydet, odendiDegistir, tutarYay } from './actions'
+import { SozlesmeKutusu } from './SozlesmeKutusu'
+import type { SozlesmeDosyasi } from './sozlesme'
 
 export type KiraSatiri = {
   id: string
@@ -177,11 +179,14 @@ function anahtar(birim: string, kalem: Kalem, sira: number) {
 export function KiraEkrani({
   satirlar,
   tabanlar,
+  sozlesmeler,
   bugun,
 }: {
   satirlar: KiraSatiri[]
   /** Grup anahtarına göre kayıtlı kira bedeli kademeleri */
   tabanlar: Record<string, Kademe[]>
+  /** Okul adına göre yüklenmiş sözleşme dosyaları */
+  sozlesmeler: Record<string, SozlesmeDosyasi[]>
   /** Sunucunun bugünü — boş tarih kutularına varsayılan olarak yazılır */
   bugun: string
 }) {
@@ -311,6 +316,7 @@ export function KiraEkrani({
 
             <div className="space-y-4 p-3">
               <OkulOzeti okul={okul} satirlar={satirlar} />
+              <SozlesmeKutusu okulAdi={okul.ad} dosyalar={sozlesmeler[okul.ad] ?? []} />
 
               {okul.gruplar.map((grup) => (
                 <div key={grup.anahtar} className="space-y-3">
