@@ -1,7 +1,7 @@
 import { TarihAraligi } from '@/components/TarihAraligi'
-import { ayBasiISO, saat, tarih as tarihBicim } from '@/lib/format'
+import { aramaNormalle } from '@/lib/arama'
+import { saat, tarih as tarihBicim } from '@/lib/format'
 import { aktifOkul } from '@/lib/okul'
-import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 import type { KayitsizOgun } from '@/lib/types'
 
@@ -22,26 +22,35 @@ export const metadata = { title: 'Kayıtsız Öğrenciler — Yemek Takip' }
 export default async function KayitsizPage({
   searchParams,
 }: {
-  searchParams: Promise<{ bas?: string; bit?: string }>
+  searchParams: Promise<{ bas?: string; bit?: string; ad?: string }>
 }) {
-  const { bas: basQ, bit: bitQ } = await searchParams
-  const bas = basQ || ayBasiISO()
-  const bit = bitQ || (await bugunSunucu())
+  const { bas: basQ, bit: bitQ, ad: adQ } = await searchParams
+  // Tarih filtresi boş açılır: aranan çocuk çoğu zaman geçen aydan kalma,
+  // ay başıyla sınırlamak onu gizliyordu.
+  const bas = basQ ?? ''
+  const bit = bitQ ?? ''
+  const ad = (adQ ?? '').trim()
 
   const okul = await aktifOkul()
   if (!okul) return null
 
   const supabase = await supabaseServer()
-  const { data, error } = await supabase
-    .from('kayitsiz_ogunler')
-    .select('*')
-    .eq('okul_id', okul.id)
-    .gte('tarih', bas)
-    .lte('tarih', bit)
+  let sorgu = supabase.from('kayitsiz_ogunler').select('*').eq('okul_id', okul.id)
+  if (bas) sorgu = sorgu.gte('tarih', bas)
+  if (bit) sorgu = sorgu.lte('tarih', bit)
+
+  const { data, error } = await sorgu
     .order('tarih', { ascending: false })
     .order('created_at', { ascending: false })
 
-  const satirlar = (data ?? []) as KayitsizOgun[]
+  // İsim süzgeci Türkçe harfleri sadeleştirerek bakıyor: "citlak" yazan da
+  // "Çıtlak"ı bulsun. Veritabanında değil burada süzülüyor çünkü ad elle
+  // yazıldığı için ilike aramaları Türkçe karakterde şaşıyor.
+  const tumSatirlar = (data ?? []) as KayitsizOgun[]
+  const adAnahtari = aramaNormalle(ad)
+  const satirlar = adAnahtari
+    ? tumSatirlar.filter((s) => aramaNormalle(s.ad_soyad).includes(adAnahtari))
+    : tumSatirlar
 
   const bekleyenVeli = satirlar.filter((s) => !s.veli_arandi).length
   const bekleyenUcret = satirlar.filter((s) => !s.ucret_alindi).length
@@ -102,7 +111,25 @@ export default async function KayitsizPage({
         yalnızca burada durur; yemekhane ekranını ya da kasayı değiştirmez.
       </p>
 
-      <TarihAraligi bas={bas} bit={bit} temizleYolu="/reports/kayitsiz" />
+      <TarihAraligi
+        bas={bas}
+        bit={bit}
+        temizleYolu="/reports/kayitsiz"
+        cocuklar={
+          <div>
+            <label className="etiket" htmlFor="ad">
+              İsim
+            </label>
+            <input
+              id="ad"
+              name="ad"
+              defaultValue={ad}
+              placeholder="İsimle ara…"
+              className="girdi"
+            />
+          </div>
+        }
+      />
 
       {error && (
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error.message}</p>
