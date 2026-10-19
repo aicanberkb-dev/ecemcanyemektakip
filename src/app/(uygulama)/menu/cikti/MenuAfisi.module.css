@@ -87,6 +87,13 @@
   color: var(--yil);
 }
 
+/* Serbest tarih aralığı: "12.10.2026 – 30.10.2026" ay adından çok daha
+   uzun, aynı puntoda bandı taşırıyor. */
+.aralik {
+  font-size: 4.6cqw;
+  letter-spacing: 0;
+}
+
 /* Liste adı: yalnız etüt yemeği gibi ayrı listelerde yazılıyor. Ay
    başlığının altında, ondan belirgin biçimde küçük — başlık ay kalsın. */
 .listeAdi {
@@ -242,6 +249,9 @@
 }
 .sikisik .listeAdi {
   font-size: 1.9cqw;
+}
+.sikisik .aralik {
+  font-size: 3.8cqw;
 }
 .sikisik .altYazi {
   font-size: 1.8cqw;

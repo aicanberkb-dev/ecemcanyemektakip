@@ -42,16 +42,18 @@ export function kuralaGiriyor(tarih: string, kural: SabitKapali | null): boolean
  * değiştirilmemeli.
  */
 export function kuralliKapaliGunler(
-  yil: number,
-  ay: number,
+  bas: string,
+  bit: string,
   kural: SabitKapali | null,
   kapali: Map<string, string | null>,
 ): Map<string, string | null> {
   if (!kural) return kapali
   const sonuc = new Map(kapali)
-  const gunSayisi = new Date(yil, ay, 0).getDate()
-  for (let g = 1; g <= gunSayisi; g++) {
-    const tarih = `${yil}-${String(ay).padStart(2, '0')}-${String(g).padStart(2, '0')}`
+  const son = new Date(`${bit}T00:00:00`)
+  for (const g = new Date(`${bas}T00:00:00`); g <= son; g.setDate(g.getDate() + 1)) {
+    const tarih = `${g.getFullYear()}-${String(g.getMonth() + 1).padStart(2, '0')}-${String(
+      g.getDate(),
+    ).padStart(2, '0')}`
     if (sonuc.has(tarih) || !kuralaGiriyor(tarih, kural)) continue
     sonuc.set(tarih, kural.not)
   }

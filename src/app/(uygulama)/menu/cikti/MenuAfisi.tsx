@@ -96,6 +96,7 @@ export function MenuAfisi({
   kapali,
   dortSatir,
   listeAdi,
+  donemYazi,
   tur,
 }: {
   yil: number
@@ -106,6 +107,11 @@ export function MenuAfisi({
   dortSatir: boolean
   /** Afişte ay başlığının altında yazacak liste adı; boşsa yazılmaz */
   listeAdi?: string | null
+  /**
+   * Serbest tarih aralığında başlıkta ay adı yerine yazacak metin
+   * ("12.10.2026 – 30.10.2026"). Boşsa başlık ay ve yıl olarak kalır.
+   */
+  donemYazi?: string | null
   tur: AfisTuru
 }) {
   const haftalar = haftalaraBol(gunler)
@@ -131,8 +137,12 @@ export function MenuAfisi({
           />
           <div className={s.baslik}>
             <div className={s.ustYazi}>Yemek Listesi</div>
-            <h1 className={s.ay}>
-              {AY_ADLARI[ay - 1]} <span>{yil}</span>
+            <h1 className={donemYazi ? `${s.ay} ${s.aralik}` : s.ay}>
+              {donemYazi ?? (
+                <>
+                  {AY_ADLARI[ay - 1]} <span>{yil}</span>
+                </>
+              )}
             </h1>
             {listeAdi && <div className={s.listeAdi}>{listeAdi}</div>}
             <div className={s.altYazi}>Afiyet olsun</div>
