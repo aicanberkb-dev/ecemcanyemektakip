@@ -9,6 +9,7 @@ import { AY_ADLARI } from '@/lib/format'
 import { menuGunuAc, menuGunuKapat, type OkulsuzGun } from '../okulsuz-actions'
 
 import { menuKaydet, type MenuDurumu, type MenuGunGirdisi } from './actions'
+import { kuralaGiriyor, type SabitKapali } from './sabit-kapali'
 
 export type MenuGunu = {
   tarih: string
@@ -69,6 +70,7 @@ export function MenuEkrani({
   menu,
   havuz,
   okulsuz,
+  sabitKapali,
 }: {
   listeId: string
   satirSayisi: number
@@ -80,6 +82,8 @@ export function MenuEkrani({
   havuz: HavuzKaydi[]
   /** Bu menünün bu aydaki kapalı günleri — resmi tatil, bu menüyü yiyen yerlerin gezisi */
   okulsuz: OkulsuzGun[]
+  /** Listeye bağlı sabit kapalı gün kuralı; yoksa null */
+  sabitKapali: SabitKapali | null
 }) {
   const router = useRouter()
   const ALANLAR = alanlar(satirSayisi, serbestSatir)
@@ -361,6 +365,26 @@ export function MenuEkrani({
                 const gunAdi = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'][d.getDay()]
                 const doluMu = ALANLAR.some((a) => (g[a.anahtar] as string)?.trim())
                 const kapali = okulsuzHarita.get(g.tarih)
+
+                // Listenin sabit kapalı gün kuralı: kayıt yok, kural var.
+                // Gerçek kapalı gün kaydı kuralın önüne geçiyor.
+                if (!kapali && kuralaGiriyor(g.tarih, sabitKapali)) {
+                  return (
+                    <tr key={g.tarih} className="bg-slate-50">
+                      <td className="whitespace-nowrap">
+                        <span className="font-semibold text-solgun tabular-nums">
+                          {d.getDate()}
+                        </span>
+                        <span className="ml-1 text-xs text-solgun">{gunAdi}</span>
+                      </td>
+                      <td colSpan={ALANLAR.length + 1} className="text-sm text-solgun">
+                        <span className="rozet bg-slate-200 text-slate-700">yemek yok</span>
+                        <span className="ml-2">{sabitKapali?.not}</span>
+                        <span className="ml-2 text-xs text-solgun">her hafta</span>
+                      </td>
+                    </tr>
+                  )
+                }
 
                 if (kapali) {
                   return (

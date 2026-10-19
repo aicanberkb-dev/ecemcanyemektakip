@@ -7,6 +7,7 @@ import { supabaseServer } from '@/lib/supabase/server'
 
 import { MenuEkrani, type HavuzKaydi, type MenuGunu } from './MenuEkrani'
 import { MenuKopyalaFormu } from './MenuKopyalaFormu'
+import { sabitKapaliKurali } from './sabit-kapali'
 
 export const metadata = { title: 'Yemek Listesi — Yemek Takip' }
 
@@ -16,6 +17,8 @@ type Liste = {
   havuz_grubu: string
   okul_id: string | null
   satir_sayisi: number
+  kapali_haftagunu: number | null
+  kapali_notu: string | null
 }
 
 export default async function MenuPage({
@@ -36,7 +39,7 @@ export default async function MenuPage({
 
   const { data: listeVeri } = await supabase
     .from('menu_listeleri')
-    .select('id, ad, havuz_grubu, okul_id, satir_sayisi')
+    .select('id, ad, havuz_grubu, okul_id, satir_sayisi, kapali_haftagunu, kapali_notu')
     .eq('aktif', true)
     .order('sira')
 
@@ -184,6 +187,7 @@ export default async function MenuPage({
         menu={menu}
         havuz={havuz}
         okulsuz={okulsuz}
+        sabitKapali={sabitKapaliKurali(secili)}
       />
     </div>
   )

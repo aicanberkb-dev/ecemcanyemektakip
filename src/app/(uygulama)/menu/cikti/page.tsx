@@ -6,6 +6,8 @@ import { listeKapaliGunleri } from '@/lib/okulsuz'
 import { supabaseServer } from '@/lib/supabase/server'
 
 import { AfisIndir } from './AfisIndir'
+import { kuralliKapaliGunler, sabitKapaliKurali } from '../sabit-kapali'
+
 import { afisGunleri, KAGIT_SINIFI, MenuAfisi, type AfisGunu, type AfisTuru } from './MenuAfisi'
 
 export const metadata = { title: 'Yemek Listesi Çıktısı — Yemek Takip' }
@@ -33,7 +35,7 @@ export default async function MenuCiktiPage({
 
   const { data: listeler } = await supabase
     .from('menu_listeleri')
-    .select('id, ad, havuz_grubu, satir_sayisi')
+    .select('id, ad, havuz_grubu, satir_sayisi, afis_basligi, kapali_haftagunu, kapali_notu')
     .eq('aktif', true)
     .order('sira')
 
@@ -56,7 +58,14 @@ export default async function MenuCiktiPage({
   ])
 
   // tarih → menü ekranında o güne girilen açıklama; afişte kartın içinde yazar
-  const kapali = new Map(okulsuzVeri.map((o) => [o.tarih, o.sebep?.trim() || null]))
+  // Gerçek kapalı günler + listenin sabit kapalı gün kuralı (etüt yemeği
+  // cumaları yok). Kural yalnız alanı dolu listeleri etkiliyor.
+  const kapali = kuralliKapaliGunler(
+    yil,
+    ay,
+    sabitKapaliKurali(liste),
+    new Map(okulsuzVeri.map((o) => [o.tarih, o.sebep?.trim() || null])),
+  )
   const gunler = afisGunleri((data ?? []) as AfisGunu[], kapali)
   const dortSatir = (liste.satir_sayisi ?? 4) >= 4
 
@@ -111,7 +120,7 @@ export default async function MenuCiktiPage({
             {tur === 'afis' ? (
               <AfisIndir
                 key={`${liste.id}-${yil}-${ay}`}
-                dosyaAdi={`Yemek Listesi ${AY_ADLARI[ay - 1]} ${yil}.png`}
+                dosyaAdi={`${liste.afis_basligi ?? 'Yemek Listesi'} ${AY_ADLARI[ay - 1]} ${yil}.png`}
               >
                 <MenuAfisi
                   yil={yil}
@@ -119,6 +128,7 @@ export default async function MenuCiktiPage({
                   gunler={gunler}
                   kapali={kapali}
                   dortSatir={dortSatir}
+                  listeAdi={liste.afis_basligi}
                   tur="afis"
                 />
               </AfisIndir>
@@ -142,6 +152,7 @@ export default async function MenuCiktiPage({
           gunler={gunler}
           kapali={kapali}
           dortSatir={dortSatir}
+          listeAdi={liste.afis_basligi}
           tur={tur}
         />
       </div>

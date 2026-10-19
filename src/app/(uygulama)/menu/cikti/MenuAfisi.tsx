@@ -85,7 +85,9 @@ function haftalaraBol(gunler: AfisGunu[]): (AfisGunu | null)[][] {
  * günlerde "OKUL YOK" yazmıyor; menü ekranında o güne girilen açıklama
  * ("İlk gün yemek çıkmayacaktır") kartın içinde görünüyor.
  *
- * Afişte okul ya da liste adı yok: afiş zaten o okulun velilerine gidiyor.
+ * Okul menülerinde afişte ad yazmıyor: afiş zaten o okulun velilerine
+ * gidiyor. Etüt yemeği gibi ayrı listelerde hangi liste olduğu belirsiz
+ * kaldığı için `listeAdi` doluysa ay başlığının altında yazıyor.
  */
 export function MenuAfisi({
   yil,
@@ -93,6 +95,7 @@ export function MenuAfisi({
   gunler,
   kapali,
   dortSatir,
+  listeAdi,
   tur,
 }: {
   yil: number
@@ -101,6 +104,8 @@ export function MenuAfisi({
   gunler: AfisGunu[]
   kapali: Map<string, string | null>
   dortSatir: boolean
+  /** Afişte ay başlığının altında yazacak liste adı; boşsa yazılmaz */
+  listeAdi?: string | null
   tur: AfisTuru
 }) {
   const haftalar = haftalaraBol(gunler)
@@ -129,6 +134,7 @@ export function MenuAfisi({
             <h1 className={s.ay}>
               {AY_ADLARI[ay - 1]} <span>{yil}</span>
             </h1>
+            {listeAdi && <div className={s.listeAdi}>{listeAdi}</div>}
             <div className={s.altYazi}>Afiyet olsun</div>
           </div>
         </header>

@@ -87,6 +87,17 @@
   color: var(--yil);
 }
 
+/* Liste adı: yalnız etüt yemeği gibi ayrı listelerde yazılıyor. Ay
+   başlığının altında, ondan belirgin biçimde küçük — başlık ay kalsın. */
+.listeAdi {
+  font: 700 2.3cqw/1.15 var(--fb);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bantYazi);
+  max-width: 46cqw;
+  text-wrap: balance;
+}
+
 .altYazi {
   font: italic 500 2.1cqw/1 var(--fd);
   color: var(--bantIkincil);
@@ -228,6 +239,9 @@
 }
 .sikisik .ay {
   font-size: 6.8cqw;
+}
+.sikisik .listeAdi {
+  font-size: 1.9cqw;
 }
 .sikisik .altYazi {
   font-size: 1.8cqw;
