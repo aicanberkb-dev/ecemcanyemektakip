@@ -21,7 +21,7 @@ export type KiraSatiri = {
   odendi: boolean
 }
 
-type Kalem = 'kira' | 'il_payi' | 'ilce_payi' | 'uc_aylik'
+type Kalem = 'kira' | 'il_payi' | 'ilce_payi' | 'uc_aylik' | 'giderler'
 
 /** Kalem adı; `uc_aylik` kodu eski adından kalma, ekranda Arz Bedeli */
 const KALEM_ADLARI: Record<Kalem, string> = {
@@ -29,6 +29,7 @@ const KALEM_ADLARI: Record<Kalem, string> = {
   il_payi: 'İl Payı',
   ilce_payi: 'İlçe Payı',
   uc_aylik: 'Arz Bedeli',
+  giderler: 'Elektrik, Su ve Isınma Giderleri',
 }
 
 /**
@@ -67,6 +68,8 @@ type Grup = {
 
 const TUM_KALEMLER: Kalem[] = ['kira', 'il_payi', 'ilce_payi', 'uc_aylik']
 const ORTAK_KALEMLER: Kalem[] = ['il_payi', 'ilce_payi', 'uc_aylik']
+/** Ahmet Mithat'ta kiraya ek olarak gider payi da yatiriliyor */
+const AHMET_MITHAT_KALEMLERI: Kalem[] = [...TUM_KALEMLER, 'giderler']
 
 const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
   {
@@ -156,7 +159,7 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
             anahtar: 'AHMET MİTHAT YEMEKHANE',
             zemin: 'bg-rose-50/70',
             baslik: 'bg-rose-100 text-rose-900',
-            kalemler: TUM_KALEMLER,
+            kalemler: AHMET_MITHAT_KALEMLERI,
           },
         ],
       },

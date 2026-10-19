@@ -17,7 +17,7 @@ export type KiraDurumu = { hata?: string; basari?: string }
  */
 const semaSatir = z.object({
   birim: z.string().trim().min(1, 'Birim gerekli.'),
-  kalem: z.enum(['kira', 'il_payi', 'ilce_payi', 'uc_aylik']),
+  kalem: z.enum(['kira', 'il_payi', 'ilce_payi', 'uc_aylik', 'giderler']),
   sira: z.number().int().min(1).max(8),
   tutar: trSayi({ min: 0 }),
   odeme_tarihi: z
