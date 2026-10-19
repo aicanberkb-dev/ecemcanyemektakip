@@ -1,7 +1,8 @@
 import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 
-import { KiraEkrani, type KiraSatiri } from './KiraEkrani'
+import { dekontKodu, DEKONT_KOVASI, type Dekont } from './dekont'
+ import { KiraEkrani, type KiraSatiri } from './KiraEkrani'
 import { OKUL_KLASORU, SOZLESME_KOVASI, type SozlesmeDosyasi } from './sozlesme'
 
 /** İmzalı bağlantı ömrü: bir saat, sekme açık kalsa da yetsin */
@@ -25,6 +26,51 @@ export default async function KiralarPage() {
       .select('id, birim, kalem, sira, tutar, odeme_tarihi, belge_no, odendi'),
     supabase.from('kira_tabanlari').select('anahtar, sira, tutar').order('sira'),
   ])
+
+  // Dekontlar ve kapsadiklari taksitler. Bir dekont birden fazla satira
+  // baglanabiliyor; rozet kodu yukleme sirasina gore veriliyor.
+  const { data: dekontKayitlari } = await supabase
+    .from('kira_dekontlari')
+    .select('id, birim, dosya_adi, dosya_yolu, odeme_tarihi, tutar, aciklama, created_at, kira_dekont_satirlari(kira_id)')
+    .order('created_at')
+
+  // Her dekonta imzali baglanti: kova herkese acik degil.
+  const dekontYollari = (dekontKayitlari ?? []).map(
+    (d) => (d as { dosya_yolu: string }).dosya_yolu,
+  )
+  const { data: dekontBaglantilari } =
+    dekontYollari.length > 0
+      ? await supabase.storage.from(DEKONT_KOVASI).createSignedUrls(dekontYollari, BAGLANTI_SURESI)
+      : { data: null }
+
+  // Rozet kodu birim icinde sayiliyor: her okulun dekontlari DK-01'den
+  // basliyor, numara ekranda okunur kalsin.
+  const birimSayaci: Record<string, number> = {}
+  const dekontlar: Dekont[] = (dekontKayitlari ?? []).map((ham, i) => {
+    const d = ham as {
+      id: string
+      birim: string
+      dosya_adi: string
+      dosya_yolu: string
+      odeme_tarihi: string | null
+      tutar: number | string | null
+      aciklama: string | null
+      kira_dekont_satirlari: { kira_id: string }[] | null
+    }
+    birimSayaci[d.birim] = (birimSayaci[d.birim] ?? 0) + 1
+    return {
+      id: d.id,
+      birim: d.birim,
+      kod: dekontKodu(birimSayaci[d.birim]),
+      dosya_adi: d.dosya_adi,
+      dosya_yolu: d.dosya_yolu,
+      odeme_tarihi: d.odeme_tarihi,
+      tutar: d.tutar === null ? null : Number(d.tutar),
+      aciklama: d.aciklama,
+      kiraIdleri: (d.kira_dekont_satirlari ?? []).map((b) => b.kira_id),
+      baglanti: dekontBaglantilari?.[i]?.signedUrl ?? null,
+    }
+  })
 
   const satirlar = (data ?? []) as KiraSatiri[]
 
@@ -79,7 +125,9 @@ export default async function KiralarPage() {
           hesaplanır. Kalemleri tek tek de girebilirsiniz: tutar, ödeme tarihi ve belge
           numarası kutudan çıkınca kaydedilir. Ödendi işaretli satırlara hesaplama
           dokunmaz. Her okulun kira sözleşmelerini de buraya yükleyip buradan
-          açabilirsiniz.
+          açabilirsiniz. Ödeme dekontlarını da yükleyebilirsiniz: bir dekont
+          birden fazla taksiti kapsıyorsa yüklerken hangilerini kapsadığını
+          işaretlersiniz, o taksitlerin hepsinde aynı rozet görünür.
         </p>
       </div>
 
@@ -91,6 +139,7 @@ export default async function KiralarPage() {
         satirlar={satirlar}
         tabanlar={tabanKaydi}
         sozlesmeler={sozlesmeler}
+        dekontlar={dekontlar}
         bugun={bugun}
       />
     </div>

@@ -7,6 +7,8 @@ import { kademeAraliklari, kiraKirilimi, TAKSIT_SAYISI } from '@/lib/kira-hesap'
 import { supabaseServer } from '@/lib/supabase/server'
 import { bosNull, trSayi } from '@/lib/zod-tr'
 
+import { DEKONT_KOVASI } from './dekont'
+
 export type KiraDurumu = { hata?: string; basari?: string }
 
 /**
@@ -287,4 +289,96 @@ export async function tutarYay(
 
   revalidatePath('/finans/kiralar')
   return { basari: `${sonuc.yazilan} taksite yazıldı.`, yazilan: sonuc.yazilan }
+}
+
+/**
+ * Yüklenmiş bir dekont dosyasını kayda bağlar.
+ *
+ * Dosya tarayıcıdan doğrudan kovaya gidiyor (sözleşmelerde olduğu gibi);
+ * burada yalnızca kaydı ve kapsadığı taksitleri yazıyoruz.
+ *
+ * Bir taksitin tek dekontu olur. Zaten dekontu olan bir satır seçilirse
+ * veritabanındaki benzersiz kısıt itiraz eder; o yüzden ekran o satırları
+ * kilitli gösteriyor, burada da hata metni anlaşılır hâle getiriliyor.
+ */
+export async function dekontKaydet(veri: {
+  birim: string
+  dosyaYolu: string
+  dosyaAdi: string
+  odemeTarihi: string | null
+  tutar: number | null
+  aciklama: string | null
+  kiraIdleri: string[]
+  /** Seçilen taksitler aynı anda ödendi işaretlensin mi */
+  odendiIsaretle: boolean
+}): Promise<KiraDurumu> {
+  if (veri.kiraIdleri.length === 0)
+    return { hata: 'Dekontun kapsadığı en az bir taksit seçilmeli.' }
+
+  const supabase = await supabaseServer()
+
+  const { data: dekont, error: hataDekont } = await supabase
+    .from('kira_dekontlari')
+    .insert({
+      birim: veri.birim,
+      dosya_yolu: veri.dosyaYolu,
+      dosya_adi: veri.dosyaAdi,
+      odeme_tarihi: veri.odemeTarihi,
+      tutar: veri.tutar,
+      aciklama: veri.aciklama,
+    })
+    .select('id')
+    .single()
+
+  if (hataDekont || !dekont) return { hata: hataDekont?.message ?? 'Dekont kaydedilemedi.' }
+
+  const { error: hataBag } = await supabase
+    .from('kira_dekont_satirlari')
+    .insert(veri.kiraIdleri.map((kira_id) => ({ dekont_id: dekont.id, kira_id })))
+
+  if (hataBag) {
+    // Bağlantı kurulamadıysa dekont kaydı ortada kalmasın
+    await supabase.from('kira_dekontlari').delete().eq('id', dekont.id)
+    return {
+      hata: hataBag.code === '23505'
+        ? 'Seçilen taksitlerden birinde zaten dekont var; önce onu kaldırın.'
+        : hataBag.message,
+    }
+  }
+
+  if (veri.odendiIsaretle) {
+    const guncelleme: { odendi: boolean; odeme_tarihi?: string } = { odendi: true }
+    if (veri.odemeTarihi) guncelleme.odeme_tarihi = veri.odemeTarihi
+    await supabase.from('kiralar').update(guncelleme).in('id', veri.kiraIdleri)
+  }
+
+  revalidatePath('/finans/kiralar')
+  return {
+    basari: `Dekont kaydedildi; ${veri.kiraIdleri.length} taksite bağlandı.`,
+  }
+}
+
+/**
+ * Dekontu ve bağlantılarını kaldırır.
+ *
+ * Taksitlerin "ödendi" işaretine dokunulmuyor: ödeme olmuş, kaybolan
+ * yalnızca belgesi. Tiki kullanıcı isterse kendi kaldırır.
+ */
+export async function dekontSil(id: string): Promise<KiraDurumu> {
+  const supabase = await supabaseServer()
+
+  const { data: dekont } = await supabase
+    .from('kira_dekontlari')
+    .select('dosya_yolu')
+    .eq('id', id)
+    .maybeSingle()
+
+  const { error } = await supabase.from('kira_dekontlari').delete().eq('id', id)
+  if (error) return { hata: error.message }
+
+  const yol = (dekont as { dosya_yolu?: string } | null)?.dosya_yolu
+  if (yol) await supabase.storage.from(DEKONT_KOVASI).remove([yol])
+
+  revalidatePath('/finans/kiralar')
+  return { basari: 'Dekont kaldırıldı.' }
 }

@@ -6,9 +6,12 @@ import { useMemo, useState, useTransition } from 'react'
 import { para } from '@/lib/format'
 import { kademeAraliklari, type Kademe, kiraKirilimi, TAKSIT_SAYISI } from '@/lib/kira-hesap'
 
-import { hesaplaDoldur, kademeSil, kiraKaydet, odendiDegistir, tutarYay } from './actions'
+import { dekontSil, hesaplaDoldur, kademeSil, kiraKaydet, odendiDegistir, tutarYay } from './actions'
+import type { Dekont } from './dekont'
+import { DekontPaneli, type SecilebilirSatir } from './DekontPaneli'
+import { KALEM_ADLARI, type Kalem } from './kalemler'
 import { SozlesmeKutusu } from './SozlesmeKutusu'
-import type { SozlesmeDosyasi } from './sozlesme'
+import { OKUL_KLASORU, type SozlesmeDosyasi } from './sozlesme'
 
 export type KiraSatiri = {
   id: string
@@ -21,16 +24,6 @@ export type KiraSatiri = {
   odendi: boolean
 }
 
-type Kalem = 'kira' | 'il_payi' | 'ilce_payi' | 'uc_aylik' | 'giderler'
-
-/** Kalem adı; `uc_aylik` kodu eski adından kalma, ekranda Arz Bedeli */
-const KALEM_ADLARI: Record<Kalem, string> = {
-  kira: 'Kira',
-  il_payi: 'İl Payı',
-  ilce_payi: 'İlçe Payı',
-  uc_aylik: 'Arz Bedeli',
-  giderler: 'Elektrik, Su ve Isınma Giderleri',
-}
 
 /**
  * Ekrandaki bir kutu.
@@ -183,6 +176,7 @@ export function KiraEkrani({
   satirlar,
   tabanlar,
   sozlesmeler,
+  dekontlar,
   bugun,
 }: {
   satirlar: KiraSatiri[]
@@ -190,12 +184,36 @@ export function KiraEkrani({
   tabanlar: Record<string, Kademe[]>
   /** Okul adına göre yüklenmiş sözleşme dosyaları */
   sozlesmeler: Record<string, SozlesmeDosyasi[]>
+  /** Yüklenmiş dekontlar; her biri bir ya da daha çok taksiti kapsar */
+  dekontlar: Dekont[]
   /** Sunucunun bugünü — boş tarih kutularına varsayılan olarak yazılır */
   bugun: string
 }) {
   const router = useRouter()
   const [bekliyor, baslat] = useTransition()
   const [mesaj, setMesaj] = useState<{ tip: 'ok' | 'hata'; metin: string } | null>(null)
+  const [panel, setPanel] = useState<{ birim: string; klasor: string } | null>(null)
+
+  // Taksit satırı → onu kapsayan dekont. Bir satırın tek dekontu olur.
+  const satirDekontu = useMemo(() => {
+    const m = new Map<string, Dekont>()
+    for (const d of dekontlar) for (const id of d.kiraIdleri) m.set(id, d)
+    return m
+  }, [dekontlar])
+
+  function dekontKaldir(d: Dekont) {
+    if (
+      !confirm(
+        `${d.kod} — ${d.dosya_adi} kaldırılacak. Taksitlerin ödendi işareti kalır. Emin misin?`,
+      )
+    )
+      return
+    baslat(async () => {
+      const sonuc = await dekontSil(d.id)
+      setMesaj(sonuc.hata ? { tip: 'hata', metin: sonuc.hata } : null)
+      router.refresh()
+    })
+  }
 
   const mevcut = useMemo(() => {
     const m = new Map<string, KiraSatiri>()
@@ -334,9 +352,21 @@ export function KiraEkrani({
                   {grup.bolumler.map((b) => (
                     <div key={b.ad} className={`rounded-lg border border-cizgi ${b.zemin}`}>
                       <h3
-                        className={`border-b border-cizgi px-3 py-2 text-sm font-semibold ${b.baslik}`}
+                        className={`flex items-center gap-2 border-b border-cizgi px-3 py-2 text-sm font-semibold ${b.baslik}`}
                       >
-                        {b.ad}
+                        <span>{b.ad}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPanel({
+                              birim: b.anahtar,
+                              klasor: OKUL_KLASORU[okul.ad] ?? 'diger',
+                            })
+                          }
+                          className="ml-auto rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-semibold whitespace-nowrap text-indigo-800 hover:bg-indigo-100"
+                        >
+                          + Dekont Yükle
+                        </button>
                       </h3>
 
                       <div className="space-y-3 p-3">
@@ -353,9 +383,16 @@ export function KiraEkrani({
                             kaydet={kaydet}
                             odendi={odendi}
                             yay={yay}
+                            satirDekontu={satirDekontu}
                           />
                         ))}
                       </div>
+
+                      <DekontListesi
+                        dekontlar={dekontlar.filter((d) => d.birim === b.anahtar)}
+                        bekliyor={bekliyor}
+                        kaldir={dekontKaldir}
+                      />
                     </div>
                   ))}
                 </div>
@@ -364,6 +401,97 @@ export function KiraEkrani({
           </section>
         ))}
       </div>
+
+      {panel && (
+        <DekontPaneli
+          birim={panel.birim}
+          klasor={panel.klasor}
+          bugun={bugun}
+          kapat={() => setPanel(null)}
+          satirlar={satirlar
+            .filter((s) => s.birim === panel.birim)
+            .map<SecilebilirSatir>((s) => ({
+              id: s.id,
+              kalem: s.kalem,
+              sira: s.sira,
+              tutar: Number(s.tutar),
+              dekontKodu: satirDekontu.get(s.id)?.kod ?? null,
+            }))}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Bir birimin yüklenmiş dekontları; kapalı açılır */
+function DekontListesi({
+  dekontlar,
+  bekliyor,
+  kaldir,
+}: {
+  dekontlar: Dekont[]
+  bekliyor: boolean
+  kaldir: (d: Dekont) => void
+}) {
+  const [acik, setAcik] = useState(false)
+  if (dekontlar.length === 0) return null
+
+  return (
+    <div className="border-t border-cizgi">
+      <button
+        type="button"
+        onClick={() => setAcik(!acik)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold hover:bg-white/40"
+      >
+        <span>{acik ? '▾' : '▸'}</span>
+        <span>Dekontlar</span>
+        <span className="ml-auto font-normal text-solgun">{dekontlar.length} dosya</span>
+      </button>
+
+      {acik && (
+        <div className="space-y-1 px-3 pb-3">
+          {dekontlar.map((d) => (
+            <div
+              key={d.id}
+              className="flex flex-wrap items-center gap-2 rounded border border-cizgi bg-white px-2 py-1.5"
+            >
+              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-800">
+                {d.kod}
+              </span>
+              {d.baglanti ? (
+                <a
+                  href={d.baglanti}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="truncate text-[11px] font-semibold text-indigo-700 hover:underline"
+                >
+                  {d.dosya_adi}
+                </a>
+              ) : (
+                <span className="truncate text-[11px] font-semibold">{d.dosya_adi}</span>
+              )}
+              <span className="text-[10px] text-solgun">
+                {d.kiraIdleri.length} taksit
+                {d.aciklama ? ` · ${d.aciklama}` : ''}
+              </span>
+              {d.tutar !== null && (
+                <span className="ml-auto text-[11px] font-semibold tabular-nums">
+                  {para(d.tutar)}
+                </span>
+              )}
+              <button
+                type="button"
+                disabled={bekliyor}
+                onClick={() => kaldir(d)}
+                aria-label={`${d.kod} dekontunu kaldır`}
+                className="rounded border border-cizgi px-1.5 py-0.5 text-[11px] text-red-700 hover:bg-red-50 disabled:opacity-50"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -742,6 +870,7 @@ function Kutu({
   kaydet,
   odendi,
   yay,
+  satirDekontu,
 }: {
   baslik: string
   siralar: number[]
@@ -759,6 +888,8 @@ function Kutu({
   ) => void
   odendi: (birim: string, kalem: Kalem, sira: number) => void
   yay: (birim: string, kalem: Kalem, tutar: number, hedefler: number[]) => void
+  /** Kira satırı kimliğine göre o satırı kapsayan dekont */
+  satirDekontu: Map<string, Dekont>
 }) {
   // Bütün kalemler kapalı açılır: dört kalem × beş birim açık olunca ekran
   // okunmuyordu. Başlıktaki özet zaten durumu söylüyor.
@@ -852,6 +983,29 @@ function Kutu({
                   }}
                   className="girdi w-24 !py-1 text-xs"
                 />
+
+                {/* Dekont rozeti: aynı dekont birkaç taksiti kapsıyorsa
+                    hepsinde aynı kod görünür, kaç taksit olduğu yanında. */}
+                {(() => {
+                  const d = k ? satirDekontu.get(k.id) : undefined
+                  if (!d) return null
+                  const etiket = `${d.kod} · ${d.kiraIdleri.length} taksit`
+                  return d.baglanti ? (
+                    <a
+                      href={d.baglanti}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={d.dosya_adi}
+                      className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap text-indigo-800 hover:bg-indigo-100"
+                    >
+                      📎 {etiket}
+                    </a>
+                  ) : (
+                    <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap text-indigo-800">
+                      📎 {etiket}
+                    </span>
+                  )
+                })()}
 
                 <button
                   type="button"
