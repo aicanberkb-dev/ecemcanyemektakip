@@ -11,7 +11,7 @@ export default async function CiroPage() {
   const supabase = await supabaseServer()
   const { data, error } = await supabase
     .from('gunluk_ciro')
-    .select('id, tarih, yer, tutar, nakit, kart, aciklama')
+    .select('id, tarih, yer, tutar, nakit, kart, aciklama, kart_kirilimi')
     .order('tarih', { ascending: false })
 
   const satirlar = (data ?? []) as CiroSatiri[]
@@ -24,7 +24,9 @@ export default async function CiroPage() {
         <p className="text-sm text-solgun">
           Yerlerin gün gün hasılatı. Bir günü girip kaydet; aynı günü tekrar girersen
           eskisinin üstüne yazar, toplam şişmez. Yeni bir yer eklemek için kutuya adını
-          yaz, listeye kendiliğinden girer.
+          yaz, listeye kendiliğinden girer. Tarihi değiştirince o güne girilmiş
+          rakamlar forma gelir; kredi kartını banka banka kırmak istersen kartın
+          altındaki bağlantıyı kullan.
         </p>
       </div>
 

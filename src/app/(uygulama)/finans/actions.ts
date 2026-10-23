@@ -1053,7 +1053,39 @@ const ciroSemasi = z.object({
   nakit: trSayi({ min: 0 }),
   kart: trSayi({ min: 0 }),
   aciklama: bosNull,
+  /**
+   * Kredi kartının banka kırılımı: `[["VAKIFBANK","1.200,50"], …]` JSON'u.
+   * İsteğe bağlı; verilince kart tutarı buradan toplanır.
+   */
+  kart_kirilimi: z.string().trim().optional(),
 })
+
+/** Kırılım metnini banka → tutar nesnesine çevirir; boşsa null */
+function kirilimCoz(ham?: string): { kirilim: Record<string, number> | null; hata?: string } {
+  if (!ham) return { kirilim: null }
+
+  let çiftler: unknown
+  try {
+    çiftler = JSON.parse(ham)
+  } catch {
+    return { kirilim: null, hata: 'Banka kırılımı okunamadı.' }
+  }
+  if (!Array.isArray(çiftler)) return { kirilim: null, hata: 'Banka kırılımı okunamadı.' }
+
+  const kirilim: Record<string, number> = {}
+  for (const c of çiftler) {
+    if (!Array.isArray(c) || c.length !== 2) continue
+    const banka = String(c[0]).trim().replace(/\s+/g, ' ').toLocaleUpperCase('tr')
+    const tutar = Number(String(c[1]).replace(/\./g, '').replace(',', '.'))
+    if (!banka) continue
+    if (!Number.isFinite(tutar) || tutar < 0)
+      return { kirilim: null, hata: `${banka} tutarı sayı olmalı.` }
+    // Aynı banka iki kez yazılırsa toplanır; satırlardan biri sessizce düşmesin
+    kirilim[banka] = (kirilim[banka] ?? 0) + tutar
+  }
+
+  return { kirilim: Object.keys(kirilim).length > 0 ? kirilim : null }
+}
 
 /**
  * Bir yerin bir günkü cirosunu yazar.
@@ -1065,13 +1097,26 @@ export async function ciroKaydet(veri: Record<string, string>): Promise<FinansDu
   const sonuc = ciroSemasi.safeParse(veri)
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
+  const { kart_kirilimi: ham, ...veriler } = sonuc.data
+  const { kirilim, hata: kirilimHatasi } = kirilimCoz(ham)
+  if (kirilimHatasi) return { hata: kirilimHatasi }
+
+  // Kırılım varsa kart tutarı onun toplamı: kullanıcı aynı rakamı iki kez
+  // yazmasın, yazarsa da ikisi birbirinden ayrı düşmesin.
+  const kart = kirilim
+    ? Math.round(Object.values(kirilim).reduce((t, n) => t + n, 0) * 100) / 100
+    : veriler.kart
+
   const supabase = await supabaseServer()
-  const { error } = await supabase
-    .from('gunluk_ciro')
-    .upsert(
-      { ...sonuc.data, tutar: sonuc.data.nakit + sonuc.data.kart },
-      { onConflict: 'tarih,yer' },
-    )
+  const { error } = await supabase.from('gunluk_ciro').upsert(
+    {
+      ...veriler,
+      kart,
+      kart_kirilimi: kirilim,
+      tutar: Math.round((veriler.nakit + kart) * 100) / 100,
+    },
+    { onConflict: 'tarih,yer' },
+  )
   if (error) return { hata: error.message }
 
   revalidatePath('/finans/ciro')
