@@ -32,7 +32,18 @@ export type FaturaSatiri = {
  * içinde, Kiralar sekmesindeki "Elektrik, Su ve Isınma Giderleri" kaleminde
  * duruyor.
  */
-export const YERLER = ['GÖKSU', 'AKBABA', 'YEMEKHANE']
+export const YERLER: { ad: string; turler: readonly GiderTuru[] }[] = [
+  { ad: 'GÖKSU', turler: GIDER_TURLERI },
+  { ad: 'AKBABA', turler: GIDER_TURLERI },
+  { ad: 'YEMEKHANE', turler: GIDER_TURLERI },
+  // TORİK'te yalnızca elektrik aboneliği var
+  { ad: 'TORİK', turler: ['elektrik'] },
+]
+
+/** Yerin o gider türünde aboneliği var mı */
+function turVar(yer: { turler: readonly GiderTuru[] }, tur: GiderTuru) {
+  return yer.turler.includes(tur)
+}
 
 /**
  * Takip edilen dönem: Ekim 2026 – Haziran 2027.
@@ -117,14 +128,18 @@ export function FaturaEkrani({
   }
 
   const hucre = (yer: string, tur: GiderTuru) => mevcut.get(anahtar(yer, tur, donem))
-  const yerToplami = (yer: string) =>
-    GIDER_TURLERI.reduce((t, g) => t + Number(hucre(yer, g)?.tutar ?? 0), 0)
+  const yerToplami = (yer: (typeof YERLER)[number]) =>
+    yer.turler.reduce((t, g) => t + Number(hucre(yer.ad, g)?.tutar ?? 0), 0)
   const turToplami = (tur: GiderTuru) =>
-    YERLER.reduce((t, y) => t + Number(hucre(y, tur)?.tutar ?? 0), 0)
+    YERLER.reduce((t, y) => t + (turVar(y, tur) ? Number(hucre(y.ad, tur)?.tutar ?? 0) : 0), 0)
   const ayToplami = YERLER.reduce((t, y) => t + yerToplami(y), 0)
   const ayOdenen = YERLER.reduce(
     (t, y) =>
-      t + GIDER_TURLERI.reduce((s, g) => s + (hucre(y, g)?.odendi ? Number(hucre(y, g)!.tutar) : 0), 0),
+      t +
+      y.turler.reduce(
+        (s, g) => s + (hucre(y.ad, g)?.odendi ? Number(hucre(y.ad, g)!.tutar) : 0),
+        0,
+      ),
     0,
   )
 
@@ -133,8 +148,8 @@ export function FaturaEkrani({
     let girilen = 0
     let odenen = 0
     for (const y of YERLER)
-      for (const g of GIDER_TURLERI) {
-        const k = mevcut.get(anahtar(y, g, d))
+      for (const g of y.turler) {
+        const k = mevcut.get(anahtar(y.ad, g, d))
         if (k && Number(k.tutar) > 0) girilen++
         if (k?.odendi) odenen++
       }
@@ -210,19 +225,25 @@ export function FaturaEkrani({
           </thead>
           <tbody>
             {YERLER.map((yer) => (
-              <tr key={yer}>
-                <td className="font-semibold">{yer}</td>
+              <tr key={yer.ad}>
+                <td className="font-semibold">{yer.ad}</td>
                 {GIDER_TURLERI.map((tur) => (
                   <td key={tur}>
-                    <Hucre
-                      yer={yer}
-                      tur={tur}
-                      donem={donem}
-                      kayit={hucre(yer, tur)}
-                      bekliyor={bekliyor}
-                      bugun={bugun}
-                      calistir={calistir}
-                    />
+                    {turVar(yer, tur) ? (
+                      <Hucre
+                        yer={yer.ad}
+                        tur={tur}
+                        donem={donem}
+                        kayit={hucre(yer.ad, tur)}
+                        bekliyor={bekliyor}
+                        bugun={bugun}
+                        calistir={calistir}
+                      />
+                    ) : (
+                      /* Aboneliği olmayan tür: boş kutu çıkmasın, yanlışlıkla
+                         tutar girilmesin */
+                      <span className="text-xs text-solgun">—</span>
+                    )}
                   </td>
                 ))}
                 <td className="text-right font-semibold tabular-nums">{para(yerToplami(yer))}</td>
@@ -266,10 +287,16 @@ export function FaturaEkrani({
               </thead>
               <tbody>
                 {YERLER.map((yer) => (
-                  <tr key={yer}>
-                    <td className="font-semibold">{yer}</td>
+                  <tr key={yer.ad}>
+                    <td className="font-semibold">{yer.ad}</td>
                     {GIDER_TURLERI.map((tur) => {
-                      const a = abonelik.get(`${yer}|${tur}`) ?? null
+                      const a = abonelik.get(`${yer.ad}|${tur}`) ?? null
+                      if (!turVar(yer, tur))
+                        return (
+                          <td key={tur}>
+                            <span className="text-xs text-solgun">—</span>
+                          </td>
+                        )
                       return (
                         <td key={tur}>
                           <div className="flex flex-wrap gap-1.5">
@@ -279,7 +306,7 @@ export function FaturaEkrani({
                               onBlur={(e) => {
                                 if (e.target.value.trim() !== (a?.sozlesme_no ?? ''))
                                   calistir(() =>
-                                    abonelikKaydet(yer, tur, 'sozlesme_no', e.target.value),
+                                    abonelikKaydet(yer.ad, tur, 'sozlesme_no', e.target.value),
                                   )
                               }}
                               className="girdi w-36 !py-1 text-xs"
@@ -292,7 +319,7 @@ export function FaturaEkrani({
                               onBlur={(e) => {
                                 if (e.target.value.trim() !== String(a?.vade_gunu ?? ''))
                                   calistir(() =>
-                                    abonelikKaydet(yer, tur, 'vade_gunu', e.target.value),
+                                    abonelikKaydet(yer.ad, tur, 'vade_gunu', e.target.value),
                                   )
                               }}
                               className="girdi w-14 !py-1 text-center text-xs"
