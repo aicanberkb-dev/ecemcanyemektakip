@@ -166,9 +166,9 @@ export default async function KiralarPage({
           <div>
             <h1 className="baslik">Faturalar</h1>
             <p className="text-sm text-solgun">
-              Elektrik, su ve doğalgaz. Sözleşme numarasını ve vade gününü bir kez
-              girin; tutar her ay değiştiği için dönem dönem yazılır. Ödendi
-              işaretlediğiniz fatura günlük masraflara da düşer.
+              Üstten ayı seçin; o ayın elektrik, su ve doğalgaz faturaları yer yer tek
+              tabloda görünür. Sözleşme numarası ve vade günü bir kez girilir, alttaki
+              bölümde durur. Ödendi işaretlediğiniz fatura günlük masraflara da düşer.
             </p>
           </div>
 

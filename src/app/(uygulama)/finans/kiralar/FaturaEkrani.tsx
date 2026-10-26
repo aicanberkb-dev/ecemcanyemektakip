@@ -38,7 +38,7 @@ export const YERLER = ['GÖKSU', 'AKBABA', 'YEMEKHANE']
  * Takip edilen dönem: Ekim 2026 – Haziran 2027.
  *
  * Öğretim yılı boyunca. Yıl değişince buradan uzatılır; dönemler veriden
- * değil listeden geliyor ki girilmemiş aylar da satır olarak görünsün.
+ * değil listeden geliyor ki girilmemiş aylar da sekmede görünsün.
  */
 export const DONEMLER = (() => {
   const liste: string[] = []
@@ -56,8 +56,25 @@ export function donemAdi(donem: string): string {
   return `${AY_ADLARI[Number(ay) - 1]} ${yil}`
 }
 
+function donemKisa(donem: string): string {
+  const [yil, ay] = donem.split('-')
+  return `${AY_ADLARI[Number(ay) - 1].slice(0, 3)} ${yil.slice(2)}`
+}
+
 const anahtar = (yer: string, tur: GiderTuru, donem: string) => `${yer}|${tur}|${donem}`
 
+/** Bugünün dönemi listede varsa o, yoksa ilk dönem açılır */
+function acilisDonemi(bugun: string): string {
+  const simdiki = `${bugun.slice(0, 7)}-01`
+  return DONEMLER.includes(simdiki) ? simdiki : DONEMLER[0]
+}
+
+/**
+ * Faturalar: ay üstte, yerler ve gider türleri tek tabloda.
+ *
+ * Bir ayda kime ne ödeneceği tek bakışta görünsün diye düzen ay bazlı;
+ * gider türü başına ayrı ekran gezmek gerekmiyor.
+ */
 export function FaturaEkrani({
   abonelikler,
   faturalar,
@@ -69,7 +86,8 @@ export function FaturaEkrani({
 }) {
   const router = useRouter()
   const [bekliyor, baslat] = useTransition()
-  const [tur, setTur] = useState<GiderTuru>('elektrik')
+  const [donem, setDonem] = useState(() => acilisDonemi(bugun))
+  const [abonelikAcik, setAbonelikAcik] = useState(false)
   const [mesaj, setMesaj] = useState<{ tip: 'ok' | 'hata'; metin: string } | null>(null)
 
   const abonelik = useMemo(() => {
@@ -98,24 +116,61 @@ export function FaturaEkrani({
     })
   }
 
+  const hucre = (yer: string, tur: GiderTuru) => mevcut.get(anahtar(yer, tur, donem))
+  const yerToplami = (yer: string) =>
+    GIDER_TURLERI.reduce((t, g) => t + Number(hucre(yer, g)?.tutar ?? 0), 0)
+  const turToplami = (tur: GiderTuru) =>
+    YERLER.reduce((t, y) => t + Number(hucre(y, tur)?.tutar ?? 0), 0)
+  const ayToplami = YERLER.reduce((t, y) => t + yerToplami(y), 0)
+  const ayOdenen = YERLER.reduce(
+    (t, y) =>
+      t + GIDER_TURLERI.reduce((s, g) => s + (hucre(y, g)?.odendi ? Number(hucre(y, g)!.tutar) : 0), 0),
+    0,
+  )
+
+  /** Dönemde kaç fatura girilmiş, kaçı ödenmiş — sekme rozetinde */
+  function donemDurumu(d: string) {
+    let girilen = 0
+    let odenen = 0
+    for (const y of YERLER)
+      for (const g of GIDER_TURLERI) {
+        const k = mevcut.get(anahtar(y, g, d))
+        if (k && Number(k.tutar) > 0) girilen++
+        if (k?.odendi) odenen++
+      }
+    return { girilen, odenen }
+  }
+
   return (
     <div className="space-y-4">
-      <nav className="flex flex-wrap gap-2" aria-label="Gider türü">
-        {GIDER_TURLERI.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTur(t)}
-            aria-current={t === tur ? 'page' : undefined}
-            className={`rounded-md border px-4 py-2 text-sm font-semibold ${
-              t === tur
-                ? 'border-gray-900 bg-gray-900 text-white'
-                : 'border-cizgi bg-white hover:bg-slate-50'
-            }`}
-          >
-            {GIDER_ADLARI[t]}
-          </button>
-        ))}
+      {/* Ay üst barda: hangi ayın faturalarına bakıldığı tek yerden seçilir */}
+      <nav className="flex flex-wrap gap-1.5" aria-label="Dönem">
+        {DONEMLER.map((d) => {
+          const { girilen, odenen } = donemDurumu(d)
+          const secili = d === donem
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDonem(d)}
+              aria-current={secili ? 'page' : undefined}
+              className={`rounded-md border px-3 py-1.5 text-xs leading-tight font-semibold ${
+                secili
+                  ? 'border-gray-900 bg-gray-900 text-white'
+                  : 'border-cizgi bg-white hover:bg-slate-50'
+              }`}
+            >
+              <span className="block">{donemKisa(d)}</span>
+              <span
+                className={`block text-[10px] font-normal ${
+                  secili ? 'text-gray-300' : 'text-solgun'
+                }`}
+              >
+                {girilen === 0 ? 'boş' : `${odenen}/${girilen} ödendi`}
+              </span>
+            </button>
+          )
+        })}
       </nav>
 
       {mesaj && (
@@ -128,151 +183,203 @@ export function FaturaEkrani({
         </p>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        {YERLER.map((yer) => (
-          <YerKutusu
-            key={yer}
-            yer={yer}
-            tur={tur}
-            abonelik={abonelik.get(`${yer}|${tur}`) ?? null}
-            mevcut={mevcut}
-            bekliyor={bekliyor}
-            bugun={bugun}
-            calistir={calistir}
-          />
-        ))}
+      <div className="kart overflow-x-auto">
+        <div className="flex flex-wrap items-baseline gap-3 border-b border-cizgi bg-slate-50 px-4 py-2.5">
+          <h2 className="font-semibold">{donemAdi(donem)}</h2>
+          <span className="ml-auto flex flex-wrap items-baseline gap-x-3 text-xs">
+            <span className="text-solgun">toplam</span>
+            <span className="font-semibold tabular-nums">{para(ayToplami)}</span>
+            <span className="text-solgun">ödenen</span>
+            <span className="font-semibold text-emerald-700 tabular-nums">{para(ayOdenen)}</span>
+            <span className="text-solgun">kalan</span>
+            <span className="font-semibold text-red-700 tabular-nums">
+              {para(ayToplami - ayOdenen)}
+            </span>
+          </span>
+        </div>
+
+        <table className="tablo">
+          <thead>
+            <tr>
+              <th className="w-32">Yer</th>
+              {GIDER_TURLERI.map((g) => (
+                <th key={g}>{GIDER_ADLARI[g]}</th>
+              ))}
+              <th className="text-right">Toplam</th>
+            </tr>
+          </thead>
+          <tbody>
+            {YERLER.map((yer) => (
+              <tr key={yer}>
+                <td className="font-semibold">{yer}</td>
+                {GIDER_TURLERI.map((tur) => (
+                  <td key={tur}>
+                    <Hucre
+                      yer={yer}
+                      tur={tur}
+                      donem={donem}
+                      kayit={hucre(yer, tur)}
+                      bekliyor={bekliyor}
+                      bugun={bugun}
+                      calistir={calistir}
+                    />
+                  </td>
+                ))}
+                <td className="text-right font-semibold tabular-nums">{para(yerToplami(yer))}</td>
+              </tr>
+            ))}
+            <tr className="bg-slate-50">
+              <td className="font-semibold">Toplam</td>
+              {GIDER_TURLERI.map((g) => (
+                <td key={g} className="font-semibold tabular-nums">
+                  {para(turToplami(g))}
+                </td>
+              ))}
+              <td className="text-right font-bold tabular-nums">{para(ayToplami)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Abonelik bilgisi aya bağlı değil: bir kez girilir, kapalı durur */}
+      <div className="kart overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setAbonelikAcik(!abonelikAcik)}
+          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold hover:bg-slate-50"
+        >
+          <span>{abonelikAcik ? '▾' : '▸'}</span>
+          <span>Sözleşme Numaraları ve Vade Günleri</span>
+          <span className="ml-auto text-xs font-normal text-solgun">bir kez girilir</span>
+        </button>
+
+        {abonelikAcik && (
+          <div className="overflow-x-auto border-t border-cizgi">
+            <table className="tablo">
+              <thead>
+                <tr>
+                  <th className="w-32">Yer</th>
+                  {GIDER_TURLERI.map((g) => (
+                    <th key={g}>{GIDER_ADLARI[g]}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {YERLER.map((yer) => (
+                  <tr key={yer}>
+                    <td className="font-semibold">{yer}</td>
+                    {GIDER_TURLERI.map((tur) => {
+                      const a = abonelik.get(`${yer}|${tur}`) ?? null
+                      return (
+                        <td key={tur}>
+                          <div className="flex flex-wrap gap-1.5">
+                            <input
+                              defaultValue={a?.sozlesme_no ?? ''}
+                              placeholder="Sözleşme no"
+                              onBlur={(e) => {
+                                if (e.target.value.trim() !== (a?.sozlesme_no ?? ''))
+                                  calistir(() =>
+                                    abonelikKaydet(yer, tur, 'sozlesme_no', e.target.value),
+                                  )
+                              }}
+                              className="girdi w-36 !py-1 text-xs"
+                            />
+                            <input
+                              inputMode="numeric"
+                              defaultValue={a?.vade_gunu ?? ''}
+                              placeholder="Vade"
+                              title="Ayın kaçında ödeniyor"
+                              onBlur={(e) => {
+                                if (e.target.value.trim() !== String(a?.vade_gunu ?? ''))
+                                  calistir(() =>
+                                    abonelikKaydet(yer, tur, 'vade_gunu', e.target.value),
+                                  )
+                              }}
+                              className="girdi w-14 !py-1 text-center text-xs"
+                            />
+                          </div>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <p className="text-xs text-solgun">
         Ödendi işaretlenen fatura aynı tutarla günlük masraflara da yazılır; işareti
-        kaldırırsanız o masraf satırı silinir. Sözleşme numarası ve vade günü bir kez
-        girilir, her ay tekrar sorulmaz.
+        kaldırırsanız o masraf satırı silinir. Vade günü Ödeme Takvimi&apos;nde kullanılır.
       </p>
     </div>
   )
 }
 
-/** Bir yerin bir gider türündeki bütün dönemleri */
-function YerKutusu({
+/** Bir yerin bir gider türündeki o ayki faturası */
+function Hucre({
   yer,
   tur,
-  abonelik,
-  mevcut,
+  donem,
+  kayit,
   bekliyor,
   bugun,
   calistir,
 }: {
   yer: string
   tur: GiderTuru
-  abonelik: Abonelik | null
-  mevcut: Map<string, FaturaSatiri>
+  donem: string
+  kayit: FaturaSatiri | undefined
   bekliyor: boolean
   bugun: string
   calistir: (is: () => Promise<{ hata?: string; basari?: string }>) => void
 }) {
-  const kayitlar = DONEMLER.map((d) => mevcut.get(anahtar(yer, tur, d)))
-  const toplam = kayitlar.reduce((t, k) => t + Number(k?.tutar ?? 0), 0)
-  const odenen = kayitlar.reduce((t, k) => t + (k?.odendi ? Number(k.tutar) : 0), 0)
-  const odenenSayi = kayitlar.filter((k) => k?.odendi).length
+  const metin =
+    kayit && Number(kayit.tutar) > 0 ? String(Number(kayit.tutar)).replace('.', ',') : ''
 
   return (
-    <section className="kart overflow-hidden">
-      <h2 className="flex flex-wrap items-baseline gap-2 border-b border-cizgi bg-slate-50 px-4 py-2.5 font-semibold">
-        <span>{yer}</span>
-        <span className="ml-auto flex flex-wrap items-baseline gap-x-2 text-xs font-normal">
-          <span className="text-solgun">
-            {odenenSayi}/{DONEMLER.length} ödendi
-          </span>
-          <span className="tabular-nums">{para(toplam)}</span>
-          <span className="text-emerald-700 tabular-nums">{para(odenen)}</span>
-          <span className="text-red-700 tabular-nums">{para(toplam - odenen)}</span>
-        </span>
-      </h2>
+    <div
+      className={`flex flex-wrap items-center gap-1.5 rounded px-1 py-0.5 ${
+        kayit?.odendi ? 'bg-emerald-100' : ''
+      }`}
+    >
+      <input
+        inputMode="decimal"
+        defaultValue={metin}
+        placeholder="Tutar"
+        onBlur={(e) => {
+          if (e.target.value.trim() !== metin)
+            calistir(() => faturaKaydet(yer, tur, donem, 'tutar', e.target.value))
+        }}
+        className="girdi w-24 !py-1 text-right text-xs tabular-nums"
+      />
 
-      {/* Abonelik bilgisi: bir kez girilir */}
-      <div className="flex flex-wrap gap-3 border-b border-cizgi bg-white px-4 py-2.5">
-        <label className="text-[11px] text-solgun">
-          <span className="block font-semibold">Sözleşme no</span>
-          <input
-            defaultValue={abonelik?.sozlesme_no ?? ''}
-            placeholder="Abone / sözleşme no"
-            onBlur={(e) => {
-              if (e.target.value.trim() !== (abonelik?.sozlesme_no ?? ''))
-                calistir(() => abonelikKaydet(yer, tur, 'sozlesme_no', e.target.value))
-            }}
-            className="girdi mt-0.5 w-44 !py-1 text-xs"
-          />
-        </label>
-        <label className="text-[11px] text-solgun">
-          <span className="block font-semibold">Vade günü</span>
-          <input
-            inputMode="numeric"
-            defaultValue={abonelik?.vade_gunu ?? ''}
-            placeholder="ör. 15"
-            onBlur={(e) => {
-              if (e.target.value.trim() !== String(abonelik?.vade_gunu ?? ''))
-                calistir(() => abonelikKaydet(yer, tur, 'vade_gunu', e.target.value))
-            }}
-            className="girdi mt-0.5 w-20 !py-1 text-xs"
-          />
-        </label>
-      </div>
+      <button
+        type="button"
+        disabled={bekliyor}
+        onClick={() => calistir(() => faturaOdendi(yer, tur, donem, !kayit?.odendi, bugun))}
+        className={`rounded px-2 py-1 text-xs font-semibold whitespace-nowrap transition disabled:opacity-50 ${
+          kayit?.odendi
+            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+            : 'border border-cizgi bg-white text-solgun hover:bg-slate-50'
+        }`}
+      >
+        {kayit?.odendi ? '✓' : 'Ödendi'}
+      </button>
 
-      <div className="space-y-1 p-2">
-        {DONEMLER.map((donem) => {
-          const k = mevcut.get(anahtar(yer, tur, donem))
-          return (
-            <div
-              key={donem}
-              className={`flex flex-wrap items-center gap-1.5 rounded px-1.5 py-1 ${
-                k?.odendi ? 'bg-emerald-100' : ''
-              }`}
-            >
-              <span className="w-24 shrink-0 text-xs leading-tight font-medium">
-                {donemAdi(donem)}
-              </span>
-
-              <input
-                inputMode="decimal"
-                defaultValue={
-                  k && Number(k.tutar) > 0 ? String(Number(k.tutar)).replace('.', ',') : ''
-                }
-                placeholder="Tutar"
-                onBlur={(e) => {
-                  const eski =
-                    k && Number(k.tutar) > 0 ? String(Number(k.tutar)).replace('.', ',') : ''
-                  if (e.target.value.trim() !== eski)
-                    calistir(() => faturaKaydet(yer, tur, donem, 'tutar', e.target.value))
-                }}
-                className="girdi w-24 !py-1 text-right text-xs tabular-nums"
-              />
-
-              <input
-                type="date"
-                defaultValue={k?.odeme_tarihi ?? (k?.odendi ? '' : bugun)}
-                onBlur={(e) => {
-                  if (e.target.value !== (k?.odeme_tarihi ?? ''))
-                    calistir(() => faturaKaydet(yer, tur, donem, 'odeme_tarihi', e.target.value))
-                }}
-                className="girdi w-32 !py-1 text-xs"
-              />
-
-              <button
-                type="button"
-                disabled={bekliyor}
-                onClick={() => calistir(() => faturaOdendi(yer, tur, donem, !k?.odendi, bugun))}
-                className={`ml-auto rounded px-2 py-1 text-xs font-semibold whitespace-nowrap transition disabled:opacity-50 ${
-                  k?.odendi
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                    : 'border border-cizgi bg-white text-solgun hover:bg-slate-50'
-                }`}
-              >
-                {k?.odendi ? '✓ Ödendi' : 'Ödendi'}
-              </button>
-            </div>
-          )
-        })}
-      </div>
-    </section>
+      {/* Ödeme tarihi yalnız ödendikten sonra: ödenmemiş hücre kalabalık olmasın */}
+      {kayit?.odendi && (
+        <input
+          type="date"
+          defaultValue={kayit.odeme_tarihi ?? bugun}
+          onBlur={(e) => {
+            if (e.target.value !== (kayit.odeme_tarihi ?? ''))
+              calistir(() => faturaKaydet(yer, tur, donem, 'odeme_tarihi', e.target.value))
+          }}
+          className="girdi w-28 !py-0.5 text-[11px]"
+        />
+      )}
+    </div>
   )
 }
