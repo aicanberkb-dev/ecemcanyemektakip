@@ -761,6 +761,42 @@ export async function maasOde(
   if (!Number.isFinite(tutar) || tutar < 0) return { hata: 'Geçerli bir tutar girin.' }
 
   const supabase = await supabaseServer()
+
+  const [{ data: personel }, { data: eski }] = await Promise.all([
+    supabase.from('personeller').select('ad').eq('id', personelId).maybeSingle(),
+    supabase
+      .from('maas_odemeleri')
+      .select('gider_id')
+      .eq('personel_id', personelId)
+      .eq('donem_yil', yil)
+      .eq('donem_ay', ay)
+      .maybeSingle(),
+  ])
+
+  // Ödenen maaş günlük masrafa da yazılıyor — ayrıca elle girmek gerekmesin.
+  // Oluşan satırın id'si ödemede tutuluyor ki geri alınca aynı satır silinsin.
+  const ad = (personel as { ad?: string } | null)?.ad ?? 'Personel'
+  const aciklama = `Maaş — ${ad} · ${String(ay).padStart(2, '0')}.${yil}`
+  let giderId = (eski as { gider_id?: string | null } | null)?.gider_id ?? null
+
+  if (tutar > 0) {
+    if (giderId) {
+      const { error } = await supabase
+        .from('gunluk_gider')
+        .update({ tarih: odemeTarihi, tutar, masraf_noktasi: 'MAAŞ', aciklama })
+        .eq('id', giderId)
+      if (error) return { hata: error.message }
+    } else {
+      const { data: yeni, error } = await supabase
+        .from('gunluk_gider')
+        .insert({ tarih: odemeTarihi, tutar, masraf_noktasi: 'MAAŞ', aciklama })
+        .select('id')
+        .single()
+      if (error) return { hata: error.message }
+      giderId = (yeni as { id: string }).id
+    }
+  }
+
   const { error } = await supabase.from('maas_odemeleri').upsert(
     {
       personel_id: personelId,
@@ -768,13 +804,14 @@ export async function maasOde(
       donem_ay: ay,
       tutar,
       odeme_tarihi: odemeTarihi,
+      gider_id: giderId,
     },
     { onConflict: 'personel_id,donem_yil,donem_ay' },
   )
   if (error) return { hata: error.message }
 
   tazele()
-  return { basari: 'Maaş ödendi olarak işaretlendi.' }
+  return { basari: 'Maaş ödendi işaretlendi, günlük masrafa yazıldı.' }
 }
 
 export async function maasGeriAl(
@@ -783,6 +820,20 @@ export async function maasGeriAl(
   ay: number,
 ): Promise<FinansDurumu> {
   const supabase = await supabaseServer()
+
+  // Ödemeyle birlikte açılan masraf satırı da kalkıyor; defterde ödenmemiş
+  // bir maaşın masrafı durmasın.
+  const { data: eski } = await supabase
+    .from('maas_odemeleri')
+    .select('gider_id')
+    .eq('personel_id', personelId)
+    .eq('donem_yil', yil)
+    .eq('donem_ay', ay)
+    .maybeSingle()
+
+  const giderId = (eski as { gider_id?: string | null } | null)?.gider_id
+  if (giderId) await supabase.from('gunluk_gider').delete().eq('id', giderId)
+
   const { error } = await supabase
     .from('maas_odemeleri')
     .delete()
@@ -792,7 +843,7 @@ export async function maasGeriAl(
   if (error) return { hata: error.message }
 
   tazele()
-  return { basari: 'Ödeme geri alındı.' }
+  return { basari: 'Ödeme geri alındı, masraf satırı silindi.' }
 }
 
 // ---------------------------------------------------------------------------

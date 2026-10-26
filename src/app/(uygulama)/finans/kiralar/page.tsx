@@ -1,8 +1,11 @@
+import Link from 'next/link'
+
 import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 
 import { dekontKodu, DEKONT_KOVASI, type Dekont } from './dekont'
- import { KiraEkrani, type KiraSatiri } from './KiraEkrani'
+import { FaturaEkrani, type Abonelik, type FaturaSatiri } from './FaturaEkrani'
+import { KiraEkrani, type KiraSatiri } from './KiraEkrani'
 import { OKUL_KLASORU, SOZLESME_KOVASI, type SozlesmeDosyasi } from './sozlesme'
 
 /** İmzalı bağlantı ömrü: bir saat, sekme açık kalsa da yetsin */
@@ -17,7 +20,13 @@ export const metadata = { title: 'Kiralar — Yemek Takip' }
  * değer girilince kayıt oluşuyor. Bu yüzden burada yalnızca var olan
  * kayıtlar okunuyor, eksikleri ekran tamamlıyor.
  */
-export default async function KiralarPage() {
+export default async function KiralarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sekme?: string }>
+}) {
+  const { sekme } = await searchParams
+  const faturaSekmesi = sekme === 'faturalar'
   const supabase = await supabaseServer()
   const bugun = await bugunSunucu()
   const [{ data, error }, { data: tabanlar }] = await Promise.all([
@@ -116,8 +125,61 @@ export default async function KiralarPage() {
     }),
   )
 
+  // Faturalar sekmesi: elektrik, su ve doğalgaz. Abonelik bilgisi bir kez
+  // giriliyor, tutar her ay değiştiği için dönem dönem yazılıyor.
+  const [{ data: abonelikVeri }, { data: faturaVeri }] = await Promise.all([
+    supabase.from('fatura_abonelikleri').select('yer, gider_turu, sozlesme_no, vade_gunu'),
+    supabase
+      .from('fatura_odemeleri')
+      .select('yer, gider_turu, donem, tutar, odeme_tarihi, odendi'),
+  ])
+
+  const SEKMELER = [
+    { anahtar: 'kiralar', ad: 'Kiralar' },
+    { anahtar: 'faturalar', ad: 'Faturalar' },
+  ]
+
   return (
     <div className="space-y-4">
+      <nav className="flex flex-wrap gap-2" aria-label="Bölüm">
+        {SEKMELER.map((s) => {
+          const seciliMi = (s.anahtar === 'faturalar') === faturaSekmesi
+          return (
+            <Link
+              key={s.anahtar}
+              href={s.anahtar === 'kiralar' ? '/finans/kiralar' : '/finans/kiralar?sekme=faturalar'}
+              aria-current={seciliMi ? 'page' : undefined}
+              className={`rounded-md border px-4 py-2 text-sm font-semibold ${
+                seciliMi
+                  ? 'border-gray-900 bg-gray-900 text-white'
+                  : 'border-cizgi bg-white hover:bg-slate-50'
+              }`}
+            >
+              {s.ad}
+            </Link>
+          )
+        })}
+      </nav>
+
+      {faturaSekmesi ? (
+        <>
+          <div>
+            <h1 className="baslik">Faturalar</h1>
+            <p className="text-sm text-solgun">
+              Elektrik, su ve doğalgaz. Sözleşme numarasını ve vade gününü bir kez
+              girin; tutar her ay değiştiği için dönem dönem yazılır. Ödendi
+              işaretlediğiniz fatura günlük masraflara da düşer.
+            </p>
+          </div>
+
+          <FaturaEkrani
+            abonelikler={(abonelikVeri ?? []) as Abonelik[]}
+            faturalar={(faturaVeri ?? []) as FaturaSatiri[]}
+            bugun={bugun}
+          />
+        </>
+      ) : (
+      <>
       <div>
         <h1 className="baslik">Kiralar</h1>
         <p className="text-sm text-solgun">
@@ -142,6 +204,8 @@ export default async function KiralarPage() {
         dekontlar={dekontlar}
         bugun={bugun}
       />
+      </>
+      )}
     </div>
   )
 }
