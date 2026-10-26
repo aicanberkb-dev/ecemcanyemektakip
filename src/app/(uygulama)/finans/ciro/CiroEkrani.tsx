@@ -33,10 +33,10 @@ type KirilimSatiri = { banka: string; tutar: string }
 /** Kutulara yazılan metin: yer adı → { nakit, kart, kırılım } */
 type Tutarlar = Record<
   string,
-  { nakit: string; kart: string; kirilim: KirilimSatiri[] | null }
+  { nakit: string; kart: string; kirilim: KirilimSatiri[] | null; aciklama: string }
 >
 
-const BOS: Tutarlar[string] = { nakit: '', kart: '', kirilim: null }
+const BOS: Tutarlar[string] = { nakit: '', kart: '', kirilim: null, aciklama: '' }
 
 /** Kırılım açıkken ilk gelen banka satırları */
 const VARSAYILAN_BANKALAR = ['VAKIFBANK', 'HALKBANK']
@@ -76,6 +76,8 @@ export function CiroEkrani({
   const [tarih, setTarih] = useBugunTarihi()
   const [tutarlar, setTutarlar] = useState<Tutarlar>({})
   const [yeniYer, setYeniYer] = useState('')
+  /** Açıklama kutusu açılan yerler; yazısı olanda zaten açık gelir */
+  const [acikNotlar, setAcikNotlar] = useState<Set<string>>(new Set())
   const [durum, setDurum] = useState<FinansDurumu>({})
   /** Tablodan "Düzelt" ile yüklenen gün — form başlığında yazar */
   const [duzenlenen, setDuzenlenen] = useState<string | null>(null)
@@ -174,6 +176,7 @@ export function CiroEkrani({
                   tutar: String(Number(tutar)).replace('.', ','),
                 }))
               : null,
+            aciklama: s.aciklama ?? '',
           },
         ]),
       ),
@@ -210,7 +213,8 @@ export function CiroEkrani({
       ([, v]) =>
         v.nakit.trim() !== '' ||
         v.kart.trim() !== '' ||
-        (v.kirilim?.some((k) => k.tutar.trim() !== '') ?? false),
+        (v.kirilim?.some((k) => k.tutar.trim() !== '') ?? false) ||
+        v.aciklama.trim() !== '',
     )
     if (girilenler.length === 0) {
       setDurum({ hata: 'En az bir yere nakit ya da kart tutarı yazın.' })
@@ -237,6 +241,7 @@ export function CiroEkrani({
           yer,
           nakit: v.nakit.trim() || '0',
           kart: v.kart.trim() || '0',
+          aciklama: v.aciklama,
           ...(dolu.length > 0
             ? { kart_kirilimi: JSON.stringify(dolu.map((k) => [k.banka, k.tutar || '0'])) }
             : {}),
@@ -425,6 +430,25 @@ export function CiroEkrani({
                   </div>
                 )}
 
+                {/* Açıklama isteğe bağlı: her gün yazılmıyor, kutu da hep
+                    durmasın. Yazılmışsa açık gelir. */}
+                {v.aciklama === '' && !acikNotlar.has(yer) ? (
+                  <button
+                    type="button"
+                    onClick={() => setAcikNotlar(new Set(acikNotlar).add(yer))}
+                    className="mt-1 block text-[11px] text-vurgu hover:underline"
+                  >
+                    + Açıklama
+                  </button>
+                ) : (
+                  <input
+                    value={v.aciklama}
+                    onChange={(e) => yeriDegistir(yer, { aciklama: e.target.value })}
+                    placeholder="Açıklama"
+                    className="girdi mt-1 w-full !py-1 text-xs"
+                  />
+                )}
+
                 {toplam > 0 && (
                   <p className="mt-1 text-right text-xs font-semibold text-emerald-700">
                     {para(toplam)}
@@ -602,6 +626,11 @@ export function CiroEkrani({
                                 {banka} {para(tutar)}
                               </span>
                             ))}
+                          {s.aciklama && (
+                            <span className="block text-left text-[11px] text-solgun italic">
+                              {s.aciklama}
+                            </span>
+                          )}
                         </>
                       ) : kapali ? (
                         <span className="text-xs text-solgun">kapalı</span>
