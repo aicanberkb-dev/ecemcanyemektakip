@@ -1,7 +1,7 @@
 import { bugunSunucu } from '@/lib/simulasyon-sunucu'
 import { supabaseServer } from '@/lib/supabase/server'
 
-import { DONEMLER } from '../kiralar/FaturaEkrani'
+import { DONEMLER } from '../kiralar/donemler'
 import { GIDER_ADLARI, type GiderTuru } from '../kiralar/gider-turleri'
 
 import { OdemePlaniEkrani, type Kalem } from './OdemePlaniEkrani'
