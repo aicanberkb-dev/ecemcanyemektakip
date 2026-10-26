@@ -33,7 +33,9 @@ export type FaturaSatiri = {
  * duruyor.
  */
 export const YERLER: { ad: string; turler: readonly GiderTuru[] }[] = [
-  { ad: 'GÖKSU', turler: GIDER_TURLERI },
+  // GÖKSU'da kantin ve yemekhane ayrı abone; kiralarda da ayrı birim
+  { ad: 'GÖKSU KANTİN', turler: GIDER_TURLERI },
+  { ad: 'GÖKSU YEMEKHANE', turler: GIDER_TURLERI },
   { ad: 'AKBABA', turler: GIDER_TURLERI },
   { ad: 'YEMEKHANE', turler: GIDER_TURLERI },
   // TORİK'te yalnızca elektrik aboneliği var
