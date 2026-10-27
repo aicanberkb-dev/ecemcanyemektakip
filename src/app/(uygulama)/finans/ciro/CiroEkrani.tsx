@@ -21,7 +21,10 @@ export type CiroSatiri = {
   /** Toplam — nakit + kart */
   tutar: number | string
   nakit: number | string
+  /** Z raporu: posun çektiği brüt tutar */
   kart: number | string
+  /** Hesaba geçen net tutar; girilmemişse null */
+  kart_yatan: number | string | null
   aciklama: string | null
   /** Kart tutarının banka kırılımı: banka → tutar. Girilmemişse null */
   kart_kirilimi: Record<string, number> | null
@@ -33,10 +36,24 @@ type KirilimSatiri = { banka: string; tutar: string }
 /** Kutulara yazılan metin: yer adı → { nakit, kart, kırılım } */
 type Tutarlar = Record<
   string,
-  { nakit: string; kart: string; kirilim: KirilimSatiri[] | null; aciklama: string }
+  {
+    nakit: string
+    /** Z raporu: posun çektiği brüt tutar */
+    kart: string
+    /** Hesaba geçen net tutar; aradaki fark pos komisyonu */
+    yatan: string
+    kirilim: KirilimSatiri[] | null
+    aciklama: string
+  }
 >
 
-const BOS: Tutarlar[string] = { nakit: '', kart: '', kirilim: null, aciklama: '' }
+const BOS: Tutarlar[string] = { nakit: '', kart: '', yatan: '', kirilim: null, aciklama: '' }
+
+/** Z raporu ile hesaba yatan arasındaki pos komisyonu */
+function komisyon(zRaporu: number, hesabaYatan: number) {
+  const fark = Math.round((zRaporu - hesabaYatan) * 100) / 100
+  return { fark, oran: zRaporu > 0 ? (fark / zRaporu) * 100 : 0 }
+}
 
 /** Kırılım açıkken ilk gelen banka satırları */
 const VARSAYILAN_BANKALAR = ['VAKIFBANK', 'HALKBANK']
@@ -125,6 +142,20 @@ export function CiroEkrani({
   const genelNakit = gunler.reduce((t, [, gun]) => t + gunToplami(gun, 'nakit'), 0)
   const genelKart = gunler.reduce((t, [, gun]) => t + gunToplami(gun, 'kart'), 0)
 
+  // Dönemin pos komisyonu: yalnız hesaba yatanı girilmiş günler sayılıyor,
+  // yoksa girilmemiş günler komisyonsuzmuş gibi oranı aşağı çekiyordu.
+  const genelKomisyon = useMemo(() => {
+    let zRaporu = 0
+    let fark = 0
+    for (const [, gun] of gunler)
+      for (const s of gun.values()) {
+        if (s.kart_yatan === null) continue
+        zRaporu += Number(s.kart)
+        fark += Number(s.kart) - Number(s.kart_yatan)
+      }
+    return { zRaporu, fark: Math.round(fark * 100) / 100 }
+  }, [gunler])
+
   // Dönemdeki kart hasılatının banka dağılımı; kırılımı olmayan satırların
   // kartı ayrı tutuluyor ki iki rakam toplamda kart ile aynı yeri bulsun.
   const { bankaToplamlari, kirilimsizKart } = useMemo(() => {
@@ -170,6 +201,8 @@ export function CiroEkrani({
           {
             nakit: String(Number(s.nakit)).replace('.', ','),
             kart: String(Number(s.kart)).replace('.', ','),
+            yatan:
+              s.kart_yatan === null ? '' : String(Number(s.kart_yatan)).replace('.', ','),
             kirilim: s.kart_kirilimi
               ? Object.entries(s.kart_kirilimi).map(([banka, tutar]) => ({
                   banka,
@@ -241,6 +274,7 @@ export function CiroEkrani({
           yer,
           nakit: v.nakit.trim() || '0',
           kart: v.kart.trim() || '0',
+          kart_yatan: v.yatan.trim(),
           aciklama: v.aciklama,
           ...(dolu.length > 0
             ? { kart_kirilimi: JSON.stringify(dolu.map((k) => [k.banka, k.tutar || '0'])) }
@@ -333,21 +367,56 @@ export function CiroEkrani({
                     />
                   </label>
                   <label className="flex flex-col text-[11px] text-solgun">
-                    Kredi kartı
+                    Kredi kartı · Z raporu
                     <input
                       id={`ciro-${yer}-kart`}
                       inputMode="decimal"
                       placeholder="0,00"
                       value={v.kirilim ? para(kartTutari) : v.kart}
                       readOnly={!!v.kirilim}
-                      title={v.kirilim ? 'Banka kırılımından hesaplanıyor' : undefined}
+                      title={
+                        v.kirilim
+                          ? 'Banka kırılımından hesaplanıyor'
+                          : 'Posun çektiği brüt tutar — ciroya bu girer'
+                      }
                       onChange={(e) => yeriDegistir(yer, { kart: e.target.value })}
                       className={`girdi w-28 !py-1.5 text-right tabular-nums ${
                         v.kirilim ? 'bg-slate-100 text-slate-600' : ''
                       }`}
                     />
                   </label>
+                  <label className="flex flex-col text-[11px] text-solgun">
+                    Hesaba yatan
+                    <input
+                      inputMode="decimal"
+                      placeholder="—"
+                      value={v.yatan}
+                      title="Bankadan hesaba geçen net tutar; aradaki fark pos komisyonu"
+                      onChange={(e) => yeriDegistir(yer, { yatan: e.target.value })}
+                      className="girdi w-28 !py-1.5 text-right tabular-nums"
+                    />
+                  </label>
                 </div>
+
+                {/* Komisyon: Z raporu ile hesaba yatan arasındaki fark */}
+                {v.yatan.trim() !== '' &&
+                  kartTutari > 0 &&
+                  (() => {
+                    const { fark, oran } = komisyon(kartTutari, sayiya(v.yatan))
+                    return (
+                      <p
+                        className={`mt-1 text-right text-[11px] ${
+                          fark < 0 ? 'text-amber-700' : 'text-solgun'
+                        }`}
+                      >
+                        {fark < 0 ? 'yatan Z raporundan fazla · ' : 'komisyon '}
+                        <strong className="tabular-nums">
+                          %{Math.abs(oran).toFixed(2).replace('.', ',')}
+                        </strong>{' '}
+                        <span className="tabular-nums">({para(Math.abs(fark))})</span>
+                      </p>
+                    )
+                  })()}
 
                 {/* Banka kırılımı: poslar farklı bankalara bağlı olduğunda
                     hangisinden ne geldiği buradan giriliyor. İsteğe bağlı. */}
@@ -545,6 +614,15 @@ export function CiroEkrani({
               Kredi kartı
             </p>
             <p className="text-xl font-bold tabular-nums text-indigo-700">{para(genelKart)}</p>
+            {/* Komisyon yalnız hesaba yatanı girilmiş günlerden hesaplanıyor */}
+            {genelKomisyon.zRaporu > 0 && (
+              <p className="text-xs text-solgun">
+                komisyon {para(genelKomisyon.fark)} · %
+                {((genelKomisyon.fark / genelKomisyon.zRaporu) * 100)
+                  .toFixed(2)
+                  .replace('.', ',')}
+              </p>
+            )}
           </div>
           <div>
             <p className="text-xs font-semibold tracking-wide text-solgun uppercase">
@@ -626,6 +704,15 @@ export function CiroEkrani({
                                 {banka} {para(tutar)}
                               </span>
                             ))}
+                          {/* Hesaba yatan girilmişse pos komisyonu da görünür */}
+                          {s.kart_yatan !== null && Number(s.kart) > 0 && (
+                            <span className="block text-[11px] text-solgun">
+                              yatan {para(s.kart_yatan)} · kom. %
+                              {komisyon(Number(s.kart), Number(s.kart_yatan))
+                                .oran.toFixed(2)
+                                .replace('.', ',')}
+                            </span>
+                          )}
                           {s.aciklama && (
                             <span className="block text-left text-[11px] text-solgun italic">
                               {s.aciklama}

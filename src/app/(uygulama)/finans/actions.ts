@@ -1086,7 +1086,9 @@ const ciroSemasi = z.object({
   // Hasılat nakit ve kart olarak ayrı giriliyor; toplam bunlardan çıkar,
   // ayrıca yazılmıyor ki iki rakam birbirini tutmaz hâle gelmesin.
   nakit: trSayi({ min: 0 }),
+  // Kart = Z raporu (brüt); hesaba yatan ayrı, aradaki fark pos komisyonu
   kart: trSayi({ min: 0 }),
+  kart_yatan: z.string().trim().optional(),
   aciklama: bosNull,
   /**
    * Kredi kartının banka kırılımı: `[["VAKIFBANK","1.200,50"], …]` JSON'u.
@@ -1132,9 +1134,17 @@ export async function ciroKaydet(veri: Record<string, string>): Promise<FinansDu
   const sonuc = ciroSemasi.safeParse(veri)
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
-  const { kart_kirilimi: ham, ...veriler } = sonuc.data
+  const { kart_kirilimi: ham, kart_yatan: yatanHam, ...veriler } = sonuc.data
   const { kirilim, hata: kirilimHatasi } = kirilimCoz(ham)
   if (kirilimHatasi) return { hata: kirilimHatasi }
+
+  // Hesaba yatan isteğe bağlı: boşsa komisyon hesaplanmıyor
+  let kartYatan: number | null = null
+  if (yatanHam) {
+    const n = Number(yatanHam.replace(/\./g, '').replace(',', '.'))
+    if (!Number.isFinite(n) || n < 0) return { hata: 'Hesaba yatan tutar sayı olmalı.' }
+    kartYatan = Math.round(n * 100) / 100
+  }
 
   // Kırılım varsa kart tutarı onun toplamı: kullanıcı aynı rakamı iki kez
   // yazmasın, yazarsa da ikisi birbirinden ayrı düşmesin.
@@ -1147,7 +1157,9 @@ export async function ciroKaydet(veri: Record<string, string>): Promise<FinansDu
     {
       ...veriler,
       kart,
+      kart_yatan: kartYatan,
       kart_kirilimi: kirilim,
+      // Ciro brütten hesaplanıyor: komisyon gider tarafında kalmalı
       tutar: Math.round((veriler.nakit + kart) * 100) / 100,
     },
     { onConflict: 'tarih,yer' },
