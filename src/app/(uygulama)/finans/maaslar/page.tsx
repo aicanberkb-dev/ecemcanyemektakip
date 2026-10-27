@@ -4,6 +4,7 @@ import {
   MaasEkrani,
   type Gider,
   type MaasOdemesi,
+  type OdemeHareketi,
   type Personel,
   type Ucret,
 } from './MaasEkrani'
@@ -29,6 +30,7 @@ export default async function MaaslarPage({
     { data: giderVeri },
     { data: gizliVeri },
     { data: sgkGizliVeri },
+    { data: hareketVeri },
   ] = await Promise.all([
       supabase.from('personeller').select('*').order('sira'),
       supabase
@@ -58,6 +60,13 @@ export default async function MaaslarPage({
         .select('tur')
         .eq('donem_yil', yil)
         .eq('donem_ay', ay),
+      // Ayın ödeme hareketleri: maaş parça parça ödenebiliyor
+      supabase
+        .from('maas_odeme_hareketleri')
+        .select('id, personel_id, tarih, tutar, aciklama')
+        .eq('donem_yil', yil)
+        .eq('donem_ay', ay)
+        .order('tarih'),
   ])
 
   return (
@@ -76,6 +85,7 @@ export default async function MaaslarPage({
         personeller={(personelVeri ?? []) as Personel[]}
         ucretler={(ucretVeri ?? []) as Ucret[]}
         odemeler={(odemeVeri ?? []) as MaasOdemesi[]}
+        hareketler={(hareketVeri ?? []) as OdemeHareketi[]}
         giderler={(giderVeri ?? []) as Gider[]}
         gizliler={((gizliVeri ?? []) as { personel_id: string }[]).map((g) => g.personel_id)}
         sgkGizli={((sgkGizliVeri ?? []) as { tur: string }[]).map((g) => g.tur)}

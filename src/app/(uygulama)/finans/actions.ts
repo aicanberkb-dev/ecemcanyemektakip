@@ -6,6 +6,8 @@ import { z } from 'zod'
 import { supabaseServer } from '@/lib/supabase/server'
 import { bosNull, trSayi } from '@/lib/zod-tr'
 
+import { ayinOdemeleriniSil, ozetiYenile } from './maaslar/ozet'
+
 export type FinansDurumu = {
   hata?: string
   basari?: string
@@ -762,53 +764,48 @@ export async function maasOde(
 
   const supabase = await supabaseServer()
 
-  const [{ data: personel }, { data: eski }] = await Promise.all([
-    supabase.from('personeller').select('ad').eq('id', personelId).maybeSingle(),
-    supabase
-      .from('maas_odemeleri')
-      .select('gider_id')
-      .eq('personel_id', personelId)
-      .eq('donem_yil', yil)
-      .eq('donem_ay', ay)
-      .maybeSingle(),
-  ])
-
-  // Ödenen maaş günlük masrafa da yazılıyor — ayrıca elle girmek gerekmesin.
-  // Oluşan satırın id'si ödemede tutuluyor ki geri alınca aynı satır silinsin.
-  const ad = (personel as { ad?: string } | null)?.ad ?? 'Personel'
-  const aciklama = `Maaş — ${ad} · ${String(ay).padStart(2, '0')}.${yil}`
-  let giderId = (eski as { gider_id?: string | null } | null)?.gider_id ?? null
+  // Ayın ödemeleri tek parçaya indiriliyor: bu düğme "tamamını ödedim"
+  // demek. Parça parça ödeme için maasOdemeEkle kullanılıyor.
+  const silmeHatasi = await ayinOdemeleriniSil(supabase, personelId, yil, ay)
+  if (silmeHatasi) return { hata: silmeHatasi }
 
   if (tutar > 0) {
-    if (giderId) {
-      const { error } = await supabase
-        .from('gunluk_gider')
-        .update({ tarih: odemeTarihi, tutar, masraf_noktasi: 'MAAŞ', aciklama })
-        .eq('id', giderId)
-      if (error) return { hata: error.message }
-    } else {
-      const { data: yeni, error } = await supabase
-        .from('gunluk_gider')
-        .insert({ tarih: odemeTarihi, tutar, masraf_noktasi: 'MAAŞ', aciklama })
-        .select('id')
-        .single()
-      if (error) return { hata: error.message }
-      giderId = (yeni as { id: string }).id
-    }
-  }
+    const { data: personel } = await supabase
+      .from('personeller')
+      .select('ad')
+      .eq('id', personelId)
+      .maybeSingle()
+    const ad = (personel as { ad?: string } | null)?.ad ?? 'Personel'
 
-  const { error } = await supabase.from('maas_odemeleri').upsert(
-    {
+    // Ödenen maaş günlük masrafa da yazılıyor — ayrıca elle girmek gerekmesin.
+    const { data: yeniGider, error: giderHatasi } = await supabase
+      .from('gunluk_gider')
+      .insert({
+        tarih: odemeTarihi,
+        tutar,
+        masraf_noktasi: 'MAAŞ',
+        aciklama: `Maaş — ${ad} · ${String(ay).padStart(2, '0')}.${yil}`,
+      })
+      .select('id')
+      .single()
+    if (giderHatasi) return { hata: giderHatasi.message }
+
+    const { error } = await supabase.from('maas_odeme_hareketleri').insert({
       personel_id: personelId,
       donem_yil: yil,
       donem_ay: ay,
+      tarih: odemeTarihi,
       tutar,
-      odeme_tarihi: odemeTarihi,
-      gider_id: giderId,
-    },
-    { onConflict: 'personel_id,donem_yil,donem_ay' },
-  )
-  if (error) return { hata: error.message }
+      gider_id: (yeniGider as { id: string }).id,
+    })
+    if (error) {
+      await supabase.from('gunluk_gider').delete().eq('id', (yeniGider as { id: string }).id)
+      return { hata: error.message }
+    }
+  }
+
+  const ozetHatasi = await ozetiYenile(supabase, personelId, yil, ay)
+  if (ozetHatasi) return { hata: ozetHatasi }
 
   tazele()
   return { basari: 'Maaş ödendi işaretlendi, günlük masrafa yazıldı.' }
@@ -821,29 +818,16 @@ export async function maasGeriAl(
 ): Promise<FinansDurumu> {
   const supabase = await supabaseServer()
 
-  // Ödemeyle birlikte açılan masraf satırı da kalkıyor; defterde ödenmemiş
-  // bir maaşın masrafı durmasın.
-  const { data: eski } = await supabase
-    .from('maas_odemeleri')
-    .select('gider_id')
-    .eq('personel_id', personelId)
-    .eq('donem_yil', yil)
-    .eq('donem_ay', ay)
-    .maybeSingle()
+  // Ayın bütün ödemeleri ve onlarla açılan masraf satırları kalkıyor;
+  // defterde ödenmemiş bir maaşın masrafı durmasın.
+  const silmeHatasi = await ayinOdemeleriniSil(supabase, personelId, yil, ay)
+  if (silmeHatasi) return { hata: silmeHatasi }
 
-  const giderId = (eski as { gider_id?: string | null } | null)?.gider_id
-  if (giderId) await supabase.from('gunluk_gider').delete().eq('id', giderId)
-
-  const { error } = await supabase
-    .from('maas_odemeleri')
-    .delete()
-    .eq('personel_id', personelId)
-    .eq('donem_yil', yil)
-    .eq('donem_ay', ay)
-  if (error) return { hata: error.message }
+  const ozetHatasi = await ozetiYenile(supabase, personelId, yil, ay)
+  if (ozetHatasi) return { hata: ozetHatasi }
 
   tazele()
-  return { basari: 'Ödeme geri alındı, masraf satırı silindi.' }
+  return { basari: 'Ödeme geri alındı, masraf satırları silindi.' }
 }
 
 // ---------------------------------------------------------------------------

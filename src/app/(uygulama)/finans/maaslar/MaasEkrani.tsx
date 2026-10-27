@@ -23,6 +23,7 @@ import {
   ucretSil,
   type FinansDurumu,
 } from '../actions'
+import { maasOdemeEkle, maasOdemeSil } from './odeme-actions'
 
 export type Personel = {
   id: string
@@ -38,6 +39,20 @@ export type Ucret = {
   id: string
   personel_id: string
   gecerli_baslangic: string
+  tutar: number | string
+  aciklama: string | null
+}
+
+/**
+ * Bir ödeme parçası.
+ *
+ * Maaş tek seferde ödenmek zorunda değil: her parçanın kendi tarihi ve
+ * tutarı var, her biri günlük masraf defterine kendi gününe yazılıyor.
+ */
+export type OdemeHareketi = {
+  id: string
+  personel_id: string
+  tarih: string
   tutar: number | string
   aciklama: string | null
 }
@@ -97,6 +112,7 @@ export function MaasEkrani({
   personeller,
   ucretler,
   odemeler,
+  hareketler,
   giderler,
   gizliler,
   sgkGizli,
@@ -106,6 +122,8 @@ export function MaasEkrani({
   personeller: Personel[]
   ucretler: Ucret[]
   odemeler: MaasOdemesi[]
+  /** Ayın ödeme parçaları; bir maaş birkaç seferde ödenebiliyor */
+  hareketler: OdemeHareketi[]
   giderler: Gider[]
   /** Bu ay listeden elle çıkarılan personelin id'leri */
   gizliler: string[]
@@ -135,6 +153,7 @@ export function MaasEkrani({
 
   const satirlar = gosterilen.map((p) => {
     const odeme = odemeler.find((o) => o.personel_id === p.id)
+    const parcalar = hareketler.filter((h) => h.personel_id === p.id)
     const ucret = ucretBul(p.id)
     const beklenen = Number(ucret?.tutar ?? 0)
     const vade = maasTarihi(yil, ay, p.maas_gunu)
@@ -144,6 +163,7 @@ export function MaasEkrani({
     return {
       personel: p,
       odeme,
+      parcalar,
       beklenen,
       vade,
       kalanGun,
@@ -594,6 +614,7 @@ function GeriGetir({
 function PersonelSatiri({
   personel,
   odeme,
+  parcalar,
   beklenen,
   vade,
   gecikti,
@@ -607,6 +628,8 @@ function PersonelSatiri({
 }: {
   personel: Personel
   odeme: MaasOdemesi | undefined
+  /** Ayın ödeme parçaları; tek seferde ödendiyse tek eleman */
+  parcalar: OdemeHareketi[]
   beklenen: number
   vade: string | null
   gecikti: boolean
@@ -637,6 +660,16 @@ function PersonelSatiri({
   // birkaç gün önce ya da sonra veriliyor.
   const [odemeTarihi, setOdemeTarihi] = useState(odeme?.odeme_tarihi ?? bugun)
   const [calisiyor, setCalisiyor] = useState(false)
+  // Kısmi ödeme paneli: maaş parça parça ödendiğinde açılır
+  const [parcaAcik, setParcaAcik] = useState(false)
+  const [parcaTarih, setParcaTarih] = useState(bugun)
+  const [parcaTutar, setParcaTutar] = useState('')
+  const [parcaNot, setParcaNot] = useState('')
+
+  const odenen = parcalar.reduce((t, p) => t + Number(p.tutar), 0)
+  const kalan = Math.round((beklenen - odenen) * 100) / 100
+  /** Birden fazla parça varsa tutar kutusu kilitlenir: tek rakama indirmesin */
+  const parcali = parcalar.length > 1
 
   const guncelle = personelGuncelle.bind(null, personel.id)
   const [durum, gonder, bekliyor] = useActionState(guncelle, {} as FinansDurumu)
@@ -805,19 +838,23 @@ function PersonelSatiri({
           <input
             value={tutar}
             onChange={(e) => setTutar(e.target.value)}
+            readOnly={parcali}
             onBlur={() => {
               // Ödenmiş satırda rakam değişirse ödeme kaydı da değişir;
               // yoksa yukarıdaki toplam eski rakamda kalıyordu.
-              if (!odeme) return
+              // Parçalı ödemede kilitli: tek rakam yazmak parçaları siler.
+              if (!odeme || parcali) return
               const t = sayiOku(tutar)
               if (Number.isNaN(t) || t < 0 || t === Number(odeme.tutar)) return
               calistir(() => maasOde(personel.id, yil, ay, t, odeme.odeme_tarihi ?? bugun))
             }}
             inputMode="decimal"
             title={
-              odeme
-                ? 'Ödenen tutar — düzeltirsen üstteki toplam da düzelir'
-                : 'Bu ay ödenecek tutar — avans/eksik ödeme için değiştirilebilir'
+              parcali
+                ? 'Parça parça ödendi — tutar aşağıdaki ödemelerden hesaplanıyor'
+                : odeme
+                  ? 'Ödenen tutar — düzeltirsen üstteki toplam da düzelir'
+                  : 'Bu ay ödenecek tutar — avans/eksik ödeme için değiştirilebilir'
             }
             className="w-28 rounded border border-cizgi px-2 py-1 text-right text-sm font-semibold
                        tabular-nums outline-none focus:border-vurgu focus:ring-2 focus:ring-blue-100"
@@ -888,6 +925,15 @@ function PersonelSatiri({
           <span className="mx-2 text-cizgi">|</span>
           <button
             type="button"
+            onClick={() => setParcaAcik(!parcaAcik)}
+            className="text-xs text-vurgu hover:underline"
+            title="Maaşı parça parça öde — her parça kendi gününe masraf yazılır"
+          >
+            {parcalar.length > 0 ? `Ödemeler (${parcalar.length})` : 'Kısmi ödeme'}
+          </button>
+          <span className="mx-2 text-cizgi">|</span>
+          <button
+            type="button"
             onClick={() => setDuzenle(true)}
             className="text-xs text-vurgu hover:underline"
             title="Bilgileri ve maaşı düzenle"
@@ -927,6 +973,116 @@ function PersonelSatiri({
         </td>
       </tr>
 
+      {/* Kısmi ödeme: maaş birkaç seferde ödendiğinde her parça kendi
+          tarihiyle günlük masraf defterine yazılıyor. */}
+      {(parcaAcik || parcalar.length > 0) && (
+        <tr className="bg-slate-50/80">
+          <td colSpan={7} className="px-3 py-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-semibold">Ödemeler</span>
+              {parcalar.length === 0 && <span className="text-solgun">henüz ödeme yok</span>}
+              {parcalar.map((p) => (
+                <span
+                  key={p.id}
+                  className="inline-flex items-center gap-1.5 rounded border border-cizgi bg-white px-2 py-1"
+                  title={p.aciklama ?? undefined}
+                >
+                  <span className="text-solgun">{tarihBicim(p.tarih)}</span>
+                  <span className="font-semibold tabular-nums">{para(p.tutar)}</span>
+                  <button
+                    type="button"
+                    disabled={calisiyor}
+                    aria-label={`${tarihBicim(p.tarih)} ödemesini sil`}
+                    onClick={() => {
+                      if (!confirm(`${para(p.tutar)} ödemesi silinecek. Emin misiniz?`)) return
+                      calistir(() => maasOdemeSil(p.id))
+                    }}
+                    className="text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+
+              {parcalar.length > 0 && (
+                <span className="ml-2 text-solgun">
+                  ödenen <strong className="tabular-nums">{para(odenen)}</strong>
+                  {beklenen > 0 && (
+                    <>
+                      {' · '}
+                      {kalan > 0 ? (
+                        <>
+                          kalan <strong className="text-red-700 tabular-nums">{para(kalan)}</strong>
+                        </>
+                      ) : kalan < 0 ? (
+                        <>
+                          fazla{' '}
+                          <strong className="text-amber-700 tabular-nums">{para(-kalan)}</strong>
+                        </>
+                      ) : (
+                        <strong className="text-emerald-700">tamamlandı</strong>
+                      )}
+                    </>
+                  )}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <label className="text-[11px] text-solgun">
+                <span className="block font-semibold">Tarih</span>
+                <input
+                  type="date"
+                  value={parcaTarih}
+                  onChange={(e) => setParcaTarih(e.target.value)}
+                  className="girdi mt-0.5 !py-1 text-xs"
+                />
+              </label>
+              <label className="text-[11px] text-solgun">
+                <span className="block font-semibold">Tutar</span>
+                <input
+                  inputMode="decimal"
+                  value={parcaTutar}
+                  onChange={(e) => setParcaTutar(e.target.value)}
+                  placeholder={kalan > 0 ? para(kalan) : '0,00'}
+                  className="girdi mt-0.5 w-28 !py-1 text-right text-xs tabular-nums"
+                />
+              </label>
+              <label className="flex-1 text-[11px] text-solgun">
+                <span className="block font-semibold">Açıklama</span>
+                <input
+                  value={parcaNot}
+                  onChange={(e) => setParcaNot(e.target.value)}
+                  placeholder="avans, kalan ödeme…"
+                  className="girdi mt-0.5 w-full !py-1 text-xs"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={calisiyor}
+                onClick={() => {
+                  const t = sayiOku(parcaTutar)
+                  if (Number.isNaN(t) || t <= 0) {
+                    alert('Geçerli bir tutar girin.')
+                    return
+                  }
+                  calistir(async () => {
+                    const s = await maasOdemeEkle(personel.id, yil, ay, t, parcaTarih, parcaNot)
+                    if (!s.hata) {
+                      setParcaTutar('')
+                      setParcaNot('')
+                    }
+                    return s
+                  })
+                }}
+                className="btn-birincil !py-1 text-xs"
+              >
+                Ödeme ekle
+              </button>
+            </div>
+          </td>
+        </tr>
+      )}
     </>
   )
 }
