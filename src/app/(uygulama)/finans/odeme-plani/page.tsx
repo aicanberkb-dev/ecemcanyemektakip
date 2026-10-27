@@ -69,7 +69,9 @@ export default async function OdemePlaniPage({
   ] = await Promise.all([
     supabase.from('personeller').select('id, ad, maas_gunu, calistigi_yer').eq('aktif', true),
     supabase.from('maas_odemeleri').select('personel_id, donem_yil, donem_ay, tutar'),
-    supabase.from('senetler').select('id, vade_tarihi, kime, tutar, banka, senet_no, odeme_tarihi'),
+    supabase
+      .from('senetler')
+      .select('id, vade_tarihi, son_odeme, kime, tutar, banka, senet_no, odeme_tarihi'),
     supabase.from('donemsel_giderler').select('id, tur, donem_yil, donem_ay, tutar, odeme_tarihi'),
     supabase
       .from('fatura_odemeleri')
@@ -146,10 +148,13 @@ export default async function OdemePlaniPage({
     }
   }
 
-  // --- Senetler: vadesi girilmiş, ödeme tarihi boş olanlar
+  // --- Senetler: ödeme tarihi boş olanlar.
+  // Takvimde son ödeme günü esas alınıyor — paranın en geç ne zaman
+  // hazır olması gerektiği o. Son ödeme girilmemişse vade tarihine düşer.
   for (const s of (senetVeri ?? []) as {
     id: string
     vade_tarihi: string
+    son_odeme: string | null
     kime: string
     tutar: number | string
     banka: string | null
@@ -160,10 +165,13 @@ export default async function OdemePlaniPage({
     kalemler.push({
       id: `senet-${s.id}`,
       tur: 'Senet',
-      vade: s.vade_tarihi,
+      vade: s.son_odeme ?? s.vade_tarihi,
       kime: s.kime,
       tutar: Number(s.tutar),
-      not: [s.banka, s.senet_no].filter(Boolean).join(' · ') || null,
+      not:
+        [s.banka, s.senet_no].filter(Boolean).join(' · ') ||
+        (s.son_odeme ? null : 'son ödeme günü girilmemiş') ||
+        null,
       yol: '/finans',
     })
   }
