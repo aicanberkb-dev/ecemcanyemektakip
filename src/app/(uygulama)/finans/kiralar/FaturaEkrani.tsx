@@ -208,6 +208,10 @@ export function FaturaEkrani({
                   <td key={tur}>
                     {turVar(yer, tur) ? (
                       <Hucre
+                        /* Dönem anahtarda: ay değişince kutular yeniden
+                           kuruluyor. Yoksa önceki ayın yazdığı rakam kutuda
+                           kalıyor ve odak değişince yeni aya kaydediliyordu. */
+                        key={donem}
                         yer={yer.ad}
                         tur={tur}
                         donem={donem}
