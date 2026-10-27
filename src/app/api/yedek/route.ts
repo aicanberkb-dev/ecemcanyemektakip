@@ -12,8 +12,15 @@ import { oturumBilgisi } from '@/lib/yetki'
  * dönüştürmez — yeni bir kuruluma aynen basılabilsin diye.
  */
 
-/** Yedeğe giren tablolar. Sıra, geri yüklerken bağımlılıkları bozmayacak şekilde. */
-const TABLOLAR = [
+/**
+ * Geri yüklerken önce yazılacak tablolar.
+ *
+ * Sıra bağımlılıkları bozmayacak şekilde: okullar yazılmadan öğrenci,
+ * öğrenci yazılmadan hareket yazılamaz. Bu listede olmayan tablolar
+ * veritabanından okunup sona ekleniyor — yeni tablo eklendiğinde yedeğe
+ * girmesi için burayı güncellemek gerekmesin.
+ */
+const ONCELIKLI = [
   'okullar',
   'profiles',
   'app_settings',
@@ -66,7 +73,17 @@ export async function GET() {
   const sayim: Record<string, number> = {}
   const hatalar: Record<string, string> = {}
 
-  for (const tablo of [...TABLOLAR, ...GORUNUMLER]) {
+  // Tablo listesi veritabanından: elle tutulan listede yeni tablolar
+  // unutuluyordu. Öncelikli olanlar başta, kalanlar arkasına ekleniyor.
+  const { data: tumTablolar, error: listeHatasi } = await supabase.rpc('tablo_listesi')
+  if (listeHatasi) hatalar['tablo_listesi'] = listeHatasi.message
+
+  const bulunanlar = ((tumTablolar ?? []) as string[]).filter(
+    (t) => !ONCELIKLI.includes(t as (typeof ONCELIKLI)[number]),
+  )
+  const tablolar = [...ONCELIKLI, ...bulunanlar]
+
+  for (const tablo of [...tablolar, ...GORUNUMLER]) {
     // Sayfalama: tek istekte dönen satır sayısı sınırlı olabiliyor
     const satirlar: unknown[] = []
     let bas = 0
@@ -95,6 +112,8 @@ export async function GET() {
     olusturulma: new Date().toISOString(),
     kaynak: process.env.NEXT_PUBLIC_SUPABASE_URL ?? null,
     alan: oturum.email ?? null,
+    tablo_sayisi: tablolar.length,
+    toplam_satir: Object.values(sayim).reduce((t, n) => t + n, 0),
     satir_sayilari: sayim,
     ...(Object.keys(hatalar).length > 0 ? { okunamayan: hatalar } : {}),
     veri,
