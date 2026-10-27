@@ -200,13 +200,15 @@ export default async function OdemePlaniPage({
   }
 
   // --- Faturalar: aboneliğin vade günü, faturanın kendi dönemi içinde
-  const vadeGunu = new Map(
-    ((abonelikVeri ?? []) as {
-      yer: string
-      gider_turu: string
-      vade_gunu: number | null
-      sozlesme_no: string | null
-    }[]).map((a) => [`${a.yer}|${a.gider_turu}`, a]),
+  const abonelikler = new Map(
+    (
+      (abonelikVeri ?? []) as {
+        yer: string
+        gider_turu: string
+        vade_gunu: number | null
+        sozlesme_no: string | null
+      }[]
+    ).map((a) => [`${a.yer}|${a.gider_turu}`, a]),
   )
   for (const f of (faturaVeri ?? []) as {
     yer: string
@@ -215,16 +217,29 @@ export default async function OdemePlaniPage({
     tutar: number | string
   }[]) {
     if (!DONEMLER.includes(f.donem)) continue
-    const a = vadeGunu.get(`${f.yer}|${f.gider_turu}`)
-    if (!a?.vade_gunu) continue
+    // Tutarı girilmemiş fatura bilinen bir borç değil: takvimde yer tutup
+    // gecikmiş görünmesi kafa karıştırıyordu.
+    const tutar = Number(f.tutar)
+    if (!(tutar > 0)) continue
+
+    const a = abonelikler.get(`${f.yer}|${f.gider_turu}`)
     const [yil, ay] = f.donem.split('-').map(Number)
+    // Vade günü girilmemişse ayın son gününe düşüyor; yoksa tutarı girilmiş
+    // bir fatura takvimde hiç görünmüyordu.
+    const vade = ayinGunu(yil, ay, a?.vade_gunu ?? 31)
+
+    const notlar = [
+      a?.sozlesme_no ? `Söz. ${a.sozlesme_no}` : null,
+      a?.vade_gunu ? null : 'vade günü girilmemiş',
+    ].filter(Boolean)
+
     kalemler.push({
       id: `fatura-${f.yer}-${f.gider_turu}-${f.donem}`,
       tur: GIDER_ADLARI[f.gider_turu],
-      vade: ayinGunu(yil, ay, a.vade_gunu),
+      vade,
       kime: f.yer,
-      tutar: Number(f.tutar) || null,
-      not: a.sozlesme_no ? `Söz. ${a.sozlesme_no}` : null,
+      tutar,
+      not: notlar.join(' · ') || null,
       yol: '/finans/kiralar?sekme=faturalar',
     })
   }
