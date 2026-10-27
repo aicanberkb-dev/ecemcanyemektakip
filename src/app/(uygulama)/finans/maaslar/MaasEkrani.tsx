@@ -157,13 +157,20 @@ export function MaasEkrani({
     const ucret = ucretBul(p.id)
     const beklenen = Number(ucret?.tutar ?? 0)
     const vade = maasTarihi(yil, ay, p.maas_gunu)
+    // Kısmi ödeme borcu bitirmiyor: tamamı ödenene kadar satır ödenmiş
+    // sayılmıyor, vade uyarıları da çalışmaya devam ediyor.
+    const odenen = Number(odeme?.tutar ?? 0)
+    const tamOdendi = !!odeme && (beklenen <= 0 || odenen + 0.009 >= beklenen)
+    const kismi = !!odeme && !tamOdendi
     // Vadeye kalan gün: ödenmemişlerde bir hafta kalınca uyarı verilir,
     // maaş günü sabah hatırlanacak bir şey olmaktan çıksın.
-    const kalanGun = !odeme && vade ? gunFarki(vade, bugun) : null
+    const kalanGun = !tamOdendi && vade ? gunFarki(vade, bugun) : null
     return {
       personel: p,
       odeme,
       parcalar,
+      tamOdendi,
+      kismi,
       beklenen,
       vade,
       kalanGun,
@@ -615,6 +622,8 @@ function PersonelSatiri({
   personel,
   odeme,
   parcalar,
+  tamOdendi,
+  kismi,
   beklenen,
   vade,
   gecikti,
@@ -630,6 +639,10 @@ function PersonelSatiri({
   odeme: MaasOdemesi | undefined
   /** Ayın ödeme parçaları; tek seferde ödendiyse tek eleman */
   parcalar: OdemeHareketi[]
+  /** Ücretin tamamı ödendi */
+  tamOdendi: boolean
+  /** Ödeme var ama ücretin tamamı değil — borç sürüyor */
+  kismi: boolean
   beklenen: number
   vade: string | null
   gecikti: boolean
@@ -800,17 +813,21 @@ function PersonelSatiri({
     <>
       <tr
         className={
-          odeme
+          // Kısmi ödeme yeşil değil: borç sürüyor. Vadesi de geçtiyse
+          // kırmızı öne çıkıyor, en acil bilgi o.
+          tamOdendi
             ? 'bg-emerald-50/60'
             : gecikti
               ? 'bg-red-50'
-              : bugunMu
-                ? 'bg-amber-50'
-                : yaklasti
-                  ? 'bg-yellow-50'
-                  : personel.aktif
-                    ? undefined
-                    : 'opacity-50'
+              : kismi
+                ? 'bg-sky-50'
+                : bugunMu
+                  ? 'bg-amber-50'
+                  : yaklasti
+                    ? 'bg-yellow-50'
+                    : personel.aktif
+                      ? undefined
+                      : 'opacity-50'
         }
       >
         <td className="font-medium">
@@ -865,9 +882,15 @@ function PersonelSatiri({
           )}
         </td>
         <td>
-          {odeme ? (
+          {tamOdendi && odeme ? (
             <span className="rozet bg-emerald-100 text-emerald-800">
               ödendi · {tarihBicim(odeme.odeme_tarihi)}
+            </span>
+          ) : kismi ? (
+            // Kısmi ödemede kalan tutar rozetin kendisinde: tabloya bakarken
+            // ne kadar borç kaldığı tıklamadan görünsün
+            <span className="rozet bg-sky-100 text-sky-800" title="Kısmi ödeme — borç sürüyor">
+              kalan {para(kalan)}
             </span>
           ) : ucretGecmisi.length === 0 ? (
             // Ücreti hiç tanımlanmamış personel 0 ₺ ile sessizce duruyordu;
@@ -975,7 +998,7 @@ function PersonelSatiri({
 
       {/* Kısmi ödeme: maaş birkaç seferde ödendiğinde her parça kendi
           tarihiyle günlük masraf defterine yazılıyor. */}
-      {(parcaAcik || parcalar.length > 0) && (
+      {parcaAcik && (
         <tr className="bg-slate-50/80">
           <td colSpan={7} className="px-3 py-2">
             <div className="flex flex-wrap items-center gap-2 text-xs">

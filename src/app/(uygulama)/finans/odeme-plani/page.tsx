@@ -65,9 +65,10 @@ export default async function OdemePlaniPage({
     { data: faturaVeri },
     { data: abonelikVeri },
     { data: planVeri },
+    { data: ucretVeri },
   ] = await Promise.all([
     supabase.from('personeller').select('id, ad, maas_gunu, calistigi_yer').eq('aktif', true),
-    supabase.from('maas_odemeleri').select('personel_id, donem_yil, donem_ay'),
+    supabase.from('maas_odemeleri').select('personel_id, donem_yil, donem_ay, tutar'),
     supabase.from('senetler').select('id, vade_tarihi, kime, tutar, banka, senet_no, odeme_tarihi'),
     supabase.from('donemsel_giderler').select('id, tur, donem_yil, donem_ay, tutar, odeme_tarihi'),
     supabase
@@ -76,16 +77,39 @@ export default async function OdemePlaniPage({
       .eq('odendi', false),
     supabase.from('fatura_abonelikleri').select('yer, gider_turu, vade_gunu, sozlesme_no'),
     supabase.from('odeme_plani').select('id, vade_tarihi, kime, tutar, aciklama, odendi'),
+    supabase
+      .from('personel_ucretleri')
+      .select('personel_id, gecerli_baslangic, tutar')
+      .order('gecerli_baslangic', { ascending: false }),
   ])
 
   const kalemler: Kalem[] = []
 
   // --- Maaşlar: personelin maaş günü, bu haftanın içine düşen aylar için
-  const odenmis = new Set(
-    ((maasVeri ?? []) as { personel_id: string; donem_yil: number; donem_ay: number }[]).map(
-      (m) => `${m.personel_id}|${m.donem_yil}|${m.donem_ay}`,
-    ),
+  // Kısmi ödenen maaş takvimden düşmüyor: kalan borç kadarıyla duruyor.
+  const odenenler = new Map(
+    (
+      (maasVeri ?? []) as {
+        personel_id: string
+        donem_yil: number
+        donem_ay: number
+        tutar: number | string
+      }[]
+    ).map((m) => [`${m.personel_id}|${m.donem_yil}|${m.donem_ay}`, Number(m.tutar)]),
   )
+
+  const ucretler = ((ucretVeri ?? []) as {
+    personel_id: string
+    gecerli_baslangic: string
+    tutar: number | string
+  }[]).map((u) => ({ ...u, tutar: Number(u.tutar) }))
+
+  /** O dönemde geçerli ücret: dönem sonuna kadar başlayan en yeni satır */
+  const ucretBul = (personelId: string, yil: number, ay: number) => {
+    const sonGun = `${yil}-${String(ay).padStart(2, '0')}-${new Date(yil, ay, 0).getDate()}`
+    return ucretler.find((u) => u.personel_id === personelId && u.gecerli_baslangic <= sonGun)
+      ?.tutar
+  }
   const aylar = new Set([bas.slice(0, 7), bit.slice(0, 7)])
   for (const p of (personelVeri ?? []) as {
     id: string
@@ -97,14 +121,26 @@ export default async function OdemePlaniPage({
     for (const ayMetni of aylar) {
       const [yil, ay] = ayMetni.split('-').map(Number)
       const vade = ayinGunu(yil, ay, p.maas_gunu)
-      if (odenmis.has(`${p.id}|${yil}|${ay}`)) continue
+      const odenen = odenenler.get(`${p.id}|${yil}|${ay}`) ?? 0
+      const ucret = ucretBul(p.id, yil, ay)
+
+      // Ücreti bilinmiyorsa ödeme varlığı tek ölçüt; biliniyorsa kalan borç
+      if (ucret === undefined || ucret <= 0) {
+        if (odenen > 0) continue
+      } else if (odenen + 0.009 >= ucret) continue
+
+      const kalan = ucret === undefined || ucret <= 0 ? null : Math.round((ucret - odenen) * 100) / 100
+
       kalemler.push({
         id: `maas-${p.id}-${ayMetni}`,
         tur: 'Maaş',
         vade,
         kime: p.ad,
-        tutar: null,
-        not: p.calistigi_yer ?? null,
+        tutar: kalan,
+        not:
+          odenen > 0
+            ? `${p.calistigi_yer ?? ''}${p.calistigi_yer ? ' · ' : ''}kısmi ödendi`
+            : (p.calistigi_yer ?? null),
         yol: '/finans/maaslar',
       })
     }
