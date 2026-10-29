@@ -1085,9 +1085,12 @@ const ciroSemasi = z.object({
     .transform((y) => y.replace(/\s+/g, ' ').toLocaleUpperCase('tr')),
   // Hasılat nakit ve kart olarak ayrı giriliyor; toplam bunlardan çıkar,
   // ayrıca yazılmıyor ki iki rakam birbirini tutmaz hâle gelmesin.
-  nakit: trSayi({ min: 0 }),
+  //
+  // Boş bırakılan kutu "dokunma" demek, "sıfır" değil: kart kutusunu
+  // doldurup nakit kutusunu boş bırakmak kayıtlı nakdi siliyordu.
+  nakit: z.string().trim().optional(),
   // Kart = Z raporu (brüt); hesaba yatan ayrı, aradaki fark pos komisyonu
-  kart: trSayi({ min: 0 }),
+  kart: z.string().trim().optional(),
   kart_yatan: z.string().trim().optional(),
   aciklama: bosNull,
   /**
@@ -1095,6 +1098,8 @@ const ciroSemasi = z.object({
    * İsteğe bağlı; verilince kart tutarı buradan toplanır.
    */
   kart_kirilimi: z.string().trim().optional(),
+  /** Hesaba yatanın banka kırılımı; aynı biçimde */
+  kart_yatan_kirilimi: z.string().trim().optional(),
 })
 
 /** Kırılım metnini banka → tutar nesnesine çevirir; boşsa null */
@@ -1134,33 +1139,78 @@ export async function ciroKaydet(veri: Record<string, string>): Promise<FinansDu
   const sonuc = ciroSemasi.safeParse(veri)
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
-  const { kart_kirilimi: ham, kart_yatan: yatanHam, ...veriler } = sonuc.data
+  const {
+    kart_kirilimi: ham,
+    kart_yatan_kirilimi: yatanKirilimHam,
+    kart_yatan: yatanHam,
+    nakit: nakitHam,
+    kart: kartHam,
+    ...veriler
+  } = sonuc.data
+
   const { kirilim, hata: kirilimHatasi } = kirilimCoz(ham)
   if (kirilimHatasi) return { hata: kirilimHatasi }
+  const { kirilim: yatanKirilim, hata: yatanKirilimHatasi } = kirilimCoz(yatanKirilimHam)
+  if (yatanKirilimHatasi) return { hata: yatanKirilimHatasi }
 
-  // Hesaba yatan isteğe bağlı: boşsa komisyon hesaplanmıyor
-  let kartYatan: number | null = null
-  if (yatanHam) {
-    const n = Number(yatanHam.replace(/\./g, '').replace(',', '.'))
-    if (!Number.isFinite(n) || n < 0) return { hata: 'Hesaba yatan tutar sayı olmalı.' }
-    kartYatan = Math.round(n * 100) / 100
+  /** Boş metin null döner: "dokunma" demek, sıfır değil */
+  const sayiVeya = (metin: string | undefined, ad: string) => {
+    if (!metin) return { deger: null as number | null }
+    const n = Number(metin.replace(/\./g, '').replace(',', '.'))
+    if (!Number.isFinite(n) || n < 0) return { hata: `${ad} tutarı sayı olmalı.` }
+    return { deger: Math.round(n * 100) / 100 }
   }
 
-  // Kırılım varsa kart tutarı onun toplamı: kullanıcı aynı rakamı iki kez
-  // yazmasın, yazarsa da ikisi birbirinden ayrı düşmesin.
-  const kart = kirilim
-    ? Math.round(Object.values(kirilim).reduce((t, n) => t + n, 0) * 100) / 100
-    : veriler.kart
+  const nakitSonuc = sayiVeya(nakitHam, 'Nakit')
+  if (nakitSonuc.hata) return { hata: nakitSonuc.hata }
+  const kartSonuc = sayiVeya(kartHam, 'Kart')
+  if (kartSonuc.hata) return { hata: kartSonuc.hata }
+  const yatanSonuc = sayiVeya(yatanHam, 'Hesaba yatan')
+  if (yatanSonuc.hata) return { hata: yatanSonuc.hata }
 
   const supabase = await supabaseServer()
+
+  // Kayıtlı satır: boş bırakılan alanlar bundan korunuyor. Önceden boş kutu
+  // sıfır yazılıyordu ve girilmiş nakit siliniyordu.
+  const { data: eskiVeri } = await supabase
+    .from('gunluk_ciro')
+    .select('nakit, kart, kart_yatan, kart_kirilimi, kart_yatan_kirilimi')
+    .eq('tarih', veriler.tarih)
+    .eq('yer', veriler.yer)
+    .maybeSingle()
+
+  const eski = eskiVeri as {
+    nakit: number | string
+    kart: number | string
+    kart_yatan: number | string | null
+    kart_kirilimi: Record<string, number> | null
+    kart_yatan_kirilimi: Record<string, number> | null
+  } | null
+
+  const topla = (k: Record<string, number>) =>
+    Math.round(Object.values(k).reduce((t, n) => t + n, 0) * 100) / 100
+
+  // Kırılım varsa tutar onun toplamı: kullanıcı aynı rakamı iki kez
+  // yazmasın, yazarsa da ikisi birbirinden ayrı düşmesin.
+  const kart = kirilim ? topla(kirilim) : (kartSonuc.deger ?? Number(eski?.kart ?? 0))
+  const nakit = nakitSonuc.deger ?? Number(eski?.nakit ?? 0)
+  const kartYatan = yatanKirilim
+    ? topla(yatanKirilim)
+    : (yatanSonuc.deger ??
+      (eski?.kart_yatan === null || eski?.kart_yatan === undefined
+        ? null
+        : Number(eski.kart_yatan)))
+
   const { error } = await supabase.from('gunluk_ciro').upsert(
     {
       ...veriler,
+      nakit,
       kart,
       kart_yatan: kartYatan,
-      kart_kirilimi: kirilim,
+      kart_kirilimi: kirilim ?? eski?.kart_kirilimi ?? null,
+      kart_yatan_kirilimi: yatanKirilim ?? eski?.kart_yatan_kirilimi ?? null,
       // Ciro brütten hesaplanıyor: komisyon gider tarafında kalmalı
-      tutar: Math.round((veriler.nakit + kart) * 100) / 100,
+      tutar: Math.round((nakit + kart) * 100) / 100,
     },
     { onConflict: 'tarih,yer' },
   )

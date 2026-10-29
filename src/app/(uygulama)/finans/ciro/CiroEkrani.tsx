@@ -25,13 +25,20 @@ export type CiroSatiri = {
   kart: number | string
   /** Hesaba geçen net tutar; girilmemişse null */
   kart_yatan: number | string | null
+  /** Hesaba yatanın banka kırılımı */
+  kart_yatan_kirilimi: Record<string, number> | null
   aciklama: string | null
   /** Kart tutarının banka kırılımı: banka → tutar. Girilmemişse null */
   kart_kirilimi: Record<string, number> | null
 }
 
-/** Kırılım satırı: ekranda sırası korunsun diye dizi, nesne değil */
-type KirilimSatiri = { banka: string; tutar: string }
+/**
+ * Kırılım satırı: ekranda sırası korunsun diye dizi, nesne değil.
+ *
+ * `tutar` posun çektiği (Z raporu), `yatan` o bankadan hesaba geçen.
+ * İkisinin farkı o bankanın komisyonu.
+ */
+type KirilimSatiri = { banka: string; tutar: string; yatan: string }
 
 /** Kutulara yazılan metin: yer adı → { nakit, kart, kırılım } */
 type Tutarlar = Record<
@@ -207,6 +214,10 @@ export function CiroEkrani({
               ? Object.entries(s.kart_kirilimi).map(([banka, tutar]) => ({
                   banka,
                   tutar: String(Number(tutar)).replace('.', ','),
+                  yatan:
+                    s.kart_yatan_kirilimi?.[banka] === undefined
+                      ? ''
+                      : String(Number(s.kart_yatan_kirilimi[banka])).replace('.', ','),
                 }))
               : null,
             aciklama: s.aciklama ?? '',
@@ -269,15 +280,25 @@ export function CiroEkrani({
     baslat(async () => {
       for (const [yer, v] of girilenler) {
         const dolu = (v.kirilim ?? []).filter((k) => k.banka.trim() !== '')
+        const yatanDolu = dolu.filter((k) => k.yatan.trim() !== '')
+        // Boş kutular gönderilmiyor: sunucu onları "dokunma" sayıyor,
+        // kayıtlı rakamın üstüne sıfır yazılmasın.
         const sonuc = await ciroKaydet({
           tarih,
           yer,
-          nakit: v.nakit.trim() || '0',
-          kart: v.kart.trim() || '0',
+          nakit: v.nakit.trim(),
+          kart: v.kart.trim(),
           kart_yatan: v.yatan.trim(),
           aciklama: v.aciklama,
           ...(dolu.length > 0
             ? { kart_kirilimi: JSON.stringify(dolu.map((k) => [k.banka, k.tutar || '0'])) }
+            : {}),
+          ...(yatanDolu.length > 0
+            ? {
+                kart_yatan_kirilimi: JSON.stringify(
+                  yatanDolu.map((k) => [k.banka, k.yatan || '0']),
+                ),
+              }
             : {}),
         })
         if (sonuc.hata || sonuc.alanlar) {
@@ -348,6 +369,11 @@ export function CiroEkrani({
             // Kırılım açıkken kart tutarı ondan hesaplanıyor; elle yazılan
             // rakamla kırılım birbirinden ayrı düşmesin.
             const kartTutari = v.kirilim ? kirilimToplami(v.kirilim) : sayiya(v.kart)
+            // Kırılımda yatan girilmişse hesaba yatan da ondan hesaplanıyor
+            const yatanKirilimli = !!v.kirilim?.some((k) => k.yatan.trim() !== '')
+            const yatanTutari = yatanKirilimli
+              ? v.kirilim!.reduce((t, k) => t + sayiya(k.yatan), 0)
+              : sayiya(v.yatan)
             const toplam = sayiya(v.nakit) + kartTutari
             return (
               <div key={yer} className="rounded-md border border-cizgi p-2">
@@ -390,19 +416,26 @@ export function CiroEkrani({
                     <input
                       inputMode="decimal"
                       placeholder="—"
-                      value={v.yatan}
-                      title="Bankadan hesaba geçen net tutar; aradaki fark pos komisyonu"
+                      value={yatanKirilimli ? para(yatanTutari) : v.yatan}
+                      readOnly={yatanKirilimli}
+                      title={
+                        yatanKirilimli
+                          ? 'Banka kırılımından hesaplanıyor'
+                          : 'Bankadan hesaba geçen net tutar; aradaki fark pos komisyonu'
+                      }
                       onChange={(e) => yeriDegistir(yer, { yatan: e.target.value })}
-                      className="girdi w-28 !py-1.5 text-right tabular-nums"
+                      className={`girdi w-28 !py-1.5 text-right tabular-nums ${
+                        yatanKirilimli ? 'bg-slate-100 text-slate-600' : ''
+                      }`}
                     />
                   </label>
                 </div>
 
                 {/* Komisyon: Z raporu ile hesaba yatan arasındaki fark */}
-                {v.yatan.trim() !== '' &&
+                {(yatanKirilimli || v.yatan.trim() !== '') &&
                   kartTutari > 0 &&
                   (() => {
-                    const { fark, oran } = komisyon(kartTutari, sayiya(v.yatan))
+                    const { fark, oran } = komisyon(kartTutari, yatanTutari)
                     return (
                       <p
                         className={`mt-1 text-right text-[11px] ${
@@ -425,7 +458,11 @@ export function CiroEkrani({
                     type="button"
                     onClick={() =>
                       yeriDegistir(yer, {
-                        kirilim: VARSAYILAN_BANKALAR.map((b) => ({ banka: b, tutar: '' })),
+                        kirilim: VARSAYILAN_BANKALAR.map((b) => ({
+                          banka: b,
+                          tutar: '',
+                          yatan: '',
+                        })),
                       })
                     }
                     className="mt-1 text-[11px] text-vurgu hover:underline"
@@ -434,54 +471,83 @@ export function CiroEkrani({
                   </button>
                 ) : (
                   <div className="mt-1.5 space-y-1 rounded border border-cizgi bg-white/70 p-1.5">
-                    {v.kirilim.map((k, i) => (
-                      <div key={i} className="flex items-center gap-1">
-                        <input
-                          list="ciro-bankalar"
-                          value={k.banka}
-                          placeholder="Banka"
-                          onChange={(e) =>
-                            yeriDegistir(yer, {
-                              kirilim: v.kirilim!.map((x, j) =>
-                                j === i ? { ...x, banka: e.target.value } : x,
-                              ),
-                            })
-                          }
-                          className="girdi w-24 !py-1 text-[11px]"
-                        />
-                        <input
-                          inputMode="decimal"
-                          value={k.tutar}
-                          placeholder="0,00"
-                          onChange={(e) =>
-                            yeriDegistir(yer, {
-                              kirilim: v.kirilim!.map((x, j) =>
-                                j === i ? { ...x, tutar: e.target.value } : x,
-                              ),
-                            })
-                          }
-                          className="girdi w-20 !py-1 text-right text-[11px] tabular-nums"
-                        />
-                        <button
-                          type="button"
-                          aria-label={`${yer} kırılım satırını kaldır`}
-                          onClick={() =>
-                            yeriDegistir(yer, {
-                              kirilim: v.kirilim!.filter((_, j) => j !== i),
-                            })
-                          }
-                          className="px-1 text-xs text-red-700 hover:bg-red-50"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
+                    <div className="flex items-center gap-1 text-[10px] font-semibold text-solgun">
+                      <span className="w-24">Banka</span>
+                      <span className="w-20 text-right">Z raporu</span>
+                      <span className="w-20 text-right">Yatan</span>
+                      <span className="w-14 text-right">Kom.</span>
+                      <span className="w-5" />
+                    </div>
+                    {v.kirilim.map((k, i) => {
+                      const z = sayiya(k.tutar)
+                      const y = sayiya(k.yatan)
+                      const oran = k.yatan.trim() !== '' && z > 0 ? komisyon(z, y).oran : null
+                      return (
+                        <div key={i} className="flex items-center gap-1">
+                          <input
+                            list="ciro-bankalar"
+                            value={k.banka}
+                            placeholder="Banka"
+                            onChange={(e) =>
+                              yeriDegistir(yer, {
+                                kirilim: v.kirilim!.map((x, j) =>
+                                  j === i ? { ...x, banka: e.target.value } : x,
+                                ),
+                              })
+                            }
+                            className="girdi w-24 !py-1 text-[11px]"
+                          />
+                          <input
+                            inputMode="decimal"
+                            value={k.tutar}
+                            placeholder="0,00"
+                            onChange={(e) =>
+                              yeriDegistir(yer, {
+                                kirilim: v.kirilim!.map((x, j) =>
+                                  j === i ? { ...x, tutar: e.target.value } : x,
+                                ),
+                              })
+                            }
+                            className="girdi w-20 !py-1 text-right text-[11px] tabular-nums"
+                          />
+                          <input
+                            inputMode="decimal"
+                            value={k.yatan}
+                            placeholder="—"
+                            title="Bu bankadan hesaba geçen tutar"
+                            onChange={(e) =>
+                              yeriDegistir(yer, {
+                                kirilim: v.kirilim!.map((x, j) =>
+                                  j === i ? { ...x, yatan: e.target.value } : x,
+                                ),
+                              })
+                            }
+                            className="girdi w-20 !py-1 text-right text-[11px] tabular-nums"
+                          />
+                          <span className="w-14 text-right text-[10px] text-solgun tabular-nums">
+                            {oran === null ? '' : `%${oran.toFixed(2).replace('.', ',')}`}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`${yer} kırılım satırını kaldır`}
+                            onClick={() =>
+                              yeriDegistir(yer, {
+                                kirilim: v.kirilim!.filter((_, j) => j !== i),
+                              })
+                            }
+                            className="w-5 text-xs text-red-700 hover:bg-red-50"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )
+                    })}
                     <div className="flex items-center gap-2 pt-0.5">
                       <button
                         type="button"
                         onClick={() =>
                           yeriDegistir(yer, {
-                            kirilim: [...v.kirilim!, { banka: '', tutar: '' }],
+                            kirilim: [...v.kirilim!, { banka: '', tutar: '', yatan: '' }],
                           })
                         }
                         className="text-[11px] text-vurgu hover:underline"
