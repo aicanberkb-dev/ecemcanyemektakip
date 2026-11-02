@@ -1,6 +1,6 @@
 import { supabaseServer } from '@/lib/supabase/server'
 
-import { CiroEkrani, type CiroSatiri } from './CiroEkrani'
+import { CiroEkrani, type CiroSatiri, type EkGelir } from './CiroEkrani'
 
 export const metadata = { title: 'Günlük Ciro — Yemek Takip' }
 
@@ -9,10 +9,16 @@ const VARSAYILAN_YERLER = ['GÖKSU', 'AKBABA', 'TORİK']
 
 export default async function CiroPage() {
   const supabase = await supabaseServer()
-  const { data, error } = await supabase
+  const [{ data, error }, { data: ekVeri }] = await Promise.all([
+    supabase
     .from('gunluk_ciro')
     .select('id, tarih, yer, tutar, nakit, kart, kart_yatan, aciklama, kart_kirilimi, kart_yatan_kirilimi')
-    .order('tarih', { ascending: false })
+      .order('tarih', { ascending: false }),
+    supabase
+      .from('ciro_ek_gelir')
+      .select('id, tarih, kaynak, tutar, aciklama')
+      .order('tarih', { ascending: false }),
+  ])
 
   const satirlar = (data ?? []) as CiroSatiri[]
   const yerler = [...new Set([...VARSAYILAN_YERLER, ...satirlar.map((s) => s.yer)])]
@@ -34,7 +40,11 @@ export default async function CiroPage() {
         <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error.message}</p>
       )}
 
-      <CiroEkrani satirlar={satirlar} yerler={yerler} />
+      <CiroEkrani
+        satirlar={satirlar}
+        yerler={yerler}
+        ekGelirler={(ekVeri ?? []) as EkGelir[]}
+      />
     </div>
   )
 }

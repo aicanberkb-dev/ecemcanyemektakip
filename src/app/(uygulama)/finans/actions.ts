@@ -1271,3 +1271,47 @@ export async function gunlukGiderSil(id: string): Promise<FinansDurumu> {
   revalidatePath('/finans/gider')
   return { basari: 'Silindi.' }
 }
+
+// ---------------------------------------------------------------------------
+// Günlük ciro — ek gelir
+// ---------------------------------------------------------------------------
+
+const ekGelirSemasi = z.object({
+  tarih: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tarih gerekli.'),
+  // Aynı kaynak iki türlü yazılıp listede ikiye bölünmesin
+  kaynak: z
+    .string()
+    .trim()
+    .min(1, 'Paranın nereden geldiğini yazın.')
+    .transform((k) => k.replace(/\s+/g, ' ').toLocaleUpperCase('tr')),
+  tutar: trSayi({ min: 0 }),
+  aciklama: bosNull,
+})
+
+/**
+ * Yerlerin hasılatı dışında kalan gelir.
+ *
+ * Kaymakamlıktan gelen ödeme, iade, bağış gibi kasadan geçmeyen para.
+ * Yer sütunlarına sığmadığı için ayrı satır; bir günde birkaç tane olabilir.
+ */
+export async function ekGelirEkle(veri: Record<string, string>): Promise<FinansDurumu> {
+  const sonuc = ekGelirSemasi.safeParse(veri)
+  if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
+  if (!(sonuc.data.tutar > 0)) return { hata: 'Tutar sıfırdan büyük olmalı.' }
+
+  const supabase = await supabaseServer()
+  const { error } = await supabase.from('ciro_ek_gelir').insert(sonuc.data)
+  if (error) return { hata: error.message }
+
+  revalidatePath('/finans/ciro')
+  return { basari: 'Ek gelir eklendi.' }
+}
+
+export async function ekGelirSil(id: string): Promise<FinansDurumu> {
+  const supabase = await supabaseServer()
+  const { error } = await supabase.from('ciro_ek_gelir').delete().eq('id', id)
+  if (error) return { hata: error.message }
+
+  revalidatePath('/finans/ciro')
+  return { basari: 'Ek gelir silindi.' }
+}

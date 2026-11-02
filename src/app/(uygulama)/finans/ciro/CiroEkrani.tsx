@@ -12,7 +12,7 @@ import {
   tarih as tarihBicim,
 } from '@/lib/format'
 
-import { ciroKaydet, ciroSil, type FinansDurumu } from '../actions'
+import { ciroKaydet, ciroSil, ekGelirEkle, ekGelirSil, type FinansDurumu } from '../actions'
 
 export type CiroSatiri = {
   id: string
@@ -27,9 +27,23 @@ export type CiroSatiri = {
   kart_yatan: number | string | null
   /** Hesaba yatanın banka kırılımı */
   kart_yatan_kirilimi: Record<string, number> | null
-  aciklama: string | null
   /** Kart tutarının banka kırılımı: banka → tutar. Girilmemişse null */
   kart_kirilimi: Record<string, number> | null
+  aciklama: string | null
+}
+
+/**
+ * Yerlerin hasılatı dışında kalan gelir.
+ *
+ * Kaymakamlıktan ödeme, iade, bağış gibi kasadan geçmeyen para. Bir günde
+ * birkaç tane olabildiği için yer sütunu değil ayrı kayıt.
+ */
+export type EkGelir = {
+  id: string
+  tarih: string
+  kaynak: string
+  tutar: number | string
+  aciklama: string | null
 }
 
 /**
@@ -90,9 +104,12 @@ function sayiya(metin: string): number {
 export function CiroEkrani({
   satirlar,
   yerler: gelenYerler,
+  ekGelirler,
 }: {
   satirlar: CiroSatiri[]
   yerler: string[]
+  /** Yerlerin hasılatı dışında kalan gelirler */
+  ekGelirler: EkGelir[]
 }) {
   const router = useRouter()
   const [bekliyor, baslat] = useTransition()
@@ -102,6 +119,7 @@ export function CiroEkrani({
   const [yeniYer, setYeniYer] = useState('')
   /** Açıklama kutusu açılan yerler; yazısı olanda zaten açık gelir */
   const [acikNotlar, setAcikNotlar] = useState<Set<string>>(new Set())
+  const [ek, setEk] = useState({ kaynak: '', tutar: '', aciklama: '' })
   const [durum, setDurum] = useState<FinansDurumu>({})
   /** Tablodan "Düzelt" ile yüklenen gün — form başlığında yazar */
   const [duzenlenen, setDuzenlenen] = useState<string | null>(null)
@@ -145,7 +163,18 @@ export function CiroEkrani({
     gunler.reduce((t, [, gun]) => t + Number(gun.get(yer)?.[alan] ?? 0), 0)
   const gunToplami = (gun: Map<string, CiroSatiri>, alan: Alan = 'tutar') =>
     [...gun.values()].reduce((t, s) => t + Number(s[alan]), 0)
-  const genelToplam = gunler.reduce((t, [, gun]) => t + gunToplami(gun), 0)
+  // gün → o günün ek gelirleri
+  const ekHarita = useMemo(() => {
+    const m = new Map<string, EkGelir[]>()
+    for (const e of ekGelirler) m.set(e.tarih, [...(m.get(e.tarih) ?? []), e])
+    return m
+  }, [ekGelirler])
+
+  const ekToplami = (gun: string) =>
+    (ekHarita.get(gun) ?? []).reduce((t, e) => t + Number(e.tutar), 0)
+
+  const genelToplam = gunler.reduce((t, [gun, g]) => t + gunToplami(g) + ekToplami(gun), 0)
+  const genelEk = gunler.reduce((t, [gun]) => t + ekToplami(gun), 0)
   const genelNakit = gunler.reduce((t, [, gun]) => t + gunToplami(gun, 'nakit'), 0)
   const genelKart = gunler.reduce((t, [, gun]) => t + gunToplami(gun, 'kart'), 0)
 
@@ -632,6 +661,75 @@ export function CiroEkrani({
         </div>
       </form>
 
+      {/* Ek gelir: yerlerin kasasından gelmeyen para — kaymakamlık ödemesi,
+          iade, bağış. Formdaki tarihe yazılıyor. */}
+      <div className="kart space-y-2 p-4">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <p className="text-sm font-semibold">Ek Gelir</p>
+          <span className="text-xs text-solgun">
+            {tarihBicim(tarih)} gününe — yerlerin hasılatı dışında gelen para
+          </span>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="etiket text-xs" htmlFor="ek-kaynak">
+              Nereden
+            </label>
+            <input
+              id="ek-kaynak"
+              value={ek.kaynak}
+              onChange={(e) => setEk({ ...ek, kaynak: e.target.value })}
+              placeholder="Kaymakamlık, iade…"
+              className="girdi w-44 !py-1.5"
+            />
+          </div>
+          <div>
+            <label className="etiket text-xs" htmlFor="ek-tutar">
+              Tutar
+            </label>
+            <input
+              id="ek-tutar"
+              inputMode="decimal"
+              value={ek.tutar}
+              onChange={(e) => setEk({ ...ek, tutar: e.target.value })}
+              placeholder="0,00"
+              className="girdi w-28 !py-1.5 text-right tabular-nums"
+            />
+          </div>
+          <div className="min-w-40 flex-1">
+            <label className="etiket text-xs" htmlFor="ek-aciklama">
+              Açıklama
+            </label>
+            <input
+              id="ek-aciklama"
+              value={ek.aciklama}
+              onChange={(e) => setEk({ ...ek, aciklama: e.target.value })}
+              placeholder="İsteğe bağlı"
+              className="girdi w-full !py-1.5"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={bekliyor}
+            onClick={() =>
+              baslat(async () => {
+                const sonuc = await ekGelirEkle({ tarih, ...ek })
+                if (sonuc.hata || sonuc.alanlar) {
+                  setDurum({ hata: sonuc.hata ?? 'Girilen değerlerde hata var.' })
+                  return
+                }
+                setEk({ kaynak: '', tutar: '', aciklama: '' })
+                setDurum({ basari: `${tarihBicim(tarih)} ek geliri eklendi.` })
+                router.refresh()
+              })
+            }
+            className="btn-ikincil !py-1.5"
+          >
+            Ekle
+          </button>
+        </div>
+      </div>
+
       <div className="kart flex flex-wrap items-end gap-3 p-4">
         <div>
           <label className="etiket text-xs" htmlFor="ciro-bas">
@@ -736,6 +834,7 @@ export function CiroEkrani({
                   {y}
                 </th>
               ))}
+              <th className="text-right">Ek Gelir</th>
               <th className="text-right">Gün Toplamı</th>
               <th />
             </tr>
@@ -793,12 +892,48 @@ export function CiroEkrani({
                     </td>
                   )
                 })}
+                {/* Ek gelir: nereden geldiği de görünsün, tutar tek başına
+                    "bu para nereden çıktı" sorusunu bırakıyordu */}
+                <td className="text-right tabular-nums">
+                  {ekToplami(gun) > 0 ? (
+                    <>
+                      <span className="font-semibold">{para(ekToplami(gun))}</span>
+                      {(ekHarita.get(gun) ?? []).map((e) => (
+                        <span
+                          key={e.id}
+                          className="block text-[11px] font-normal text-solgun"
+                          title={e.aciklama ?? undefined}
+                        >
+                          {e.kaynak} {para(e.tutar)}
+                          <button
+                            type="button"
+                            disabled={bekliyor}
+                            aria-label={`${e.kaynak} ek gelirini sil`}
+                            onClick={() => {
+                              if (!confirm(`${e.kaynak} — ${para(e.tutar)} silinsin mi?`)) return
+                              baslat(async () => {
+                                const sonuc = await ekGelirSil(e.id)
+                                if (sonuc.hata) setDurum({ hata: sonuc.hata })
+                                router.refresh()
+                              })
+                            }}
+                            className="ml-1 text-red-600 hover:underline disabled:opacity-50"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                    </>
+                  ) : (
+                    <span className="text-xs text-solgun">—</span>
+                  )}
+                </td>
                 <td className="text-right font-semibold tabular-nums text-emerald-700">
-                  {kayitlar.size === 0 ? (
+                  {kayitlar.size === 0 && ekToplami(gun) === 0 ? (
                     <span className="text-xs font-normal text-amber-700">veri girilmedi</span>
                   ) : (
                     <>
-                      {para(gunToplami(kayitlar))}
+                      {para(gunToplami(kayitlar) + ekToplami(gun))}
                       {gunToplami(kayitlar, 'nakit') + gunToplami(kayitlar, 'kart') > 0 && (
                         <span className="block text-xs font-normal text-solgun">
                           {para(gunToplami(kayitlar, 'nakit'))} nakit ·{' '}
@@ -863,6 +998,9 @@ export function CiroEkrani({
                     )}
                   </td>
                 ))}
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {genelEk > 0 ? para(genelEk) : <span className="text-xs font-normal">—</span>}
+                </td>
                 <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
                   {para(genelToplam)}
                   {genelNakit + genelKart > 0 && (
