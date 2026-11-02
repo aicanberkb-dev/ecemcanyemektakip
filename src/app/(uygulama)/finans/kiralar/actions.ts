@@ -8,8 +8,96 @@ import { supabaseServer } from '@/lib/supabase/server'
 import { bosNull, trSayi } from '@/lib/zod-tr'
 
 import { DEKONT_KOVASI } from './dekont'
+import { KALEM_ADLARI, type Kalem } from './kalemler'
 
 export type KiraDurumu = { hata?: string; basari?: string }
+
+type Baglanti = Awaited<ReturnType<typeof supabaseServer>>
+
+/** Ödenen taksit kaydının masrafa yazılması için gereken alanları */
+type OdenenSatir = {
+  birim: string
+  kalem: string
+  sira: number
+  tutar: number | string | null
+  odeme_tarihi: string | null
+  belge_no?: string | null
+  gider_id: string | null
+}
+
+function tazele() {
+  revalidatePath('/finans/kiralar')
+  revalidatePath('/finans/gider')
+  revalidatePath('/finans/odeme-plani')
+}
+
+/**
+ * Masraf defterindeki nokta adı: "GÖKSU KANTİN İL PAYI".
+ *
+ * Kalem adlarının kısası kullanılıyor; "Elektrik, Su ve Isınma Giderleri"
+ * nokta adı olarak defterde okunmuyor.
+ */
+const MASRAF_ETIKETI: Record<Kalem, string> = {
+  kira: 'KİRA',
+  il_payi: 'İL PAYI',
+  ilce_payi: 'İLÇE PAYI',
+  uc_aylik: 'ARZ BEDELİ',
+  giderler: 'GİDER KATKISI',
+}
+
+function masrafNoktasi(birim: string, kalem: string): string {
+  const etiket = MASRAF_ETIKETI[kalem as Kalem] ?? kalem.toLocaleUpperCase('tr')
+  return `${birim} ${etiket}`
+}
+
+function masrafAciklamasi(kalem: string, sira: number, belgeNo?: string | null): string {
+  const ad = KALEM_ADLARI[kalem as Kalem] ?? kalem
+  return `${ad} — ${sira}. taksit` + (belgeNo ? ` · Belge ${belgeNo}` : '')
+}
+
+/**
+ * Ödenen taksiti günlük masraf defterine yazar, yazdığı satırın id'sini döner.
+ *
+ * Faturalardaki kurgunun aynısı: bağlı satır varsa güncelleniyor, yoksa
+ * açılıyor — iki kez "ödendi" denince defterde iki satır birikmesin.
+ *
+ * Tutarı sıfır ya da tarihi boş olan taksit yazılmıyor: rakamı girilmemiş
+ * bir satır deftere 0 TL olarak düşmemeli. O durumda kayıt yine "ödendi"
+ * kalıyor, tutar girilip tekrar işaretlenince masrafa düşüyor.
+ */
+async function masrafaYaz(
+  supabase: Baglanti,
+  kira: OdenenSatir,
+): Promise<{ giderId?: string | null; hata?: string }> {
+  const tutar = Number(kira.tutar ?? 0)
+  if (!(tutar > 0) || !kira.odeme_tarihi) return { giderId: kira.gider_id ?? null }
+
+  const yama = {
+    tarih: kira.odeme_tarihi,
+    tutar,
+    masraf_noktasi: masrafNoktasi(kira.birim, kira.kalem),
+    aciklama: masrafAciklamasi(kira.kalem, kira.sira, kira.belge_no),
+  }
+
+  if (kira.gider_id) {
+    const { error } = await supabase.from('gunluk_gider').update(yama).eq('id', kira.gider_id)
+    if (error) return { hata: error.message }
+    return { giderId: kira.gider_id }
+  }
+
+  const { data, error } = await supabase
+    .from('gunluk_gider')
+    .insert(yama)
+    .select('id')
+    .single()
+  if (error) return { hata: error.message }
+  return { giderId: (data as { id: string }).id }
+}
+
+/** Taksite bağlı masraf satırını kaldırır */
+async function masrafiSil(supabase: Baglanti, giderId: string | null | undefined) {
+  if (giderId) await supabase.from('gunluk_gider').delete().eq('id', giderId)
+}
 
 /**
  * Bir satırın tutar / tarih / belge bilgisi.
@@ -46,13 +134,31 @@ export async function kiraKaydet(veri: {
   }
 
   const supabase = await supabaseServer()
-  const { error } = await supabase
+  const { data: yazilan, error } = await supabase
     .from('kiralar')
     .upsert(sonuc.data, { onConflict: 'birim,kalem,sira' })
+    .select('birim, kalem, sira, tutar, odeme_tarihi, belge_no, odendi, gider_id')
+    .single()
 
   if (error) return { hata: error.message }
 
-  revalidatePath('/finans/kiralar')
+  // Ödenmiş satırın tutarı ya da tarihi değiştiyse defterdeki karşılığı da
+  // güncellensin; yoksa masraf defteri kiralardan sapar.
+  const kayit = yazilan as (OdenenSatir & { odendi: boolean }) | null
+  if (kayit?.odendi) {
+    const masraf = await masrafaYaz(supabase, kayit)
+    if (masraf.hata) return { hata: masraf.hata }
+    if ((masraf.giderId ?? null) !== (kayit.gider_id ?? null)) {
+      await supabase
+        .from('kiralar')
+        .update({ gider_id: masraf.giderId ?? null })
+        .eq('birim', kayit.birim)
+        .eq('kalem', kayit.kalem)
+        .eq('sira', kayit.sira)
+    }
+  }
+
+  tazele()
   return { basari: 'Kaydedildi.' }
 }
 
@@ -61,6 +167,9 @@ export async function kiraKaydet(veri: {
  *
  * Satır henüz yoksa önce açılır: kullanıcı tutarı sonradan girebilir,
  * "ödendi" demek için tutar girmek zorunda kalmamalı.
+ *
+ * Ödendi denince aynı tutar günlük masraf defterine de yazılıyor; işaret
+ * kalkınca o satır siliniyor. Masrafı ayrıca elle girmek gerekmesin.
  */
 export async function odendiDegistir(
   veri: { birim: string; kalem: string; sira: number },
@@ -72,27 +181,62 @@ export async function odendiDegistir(
 
   const { data: eski } = await supabase
     .from('kiralar')
-    .select('odeme_tarihi')
+    .select('tutar, odeme_tarihi, belge_no, gider_id')
     .eq('birim', veri.birim)
     .eq('kalem', veri.kalem)
     .eq('sira', veri.sira)
     .maybeSingle()
 
-  // Ödendi derken tarih boşsa ekranda duran varsayılan tarih kaydedilir;
-  // kullanıcı ayrıca tarih kutusuna dokunmak zorunda kalmasın.
-  const tarih =
-    odendi && varsayilanTarih && !(eski as { odeme_tarihi?: string | null } | null)?.odeme_tarihi
-      ? { odeme_tarihi: varsayilanTarih }
-      : {}
+  const kayit = eski as {
+    tutar?: number | string | null
+    odeme_tarihi?: string | null
+    belge_no?: string | null
+    gider_id?: string | null
+  } | null
 
-  const { error } = await supabase
-    .from('kiralar')
-    .upsert({ ...veri, ...tarih, odendi }, { onConflict: 'birim,kalem,sira' })
+  // İşaret kalkınca deftere düşen satır da gitsin: ödeme geri alındı.
+  if (!odendi) {
+    await masrafiSil(supabase, kayit?.gider_id)
+    const { error } = await supabase
+      .from('kiralar')
+      .upsert({ ...veri, odendi: false, gider_id: null }, { onConflict: 'birim,kalem,sira' })
+    if (error) return { hata: error.message }
+
+    tazele()
+    return { basari: 'Ödendi işareti kaldırıldı; günlük masraftaki satır da silindi.' }
+  }
+
+  // Tarih boşsa ekranda duran varsayılan tarih kaydedilir; kullanıcı ayrıca
+  // tarih kutusuna dokunmak zorunda kalmasın.
+  const tarih = kayit?.odeme_tarihi ?? varsayilanTarih ?? null
+
+  const sonuc = await masrafaYaz(supabase, {
+    ...veri,
+    tutar: kayit?.tutar ?? 0,
+    odeme_tarihi: tarih,
+    belge_no: kayit?.belge_no ?? null,
+    gider_id: kayit?.gider_id ?? null,
+  })
+  if (sonuc.hata) return { hata: sonuc.hata }
+
+  const { error } = await supabase.from('kiralar').upsert(
+    {
+      ...veri,
+      odendi: true,
+      ...(tarih ? { odeme_tarihi: tarih } : {}),
+      gider_id: sonuc.giderId ?? null,
+    },
+    { onConflict: 'birim,kalem,sira' },
+  )
 
   if (error) return { hata: error.message }
 
-  revalidatePath('/finans/kiralar')
-  return { basari: odendi ? 'Ödendi olarak işaretlendi.' : 'Ödendi işareti kaldırıldı.' }
+  tazele()
+  return {
+    basari: sonuc.giderId
+      ? 'Ödendi olarak işaretlendi, günlük masrafa yazıldı.'
+      : 'Ödendi olarak işaretlendi. Tutar girilince günlük masrafa da düşecek.',
+  }
 }
 
 /**
@@ -346,15 +490,40 @@ export async function dekontKaydet(veri: {
     }
   }
 
+  let masrafaDusen = 0
+
   if (veri.odendiIsaretle) {
     const guncelleme: { odendi: boolean; odeme_tarihi?: string } = { odendi: true }
     if (veri.odemeTarihi) guncelleme.odeme_tarihi = veri.odemeTarihi
-    await supabase.from('kiralar').update(guncelleme).in('id', veri.kiraIdleri)
+
+    const { data: isaretli } = await supabase
+      .from('kiralar')
+      .update(guncelleme)
+      .in('id', veri.kiraIdleri)
+      .select('id, birim, kalem, sira, tutar, odeme_tarihi, belge_no, gider_id')
+
+    // Dekontla ödendi işaretlenen her taksit günlük masrafa da düşsün —
+    // "ödendi" tikini tek tek koymakla dekont yüklemek aynı şey.
+    for (const satir of (isaretli ?? []) as (OdenenSatir & { id: string })[]) {
+      const masraf = await masrafaYaz(supabase, satir)
+      if (masraf.hata) return { hata: masraf.hata }
+      if (masraf.giderId) {
+        masrafaDusen++
+        if (masraf.giderId !== satir.gider_id) {
+          await supabase
+            .from('kiralar')
+            .update({ gider_id: masraf.giderId })
+            .eq('id', satir.id)
+        }
+      }
+    }
   }
 
-  revalidatePath('/finans/kiralar')
+  tazele()
   return {
-    basari: `Dekont kaydedildi; ${veri.kiraIdleri.length} taksite bağlandı.`,
+    basari:
+      `Dekont kaydedildi; ${veri.kiraIdleri.length} taksite bağlandı.` +
+      (masrafaDusen > 0 ? ` ${masrafaDusen} satır günlük masrafa yazıldı.` : ''),
   }
 }
 
