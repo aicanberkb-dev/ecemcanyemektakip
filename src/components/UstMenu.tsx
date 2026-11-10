@@ -55,6 +55,7 @@ const RAPOR_ALT = [
   { yol: '/reports/nakit', ad: 'Nakit' },
   { yol: '/reports/kasa', ad: 'Okul Kasa Takibi' },
   { yol: '/reports/devam', ad: 'Devam Çizelgesi' },
+  { yol: '/reports/az-gelenler', ad: 'Az Gelenler' },
   { yol: '/reports/yoklama', ad: '1. Sınıf Yoklama' },
   { yol: '/reports/yemek', ad: 'Yemek Katılımı' },
   { yol: '/reports/tahsilat', ad: 'Tahsilat Geçmişi' },
