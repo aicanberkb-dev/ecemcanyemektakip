@@ -26,24 +26,23 @@ export const VARSAYILAN_TAKSITLER: Taksit[] = Array.from(
 )
 
 /**
- * GÖKSU: 8,5 aylık sözleşme, Kasım 2026 – Kasım 2027.
+ * GÖKSU: 8,5 aylık sözleşme, Ekim 2026 – Haziran 2027.
  *
- * Sekiz tam (Kasım 2026 – Haziran 2027) ve bir yarım (Kasım 2027) taksit
- * eder. Birinci taksit bu sözleşmeye ait değil — geçen sezonun kapanış
- * ödemesi — o yüzden ayraçla ayrıldı. Yaz tatilinde (Temmuz–Ekim) kira
- * yatmadığı için Haziran 2027 ile Kasım 2027 arasında boşluk var.
+ * Sekiz tam (Ekim 2026 – Mayıs 2027) ve bir yarım (Haziran 2027) taksit
+ * eder. Birinci satır bu sözleşmeye ait değil: geçen sezonun kirası eylülde
+ * yatıyor, yeni sözleşme ekimle başlıyor — o yüzden ayraçla ayrıldı.
  */
 export const GOKSU_TAKSITLERI: Taksit[] = [
-  { sira: 1, ad: 'Ekim 2026', ayrac: '2025–2026 sözleşmesinin son taksiti' },
-  { sira: 2, ad: 'Kasım 2026', ayrac: 'Yeni sözleşme · 8,5 ay · Kasım 2026 – Kasım 2027' },
-  { sira: 3, ad: 'Aralık 2026' },
-  { sira: 4, ad: 'Ocak 2027' },
-  { sira: 5, ad: 'Şubat 2027' },
-  { sira: 6, ad: 'Mart 2027' },
-  { sira: 7, ad: 'Nisan 2027' },
-  { sira: 8, ad: 'Mayıs 2027' },
-  { sira: 9, ad: 'Haziran 2027' },
-  { sira: 10, ad: 'Kasım 2027', yarim: true, ayrac: 'Gelecek sezon · yarım taksit' },
+  { sira: 1, ad: 'Eylül 2026', ayrac: 'Geçen sezon · 2025–2026 sözleşmesi' },
+  { sira: 2, ad: 'Ekim 2026', ayrac: 'Yeni sözleşme · 8,5 ay · Ekim 2026 – Haziran 2027' },
+  { sira: 3, ad: 'Kasım 2026' },
+  { sira: 4, ad: 'Aralık 2026' },
+  { sira: 5, ad: 'Ocak 2027' },
+  { sira: 6, ad: 'Şubat 2027' },
+  { sira: 7, ad: 'Mart 2027' },
+  { sira: 8, ad: 'Nisan 2027' },
+  { sira: 9, ad: 'Mayıs 2027' },
+  { sira: 10, ad: 'Haziran 2027', yarim: true, ayrac: 'Sözleşmenin son ayı · yarım taksit' },
 ]
 
 /** Hesaplamanın yarıya ineceği taksitler */
