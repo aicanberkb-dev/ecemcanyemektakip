@@ -108,7 +108,8 @@ async function masrafiSil(supabase: Baglanti, giderId: string | null | undefined
 const semaSatir = z.object({
   birim: z.string().trim().min(1, 'Birim gerekli.'),
   kalem: z.enum(['kira', 'il_payi', 'ilce_payi', 'uc_aylik', 'giderler']),
-  sira: z.number().int().min(1).max(8),
+  // Sekiz taksit varsayılan, ama GÖKSU 8,5 aylık sözleşmede on satıra çıktı
+  sira: z.number().int().min(1).max(12),
   tutar: trSayi({ min: 0 }),
   odeme_tarihi: z
     .string()
@@ -239,8 +240,16 @@ export async function odendiDegistir(
   }
 }
 
+/** Kuruşa yuvarlar; yarım taksitte kayan nokta artığı tutarı bozmasın */
+function kurus(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
 /**
  * Bir kalemin verilen taksitlerine aynı tutarı yazar.
+ *
+ * Yarım taksitlerde (yarıyıl ya da sözleşmenin son ayı) tutarın yarısı
+ * yazılır — sözleşme "o aya ilişkin kira bedelinin yarısını öder" diyor.
  *
  * Ödenmiş satır atlanır: olmuş bitmiş bir ödeme sonradan yapılan bir
  * hesaplamayla değişmemeli.
@@ -251,7 +260,10 @@ async function kalemYaz(
   kalem: string,
   tutar: number,
   siralar: number[],
+  yarimlar: number[] = [],
 ): Promise<{ hata?: string; yazilan: number; atlanan: number }> {
+  const yarimKume = new Set(yarimlar)
+  const taksitTutari = (sira: number) => (yarimKume.has(sira) ? kurus(tutar / 2) : tutar)
   const { data, error } = await supabase
     .from('kiralar')
     .select('id, sira, odendi')
@@ -275,11 +287,15 @@ async function kalemYaz(
       continue
     }
 
+    const satirTutari = taksitTutari(sira)
     if (r) {
-      const { error: guncelleme } = await supabase.from('kiralar').update({ tutar }).eq('id', r.id)
+      const { error: guncelleme } = await supabase
+        .from('kiralar')
+        .update({ tutar: satirTutari })
+        .eq('id', r.id)
       if (guncelleme) return { hata: guncelleme.message, yazilan, atlanan }
     } else {
-      eklenecek.push({ birim, kalem, sira, tutar })
+      eklenecek.push({ birim, kalem, sira, tutar: satirTutari })
     }
     yazilan++
   }
@@ -309,6 +325,10 @@ export async function hesaplaDoldur(veri: {
   taban: string
   /** Yeni tabanın geçerli olduğu ilk taksit; öncesi olduğu gibi kalır */
   baslangic: number
+  /** Okulun kaç taksiti var; GÖKSU 8,5 aylık sözleşmede on satır */
+  taksitSayisi?: number
+  /** Tutarın yarısının yazılacağı taksitler */
+  yarimlar?: number[]
 }): Promise<KiraDurumu> {
   const sonuc = z
     .object({
@@ -316,7 +336,9 @@ export async function hesaplaDoldur(veri: {
       kiraAnahtarlari: z.array(z.string().trim().min(1)).min(1),
       paylarAnahtarlari: z.array(z.string().trim().min(1)).min(1),
       taban: trSayi({ min: 1 }),
-      baslangic: z.number().int().min(1).max(TAKSIT_SAYISI),
+      baslangic: z.number().int().min(1).max(12),
+      taksitSayisi: z.number().int().min(1).max(12).default(TAKSIT_SAYISI),
+      yarimlar: z.array(z.number().int().min(1).max(12)).default([]),
     })
     .safeParse(veri)
 
@@ -324,7 +346,8 @@ export async function hesaplaDoldur(veri: {
     return { hata: sonuc.error.issues[0]?.message ?? 'Kira bedelini kontrol et.' }
   }
 
-  const { tabanAnahtari, kiraAnahtarlari, paylarAnahtarlari, taban, baslangic } = sonuc.data
+  const { tabanAnahtari, kiraAnahtarlari, paylarAnahtarlari, taban, baslangic, taksitSayisi, yarimlar } =
+    sonuc.data
   const kirilim = kiraKirilimi(taban, kiraAnahtarlari.length, paylarAnahtarlari.length)
 
   const supabase = await supabaseServer()
@@ -351,8 +374,8 @@ export async function hesaplaDoldur(veri: {
   // Bu kademe yalnız kendi aralığını yazar: sonraki kademe başlıyorsa orada
   // durur, yoksa son taksite kadar gider. Aksi hâlde eski kademeyi
   // hesaplatmak sonraki zammı silip süpürürdü.
-  const aralik = kademeAraliklari(kademeler).find((a) => a.baslangic === baslangic)
-  const bitis = aralik?.bitis ?? TAKSIT_SAYISI
+  const aralik = kademeAraliklari(kademeler, taksitSayisi).find((a) => a.baslangic === baslangic)
+  const bitis = aralik?.bitis ?? taksitSayisi
   const hedefler = Array.from({ length: bitis - baslangic + 1 }, (_, i) => baslangic + i)
 
   const isler = [
@@ -373,7 +396,7 @@ export async function hesaplaDoldur(veri: {
   let yazilan = 0
   let atlanan = 0
   for (const is of isler) {
-    const r = await kalemYaz(supabase, is.birim, is.kalem, is.tutar, is.siralar)
+    const r = await kalemYaz(supabase, is.birim, is.kalem, is.tutar, is.siralar, yarimlar)
     if (r.hata) return { hata: r.hata }
     yazilan += r.yazilan
     atlanan += r.atlanan
@@ -424,11 +447,13 @@ export async function tutarYay(
   kalem: string,
   tutar: number,
   siralar: number[],
+  /** Yarı tutarla yazılacak taksitler */
+  yarimlar: number[] = [],
 ): Promise<KiraDurumu & { yazilan?: number }> {
   if (siralar.length === 0) return { basari: 'Yayılacak taksit yok.' }
 
   const supabase = await supabaseServer()
-  const sonuc = await kalemYaz(supabase, birim, kalem, tutar, siralar)
+  const sonuc = await kalemYaz(supabase, birim, kalem, tutar, siralar, yarimlar)
   if (sonuc.hata) return { hata: sonuc.hata }
 
   revalidatePath('/finans/kiralar')

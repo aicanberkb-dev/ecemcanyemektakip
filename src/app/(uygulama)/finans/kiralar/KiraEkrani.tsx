@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 
 import { para } from '@/lib/format'
-import { kademeAraliklari, type Kademe, kiraKirilimi, TAKSIT_SAYISI } from '@/lib/kira-hesap'
+import { kademeAraliklari, type Kademe, kiraKirilimi } from '@/lib/kira-hesap'
 
 import { dekontSil, hesaplaDoldur, kademeSil, kiraKaydet, odendiDegistir, tutarYay } from './actions'
 import type { Dekont } from './dekont'
@@ -12,6 +12,12 @@ import { DekontPaneli, type SecilebilirSatir } from './DekontPaneli'
 import { KALEM_ADLARI, type Kalem } from './kalemler'
 import { SozlesmeKutusu } from './SozlesmeKutusu'
 import { OKUL_KLASORU, type SozlesmeDosyasi } from './sozlesme'
+import {
+  GOKSU_TAKSITLERI,
+  type Taksit,
+  VARSAYILAN_TAKSITLER,
+  yarimSiralar,
+} from './taksitler'
 
 export type KiraSatiri = {
   id: string
@@ -56,6 +62,8 @@ type Grup = {
   kiraAnahtarlari: string[]
   /** İl payı, ilçe payı ve arz bu birimlere eşit bölünür */
   paylarAnahtarlari: string[]
+  /** Taksit düzeni; GÖKSU 8,5 aylık sözleşmede on satır, öbürleri sekiz */
+  taksitler: Taksit[]
   bolumler: Bolum[]
 }
 
@@ -76,6 +84,7 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
         ad: 'Kira Bedeli (Yemekhane + Kantin)',
         kiraAnahtarlari: ['GÖKSU'],
         paylarAnahtarlari: ['GÖKSU KANTİN', 'GÖKSU YEMEKHANE'],
+        taksitler: GOKSU_TAKSITLERI,
         bolumler: [
           {
             ad: 'GÖKSU — Kira (Yemekhane + Kantin)',
@@ -111,6 +120,7 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
         ad: 'Kantin Kira Bedeli (İlkokul + Ortaokul)',
         kiraAnahtarlari: ['AKBABA KANTİN İLKOKUL', 'AKBABA KANTİN ORTAOKUL'],
         paylarAnahtarlari: ['AKBABA KANTİN İLKOKUL'],
+        taksitler: VARSAYILAN_TAKSITLER,
         bolumler: [
           {
             ad: 'AKBABA KANTİN İLKOKUL — Kira',
@@ -146,6 +156,7 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
         ad: 'Yemekhane Kira Bedeli',
         kiraAnahtarlari: ['AHMET MİTHAT YEMEKHANE'],
         paylarAnahtarlari: ['AHMET MİTHAT YEMEKHANE'],
+        taksitler: VARSAYILAN_TAKSITLER,
         bolumler: [
           {
             ad: 'AHMET MİTHAT YEMEKHANE',
@@ -161,11 +172,10 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
 ]
 
 /**
- * Bütün kalemler sekiz taksit; ay takvimiyle ilgisi yok, bu yüzden dönem
- * değil taksit sırası tutuluyor. Arz bedeli de aynı: üç taksiti birden
- * yatıran, üç satırı tek tek ödendi işaretler.
+ * Kalemler taksit sırasıyla tutuluyor; dönem adı ekranda taksit listesinden
+ * geliyor. Arz bedeli de öbür kalemler gibi: üç taksiti birden yatıran, üç
+ * satırı tek tek ödendi işaretler.
  */
-const TAKSITLER = Array.from({ length: TAKSIT_SAYISI }, (_, i) => i + 1)
 
 /** Satır anahtarı: birim + kalem + taksit sırası */
 function anahtar(birim: string, kalem: Kalem, sira: number) {
@@ -265,6 +275,8 @@ export function KiraEkrani({
         paylarAnahtarlari: grup.paylarAnahtarlari,
         taban,
         baslangic,
+        taksitSayisi: grup.taksitler.length,
+        yarimlar: yarimSiralar(grup.taksitler),
       })
       if (sonuc.hata) setMesaj({ tip: 'hata', metin: sonuc.hata })
       else setMesaj({ tip: 'ok', metin: `${grup.ad}: ${sonuc.basari ?? 'Hesaplandı.'}` })
@@ -296,6 +308,8 @@ export function KiraEkrani({
           paylarAnahtarlari: grup.paylarAnahtarlari,
           taban: String(onceki.tutar).replace('.', ','),
           baslangic: onceki.sira,
+          taksitSayisi: grup.taksitler.length,
+          yarimlar: yarimSiralar(grup.taksitler),
         })
         metin = yeniden.hata ? yeniden.hata : `${metin} ${yeniden.basari ?? ''}`.trim()
       }
@@ -306,9 +320,15 @@ export function KiraEkrani({
   }
 
   /** Girilen tutarı sonraki taksitlere yayar; ödenmiş satırlara dokunmaz */
-  function yay(birim: string, kalem: Kalem, tutar: number, hedefler: number[]) {
+  function yay(
+    birim: string,
+    kalem: Kalem,
+    tutar: number,
+    hedefler: number[],
+    yarimlar: number[] = [],
+  ) {
     baslat(async () => {
-      const sonuc = await tutarYay(birim, kalem, tutar, hedefler)
+      const sonuc = await tutarYay(birim, kalem, tutar, hedefler, yarimlar)
       if (sonuc.hata) setMesaj({ tip: 'hata', metin: sonuc.hata })
       else setMesaj(null)
       router.refresh()
@@ -374,7 +394,7 @@ export function KiraEkrani({
                           <Kutu
                             key={kalem}
                             baslik={KALEM_ADLARI[kalem]}
-                            siralar={TAKSITLER}
+                            taksitler={grup.taksitler}
                             birim={b.anahtar}
                             kalem={kalem}
                             mevcut={mevcut}
@@ -546,7 +566,11 @@ function OkulOzeti({
 
       {acik && (
         <dl className="space-y-0.5 border-t border-slate-300 p-3 text-xs text-slate-700">
-          <Satir ad="Ödenecek" deger={para(odenecek)} not="8 taksit · bütün kalemler" />
+          <Satir
+            ad="Ödenecek"
+            deger={para(odenecek)}
+            not={`${okul.gruplar[0]?.taksitler.length ?? 0} taksit · bütün kalemler`}
+          />
           <Satir
             ad="Ödenen"
             deger={para(odenen)}
@@ -591,7 +615,7 @@ function TabanKutusu({
   hesapla: (grup: Grup, taban: string, baslangic: number) => void
   kademeKaldir: (grup: Grup, sira: number, onceki?: Kademe) => void
 }) {
-  const araliklar = kademeAraliklari(kademeler)
+  const araliklar = kademeAraliklari(kademeler, grup.taksitler.length)
   // Kutu kapalı açılır: kalem kutuları gibi, ekran kalabalıklaşmasın.
   // Başlıkta geçerli kira zaten yazıyor.
   const [kutuAcik, setKutuAcik] = useState(false)
@@ -715,9 +739,9 @@ function TabanKutusu({
                   className="girdi !py-1 text-xs"
                   aria-label="Yeni kiranın geçerli olduğu ilk taksit"
                 >
-                  {TAKSITLER.map((t) => (
-                    <option key={t} value={t}>
-                      {t}. taksitten itibaren
+                  {grup.taksitler.map((t) => (
+                    <option key={t.sira} value={t.sira}>
+                      {t.ad}&apos;dan itibaren
                     </option>
                   ))}
                 </select>
@@ -725,7 +749,7 @@ function TabanKutusu({
 
               {gecerli && (
                 <p className="text-[11px] text-solgun">
-                  {aralikAdi(baslangic, TAKSIT_SAYISI)} {para(sayi)} üzerinden yazılacak.
+                  {aralikAdi(baslangic, grup.taksitler.length)} {para(sayi)} üzerinden yazılacak.
                 </p>
               )}
 
@@ -861,7 +885,7 @@ function Satir({
 /** Bir kalemin bütün taksitleri; başlıkta ödenen toplam durur */
 function Kutu({
   baslik,
-  siralar,
+  taksitler,
   birim,
   kalem,
   mevcut,
@@ -873,7 +897,7 @@ function Kutu({
   satirDekontu,
 }: {
   baslik: string
-  siralar: number[]
+  taksitler: Taksit[]
   birim: string
   kalem: Kalem
   mevcut: Map<string, KiraSatiri>
@@ -887,7 +911,13 @@ function Kutu({
     deger: string,
   ) => void
   odendi: (birim: string, kalem: Kalem, sira: number) => void
-  yay: (birim: string, kalem: Kalem, tutar: number, hedefler: number[]) => void
+  yay: (
+    birim: string,
+    kalem: Kalem,
+    tutar: number,
+    hedefler: number[],
+    yarimlar: number[],
+  ) => void
   /** Kira satırı kimliğine göre o satırı kapsayan dekont */
   satirDekontu: Map<string, Dekont>
 }) {
@@ -895,6 +925,7 @@ function Kutu({
   // okunmuyordu. Başlıktaki özet zaten durumu söylüyor.
   const [acik, setAcik] = useState(false)
 
+  const siralar = taksitler.map((t) => t.sira)
   const kayitlar = siralar.map((s) => mevcut.get(anahtar(birim, kalem, s)))
   const toplam = kayitlar.reduce((t, k) => t + Number(k?.tutar ?? 0), 0)
   const odenen = kayitlar.reduce((t, k) => t + (k?.odendi ? Number(k.tutar) : 0), 0)
@@ -924,19 +955,38 @@ function Kutu({
 
       {acik && (
         <div className="space-y-1 border-t border-cizgi p-2">
-          {siralar.map((sira, i) => {
+          {taksitler.map((t, i) => {
+            const sira = t.sira
             const k = mevcut.get(anahtar(birim, kalem, sira))
             // Bu satırdan sonrası: tutar girilince aynı rakam oraya da yazılır
-            const sonrakiler = siralar.slice(i + 1)
+            const sonrakiler = taksitler.slice(i + 1)
+            const sonrakiSiralar = sonrakiler.map((s) => s.sira)
+            const sonrakiYarimlar = yarimSiralar(sonrakiler)
             return (
-              <div
-                key={sira}
-                className={`flex flex-wrap items-center gap-1.5 rounded px-1.5 py-1 ${
-                  k?.odendi ? 'bg-emerald-100' : ''
-                }`}
-              >
+              <div key={sira}>
+                {/* Ayraç: sözleşme sınırını göstersin, hangi taksitin hangi
+                    döneme ait olduğu listede kaybolmasın. */}
+                {t.ayrac && (
+                  <div className="flex items-center gap-2 px-1.5 pt-2 pb-1">
+                    <span className="text-[10px] font-semibold tracking-wide text-indigo-700 uppercase">
+                      {t.ayrac}
+                    </span>
+                    <span className="h-px flex-1 bg-indigo-200" />
+                  </div>
+                )}
+
+                <div
+                  className={`flex flex-wrap items-center gap-1.5 rounded px-1.5 py-1 ${
+                    k?.odendi ? 'bg-emerald-100' : t.yarim ? 'bg-amber-50' : ''
+                  }`}
+                >
                 <span className="w-28 shrink-0 text-xs leading-tight font-medium">
-                  {sira}. Taksit
+                  {t.ad}
+                  {t.yarim && (
+                    <span className="ml-1 rounded bg-amber-200 px-1 text-[9px] font-semibold text-amber-900 uppercase">
+                      yarım
+                    </span>
+                  )}
                 </span>
 
                 <input
@@ -954,9 +1004,12 @@ function Kutu({
 
                     // Aynı rakam sonraki taksitlere de yazılır; ortada zam
                     // gelirse o taksitten sonrası yeni rakama döner.
-                    const sayi = Number(yeni.replace(/\./g, '').replace(',', '.'))
-                    if (Number.isFinite(sayi) && sayi > 0 && sonrakiler.length > 0) {
-                      yay(birim, kalem, sayi, sonrakiler)
+                    // Yarım taksit girildiyse tam karşılığı yayılır, yoksa
+                    // sonraki tam aylar da yarım rakamla dolardı.
+                    const girilen = Number(yeni.replace(/\./g, '').replace(',', '.'))
+                    const sayi = t.yarim ? girilen * 2 : girilen
+                    if (Number.isFinite(sayi) && sayi > 0 && sonrakiSiralar.length > 0) {
+                      yay(birim, kalem, sayi, sonrakiSiralar, sonrakiYarimlar)
                     }
                   }}
                   className="girdi w-24 !py-1 text-right text-xs tabular-nums"
@@ -1019,6 +1072,7 @@ function Kutu({
                 >
                   {k?.odendi ? '✓ Ödendi' : 'Ödendi'}
                 </button>
+                </div>
               </div>
             )
           })}
