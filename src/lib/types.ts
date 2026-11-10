@@ -289,32 +289,6 @@ export type DevamSatiri = {
   gelmedi_sayisi: number
 }
 
-/**
- * Az Gelenler raporunun bir satırı — `az_gelenler` fonksiyonundan gelir.
- *
- * `oran` payda sıfırsa (ölçülecek yemek günü henüz yok) null döner; sıfır
- * yazmak "hiç gelmedi" demek olurdu.
- */
-export type AzGelenSatiri = {
-  student_id: string
-  ogrenci_no: string
-  ad_soyad: string
-  sinif: string | null
-  ogrenci_tipi: OgrenciTipi
-  veli_adi: string | null
-  veli_telefon: string | null
-  veli2_adi: string | null
-  veli2_telefon: string | null
-  deneme: boolean
-  /** Ölçümün başladığı gün: aylık aboneliğin başlangıcı (ya da sezon başı) */
-  olcum_baslangici: string
-  gelis: number
-  ders_gunu: number
-  oran: number | null
-  son_gelis: string | null
-  kalan: number | null
-}
-
 export type GunSonu = {
   gunlukcu: number
   aylikci: number
