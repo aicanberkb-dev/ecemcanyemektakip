@@ -202,7 +202,11 @@ export function KiraEkrani({
   const router = useRouter()
   const [bekliyor, baslat] = useTransition()
   const [mesaj, setMesaj] = useState<{ tip: 'ok' | 'hata'; metin: string } | null>(null)
-  const [panel, setPanel] = useState<{ birim: string; klasor: string } | null>(null)
+  const [panel, setPanel] = useState<{
+    birim: string
+    klasor: string
+    taksitler: Taksit[]
+  } | null>(null)
 
   // Taksit satırı → onu kapsayan dekont. Bir satırın tek dekontu olur.
   const satirDekontu = useMemo(() => {
@@ -210,6 +214,25 @@ export function KiraEkrani({
     for (const d of dekontlar) for (const id of d.kiraIdleri) m.set(id, d)
     return m
   }, [dekontlar])
+
+  // Kimlik → satır; dekontun hangi kalem ve taksiti kapsadığını yazabilmek için
+  const satirKimligi = useMemo(() => {
+    const m = new Map<string, KiraSatiri>()
+    for (const s of satirlar) m.set(s.id, s)
+    return m
+  }, [satirlar])
+
+  /** "İl Payı · Eylül 2026" biçiminde, dekontun kapsadığı taksitler */
+  function dekontKapsami(d: Dekont, taksitler: Taksit[]): string[] {
+    return d.kiraIdleri
+      .map((id) => satirKimligi.get(id))
+      .filter((s): s is KiraSatiri => !!s)
+      .sort((a, b) => a.sira - b.sira || a.kalem.localeCompare(b.kalem))
+      .map((s) => {
+        const ad = taksitler.find((t) => t.sira === s.sira)?.ad ?? `${s.sira}. Taksit`
+        return `${KALEM_ADLARI[s.kalem]} · ${ad}`
+      })
+  }
 
   function dekontKaldir(d: Dekont) {
     if (
@@ -381,6 +404,7 @@ export function KiraEkrani({
                             setPanel({
                               birim: b.anahtar,
                               klasor: OKUL_KLASORU[okul.ad] ?? 'diger',
+                              taksitler: grup.taksitler,
                             })
                           }
                           className="ml-auto rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-semibold whitespace-nowrap text-indigo-800 hover:bg-indigo-100"
@@ -412,6 +436,7 @@ export function KiraEkrani({
                         dekontlar={dekontlar.filter((d) => d.birim === b.anahtar)}
                         bekliyor={bekliyor}
                         kaldir={dekontKaldir}
+                        kapsam={(d) => dekontKapsami(d, grup.taksitler)}
                       />
                     </div>
                   ))}
@@ -427,6 +452,9 @@ export function KiraEkrani({
           birim={panel.birim}
           klasor={panel.klasor}
           bugun={bugun}
+          taksitAdi={(sira) =>
+            panel.taksitler.find((t) => t.sira === sira)?.ad ?? `${sira}. Taksit`
+          }
           kapat={() => setPanel(null)}
           satirlar={satirlar
             .filter((s) => s.birim === panel.birim)
@@ -448,10 +476,13 @@ function DekontListesi({
   dekontlar,
   bekliyor,
   kaldir,
+  kapsam,
 }: {
   dekontlar: Dekont[]
   bekliyor: boolean
   kaldir: (d: Dekont) => void
+  /** Dekontun kapsadığı taksitlerin okunur adları */
+  kapsam: (d: Dekont) => string[]
 }) {
   const [acik, setAcik] = useState(false)
   if (dekontlar.length === 0) return null
@@ -470,7 +501,9 @@ function DekontListesi({
 
       {acik && (
         <div className="space-y-1 px-3 pb-3">
-          {dekontlar.map((d) => (
+          {dekontlar.map((d) => {
+            const kapsadiklari = kapsam(d)
+            return (
             <div
               key={d.id}
               className="flex flex-wrap items-center gap-2 rounded border border-cizgi bg-white px-2 py-1.5"
@@ -490,9 +523,13 @@ function DekontListesi({
               ) : (
                 <span className="truncate text-[11px] font-semibold">{d.dosya_adi}</span>
               )}
-              <span className="text-[10px] text-solgun">
-                {d.kiraIdleri.length} taksit
-                {d.aciklama ? ` · ${d.aciklama}` : ''}
+              {/* Hangi taksitleri kapsadığı tek tek yazılıyor: "3 taksit"
+                  deyince hangileri olduğu dosyayı açmadan anlaşılmıyordu. */}
+              <span className="basis-full text-[10px] text-solgun">
+                {kapsadiklari.length > 0
+                  ? kapsadiklari.join(' · ')
+                  : `${d.kiraIdleri.length} taksit`}
+                {d.aciklama ? ` — ${d.aciklama}` : ''}
               </span>
               {d.tutar !== null && (
                 <span className="ml-auto text-[11px] font-semibold tabular-nums">
@@ -509,7 +546,8 @@ function DekontListesi({
                 ✕
               </button>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

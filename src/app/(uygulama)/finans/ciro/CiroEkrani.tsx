@@ -80,6 +80,20 @@ function komisyon(zRaporu: number, hesabaYatan: number) {
 const VARSAYILAN_BANKALAR = ['VAKIFBANK', 'HALKBANK']
 
 /**
+ * Yerin poslarının bağlı olduğu bankalar.
+ *
+ * Kırılım açılınca bu satırlar hazır gelsin diye; her seferinde banka adı
+ * yazmak gerekmesin. Listede olmayan yer varsayılanla açılır.
+ */
+const YERE_GORE_BANKALAR: Record<string, string[]> = {
+  TORİK: ['YAPI KREDİ', 'VAKIFBANK'],
+}
+
+function yerinBankalari(yer: string): string[] {
+  return YERE_GORE_BANKALAR[yer] ?? VARSAYILAN_BANKALAR
+}
+
+/**
  * Hafta sonu kapalı olan yerler.
  *
  * Cumartesi–pazar yalnızca TORİK çalışıyor; diğerlerinde "veri girilmedi"
@@ -159,10 +173,26 @@ export function CiroEkrani({
 
   /** alan: hangi rakam toplanacak — toplam, nakit ya da kart */
   type Alan = 'tutar' | 'nakit' | 'kart'
+  /**
+   * Bir satırın toplamlara giren değeri.
+   *
+   * Hesaba yatan girilmişse kartın karşılığı odur: Z raporu posun çektiği,
+   * yatan ise komisyon düşüldükten sonra hesaba geçen. Eline geçen para o
+   * olduğu için toplamlar yatanı sayıyor; yatan girilmemişse Z raporu.
+   */
+  const satirDegeri = (s: CiroSatiri, alan: Alan) => {
+    const kart = s.kart_yatan === null ? Number(s.kart) : Number(s.kart_yatan)
+    if (alan === 'kart') return kart
+    if (alan === 'nakit') return Number(s.nakit)
+    return Number(s.nakit) + kart
+  }
   const yerToplami = (yer: string, alan: Alan = 'tutar') =>
-    gunler.reduce((t, [, gun]) => t + Number(gun.get(yer)?.[alan] ?? 0), 0)
+    gunler.reduce((t, [, gun]) => {
+      const s = gun.get(yer)
+      return t + (s ? satirDegeri(s, alan) : 0)
+    }, 0)
   const gunToplami = (gun: Map<string, CiroSatiri>, alan: Alan = 'tutar') =>
-    [...gun.values()].reduce((t, s) => t + Number(s[alan]), 0)
+    [...gun.values()].reduce((t, s) => t + satirDegeri(s, alan), 0)
   // gün → o günün ek gelirleri
   const ekHarita = useMemo(() => {
     const m = new Map<string, EkGelir[]>()
@@ -192,19 +222,22 @@ export function CiroEkrani({
     return { zRaporu, fark: Math.round(fark * 100) / 100 }
   }, [gunler])
 
-  // Dönemdeki kart hasılatının banka dağılımı; kırılımı olmayan satırların
-  // kartı ayrı tutuluyor ki iki rakam toplamda kart ile aynı yeri bulsun.
+  // Dönemdeki kart hasılatının banka dağılımı. Burada da hesaba yatan
+  // öncelikli: o bankadan gerçekte ne geçtiği okunsun. Kırılımı olmayan
+  // satırlar ayrı tutuluyor ki iki rakam toplamda kart ile aynı yeri bulsun.
   const { bankaToplamlari, kirilimsizKart } = useMemo(() => {
     const toplam = new Map<string, number>()
     let kirilimsiz = 0
     for (const [, gun] of gunler) {
       for (const s of gun.values()) {
-        const k = s.kart_kirilimi
+        const yatanK = s.kart_yatan_kirilimi
+        const k =
+          yatanK && Object.keys(yatanK).length > 0 ? yatanK : s.kart_kirilimi
         if (k && Object.keys(k).length > 0) {
           for (const [banka, tutar] of Object.entries(k))
             toplam.set(banka, (toplam.get(banka) ?? 0) + Number(tutar))
         } else {
-          kirilimsiz += Number(s.kart)
+          kirilimsiz += s.kart_yatan === null ? Number(s.kart) : Number(s.kart_yatan)
         }
       }
     }
@@ -274,7 +307,7 @@ export function CiroEkrani({
 
   /** Daha önce kullanılmış banka adları — yazarken öneri olarak çıkar */
   const bankalar = useMemo(() => {
-    const k = new Set(VARSAYILAN_BANKALAR)
+    const k = new Set([...VARSAYILAN_BANKALAR, ...Object.values(YERE_GORE_BANKALAR).flat()])
     for (const s of satirlar) for (const b of Object.keys(s.kart_kirilimi ?? {})) k.add(b)
     return [...k].sort()
   }, [satirlar])
@@ -487,7 +520,7 @@ export function CiroEkrani({
                     type="button"
                     onClick={() =>
                       yeriDegistir(yer, {
-                        kirilim: VARSAYILAN_BANKALAR.map((b) => ({
+                        kirilim: yerinBankalari(yer).map((b) => ({
                           banka: b,
                           tutar: '',
                           yatan: '',
@@ -778,9 +811,13 @@ export function CiroEkrani({
               Kredi kartı
             </p>
             <p className="text-xl font-bold tabular-nums text-indigo-700">{para(genelKart)}</p>
-            {/* Komisyon yalnız hesaba yatanı girilmiş günlerden hesaplanıyor */}
+            {/* Komisyon yalnız hesaba yatanı girilmiş günlerden hesaplanıyor.
+                Rakam hesaba geçen; Z raporu da yanında dursun ki ne kadarının
+                komisyona gittiği görünsün. */}
             {genelKomisyon.zRaporu > 0 && (
               <p className="text-xs text-solgun">
+                hesaba geçen · Z raporu {para(genelKomisyon.zRaporu)}
+                <br />
                 komisyon {para(genelKomisyon.fark)} · %
                 {((genelKomisyon.fark / genelKomisyon.zRaporu) * 100)
                   .toFixed(2)

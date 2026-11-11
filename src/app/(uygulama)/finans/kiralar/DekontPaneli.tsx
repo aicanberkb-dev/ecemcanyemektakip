@@ -35,12 +35,15 @@ export function DekontPaneli({
   birim,
   klasor,
   satirlar,
+  taksitAdi,
   bugun,
   kapat,
 }: {
   birim: string
   klasor: string
   satirlar: SecilebilirSatir[]
+  /** Taksit sırasının ekrandaki adı: "3. Taksit" ya da "Aralık 2026" */
+  taksitAdi: (sira: number) => string
   bugun: string
   kapat: () => void
 }) {
@@ -267,7 +270,9 @@ export function DekontPaneli({
                         className="accent-indigo-600"
                       />
                       <span className="min-w-0 leading-tight">
-                        <span className="block text-[11px] font-semibold">{s.sira}. Taksit</span>
+                        <span className="block text-[11px] font-semibold">
+                          {taksitAdi(s.sira)}
+                        </span>
                         <span className="block text-[10px] text-solgun tabular-nums">
                           {kilit ? s.dekontKodu : para(s.tutar)}
                         </span>
