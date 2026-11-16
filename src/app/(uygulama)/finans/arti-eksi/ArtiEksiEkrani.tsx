@@ -18,7 +18,12 @@ export type ArtiEksiSatiri = {
   tutar: number | string
   yontem: Yontem
   aciklama: string | null
+  /** Aynı güne düşen satırların sırası için */
+  created_at: string
 }
+
+/** Bir satır yapıldıktan sonra elde kalan para */
+type Bakiye = { toplam: number; nakit: number; havale: number }
 
 type Taslak = { tarih: string; tutar: string; yontem: Yontem; aciklama: string }
 
@@ -50,6 +55,31 @@ export function ArtiEksiEkrani({ satirlar }: { satirlar: ArtiEksiSatiri[] }) {
   const fark = topla(artilar) - topla(eksiler)
   const nakitFark = topla(artilar, 'nakit') - topla(eksiler, 'nakit')
   const havaleFark = topla(artilar, 'havale') - topla(eksiler, 'havale')
+
+  /**
+   * Satır başına "o an elimde ne vardı".
+   *
+   * Hesap bütün defter üzerinden yapılıyor, süzülmüş liste üzerinden değil:
+   * tarih aralığı daraltılsa bile elde kalan para öncesini de içeriyor,
+   * yoksa rakam gerçeği söylemezdi.
+   */
+  const bakiyeler = useMemo(() => {
+    const sirali = [...satirlar].sort(
+      (a, b) => a.tarih.localeCompare(b.tarih) || a.created_at.localeCompare(b.created_at),
+    )
+    const m = new Map<string, Bakiye>()
+    let toplam = 0
+    let nakit = 0
+    let havale = 0
+    for (const s of sirali) {
+      const d = (s.yon === 'arti' ? 1 : -1) * Number(s.tutar)
+      toplam += d
+      if (s.yontem === 'nakit') nakit += d
+      else havale += d
+      m.set(s.id, { toplam, nakit, havale })
+    }
+    return m
+  }, [satirlar])
 
   return (
     <div className="space-y-4">
@@ -117,8 +147,8 @@ export function ArtiEksiEkrani({ satirlar }: { satirlar: ArtiEksiSatiri[] }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Sutun yon="arti" satirlar={artilar} toplam={topla(artilar)} />
-        <Sutun yon="eksi" satirlar={eksiler} toplam={topla(eksiler)} />
+        <Sutun yon="arti" satirlar={artilar} toplam={topla(artilar)} bakiyeler={bakiyeler} />
+        <Sutun yon="eksi" satirlar={eksiler} toplam={topla(eksiler)} bakiyeler={bakiyeler} />
       </div>
     </div>
   )
@@ -128,10 +158,12 @@ function Sutun({
   yon,
   satirlar,
   toplam,
+  bakiyeler,
 }: {
   yon: Yon
   satirlar: ArtiEksiSatiri[]
   toplam: number
+  bakiyeler: Map<string, Bakiye>
 }) {
   const arti = yon === 'arti'
   const renk = arti ? 'text-emerald-700' : 'text-red-700'
@@ -155,6 +187,7 @@ function Sutun({
             <tr>
               <th>Tarih</th>
               <th className="text-right">Tutar</th>
+              <th className="text-right">Kalan</th>
               <th>Yöntem</th>
               <th>Açıklama</th>
               <th />
@@ -162,11 +195,11 @@ function Sutun({
           </thead>
           <tbody>
             {satirlar.map((s) => (
-              <Satir key={s.id} satir={s} renk={renk} />
+              <Satir key={s.id} satir={s} renk={renk} bakiye={bakiyeler.get(s.id)} />
             ))}
             {satirlar.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-solgun">
+                <td colSpan={6} className="py-6 text-center text-solgun">
                   Henüz satır yok.
                 </td>
               </tr>
@@ -294,7 +327,16 @@ function YeniSatir({ yon }: { yon: Yon }) {
   )
 }
 
-function Satir({ satir, renk }: { satir: ArtiEksiSatiri; renk: string }) {
+function Satir({
+  satir,
+  renk,
+  bakiye,
+}: {
+  satir: ArtiEksiSatiri
+  renk: string
+  /** Bu satır yapıldıktan sonra elde kalan para */
+  bakiye?: Bakiye
+}) {
   const router = useRouter()
   const [bekliyor, baslat] = useTransition()
   const [duzenle, setDuzenle] = useState(false)
@@ -309,7 +351,7 @@ function Satir({ satir, renk }: { satir: ArtiEksiSatiri; renk: string }) {
   if (duzenle) {
     return (
       <tr>
-        <td colSpan={5} className="bg-slate-50">
+        <td colSpan={6} className="bg-slate-50">
           <div className="space-y-2 py-1">
             <Kutular
               taslak={taslak}
@@ -358,6 +400,20 @@ function Satir({ satir, renk }: { satir: ArtiEksiSatiri; renk: string }) {
       <td className="whitespace-nowrap">{tarihBicim(satir.tarih)}</td>
       <td className={`text-right font-medium whitespace-nowrap tabular-nums ${renk}`}>
         {para(satir.tutar)}
+      </td>
+      {/* O an elde kalan para: giriş/çıkış olduğu andaki kasa. Eksiye
+          düşmüşse kırmızı, gözden kaçmasın. */}
+      <td
+        className={`text-right font-semibold whitespace-nowrap tabular-nums ${
+          bakiye && bakiye.toplam < 0 ? 'text-red-700' : 'text-slate-700'
+        }`}
+        title={
+          bakiye
+            ? `Nakit ${para(bakiye.nakit)} · Havale ${para(bakiye.havale)}`
+            : undefined
+        }
+      >
+        {bakiye ? para(bakiye.toplam) : '—'}
       </td>
       <td>
         <span className="rozet bg-slate-100 text-slate-700">{YONTEM_ADLARI[satir.yontem]}</span>

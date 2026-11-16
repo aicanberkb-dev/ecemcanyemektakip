@@ -8,7 +8,9 @@ export default async function ArtiEksiPage() {
   const supabase = await supabaseServer()
   const { data, error } = await supabase
     .from('arti_eksi')
-    .select('id, yon, tarih, tutar, yontem, aciklama')
+    // created_at da okunuyor: aynı güne düşen satırları sıraya dizip her
+    // satırın yanına o andaki kasayı yazabilmek için gerekiyor
+    .select('id, yon, tarih, tutar, yontem, aciklama, created_at')
     .order('tarih', { ascending: false })
     .order('created_at', { ascending: false })
 
@@ -18,7 +20,9 @@ export default async function ArtiEksiPage() {
         <h1 className="baslik">Artı / Eksi</h1>
         <p className="text-sm text-solgun">
           Gelen ve giden paraları elle yazdığın defter. Artılardan eksiler çıkarılır,
-          fark en üstte görünür. Tarih kutusu bugünle gelir, istersen değiştir.
+          fark en üstte görünür. Her satırın sonundaki <strong>Kalan</strong>, o
+          giriş ya da çıkış yapıldığı anda elinde kalan paradır. Tarih kutusu
+          bugünle gelir, istersen değiştir.
         </p>
       </div>
 
