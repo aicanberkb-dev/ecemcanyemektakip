@@ -187,7 +187,7 @@ function Sutun({
             <tr>
               <th>Tarih</th>
               <th className="text-right">Tutar</th>
-              <th className="text-right">Kalan</th>
+              <th className="bg-indigo-50 text-right text-indigo-800">Kalan</th>
               <th>Yöntem</th>
               <th>Açıklama</th>
               <th />
@@ -401,11 +401,14 @@ function Satir({
       <td className={`text-right font-medium whitespace-nowrap tabular-nums ${renk}`}>
         {para(satir.tutar)}
       </td>
-      {/* O an elde kalan para: giriş/çıkış olduğu andaki kasa. Eksiye
-          düşmüşse kırmızı, gözden kaçmasın. */}
+      {/* O an elde kalan para. Kendi rengi var: bu bir işlem tutarı değil,
+          o andaki kasa — artı/eksi sütunlarının yeşil-kırmızısına
+          karışmasın. Kasa eksiye düşmüşse kırmızıya döner. */}
       <td
-        className={`text-right font-semibold whitespace-nowrap tabular-nums ${
-          bakiye && bakiye.toplam < 0 ? 'text-red-700' : 'text-slate-700'
+        className={`text-right font-bold whitespace-nowrap tabular-nums ${
+          bakiye && bakiye.toplam < 0
+            ? 'bg-red-100 text-red-800'
+            : 'bg-indigo-50 text-indigo-800'
         }`}
         title={
           bakiye
