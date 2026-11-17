@@ -6,8 +6,20 @@ const paraFormat = new Intl.NumberFormat('tr-TR', {
 
 const sayiFormat = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2 })
 
+/** Kuruşsuz para; kuruş girilmeyen defterlerde rakam kalabalık olmasın */
+const paraTamFormat = new Intl.NumberFormat('tr-TR', {
+  style: 'currency',
+  currency: 'TRY',
+  maximumFractionDigits: 0,
+})
+
 export function para(deger: number | string | null | undefined): string {
   return paraFormat.format(Number(deger ?? 0))
+}
+
+/** Kuruşu atılmış para: "12.500 ₺" */
+export function paraTam(deger: number | string | null | undefined): string {
+  return paraTamFormat.format(Number(deger ?? 0))
 }
 
 export function sayi(deger: number | string | null | undefined): string {

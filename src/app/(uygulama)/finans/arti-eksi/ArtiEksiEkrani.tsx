@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 
 import { useBugun, useBugunTarihi } from '@/components/BugunSaglayici'
-import { para, tarih as tarihBicim } from '@/lib/format'
+// Bu deftere kuruş girilmiyor; rakamlar kuruşsuz gösteriliyor
+import { paraTam as para, tarih as tarihBicim } from '@/lib/format'
 
 import { artiEksiKaydet, artiEksiSil, type FinansDurumu } from '../actions'
 
@@ -187,7 +188,7 @@ function Sutun({
             <tr>
               <th>Tarih</th>
               <th className="text-right">Tutar</th>
-              <th className="bg-indigo-50 text-right text-indigo-800">Kalan</th>
+              <th className="bg-indigo-700 text-right text-white">Kalan</th>
               <th>Yöntem</th>
               <th>Açıklama</th>
               <th />
@@ -407,8 +408,8 @@ function Satir({
       <td
         className={`text-right font-bold whitespace-nowrap tabular-nums ${
           bakiye && bakiye.toplam < 0
-            ? 'bg-red-100 text-red-800'
-            : 'bg-indigo-50 text-indigo-800'
+            ? 'bg-red-600 text-white'
+            : 'bg-indigo-600 text-white'
         }`}
         title={
           bakiye
