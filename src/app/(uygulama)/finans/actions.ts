@@ -1072,6 +1072,45 @@ const artiEksiSemasi = z.object({
 })
 
 /** id verilirse satırı günceller, verilmezse yeni satır ekler. */
+/**
+ * Eksi satırının günlük masraftaki karşılığı.
+ *
+ * Eksi, hesaptan çıkan gerçek ödeme — kasap, tedarikçi, hastahane. Ödenen
+ * her şey defterde görünsün diye masrafa da yazılıyor. Artı satırları
+ * hesaba giren para, masraf değil; onlarda bağlantı yok.
+ */
+async function artiEksiMasrafi(
+  supabase: Awaited<ReturnType<typeof supabaseServer>>,
+  satir: { yon: string; tarih: string; tutar: number; aciklama: string | null },
+  giderId: string | null,
+): Promise<{ giderId: string | null; hata?: string }> {
+  // Artıya dönmüş ya da tutarı sıfırlanmışsa defterdeki satır gitsin
+  if (satir.yon !== 'eksi' || !(satir.tutar > 0)) {
+    if (giderId) await supabase.from('gunluk_gider').delete().eq('id', giderId)
+    return { giderId: null }
+  }
+
+  const yama = {
+    tarih: satir.tarih,
+    tutar: satir.tutar,
+    masraf_noktasi: satir.aciklama?.trim() || 'ARTI/EKSİ',
+    aciklama: 'Artı/Eksi defteri',
+  }
+
+  if (giderId) {
+    const { error } = await supabase.from('gunluk_gider').update(yama).eq('id', giderId)
+    return error ? { giderId, hata: error.message } : { giderId }
+  }
+
+  const { data, error } = await supabase
+    .from('gunluk_gider')
+    .insert(yama)
+    .select('id')
+    .single()
+  if (error) return { giderId: null, hata: error.message }
+  return { giderId: (data as { id: string }).id }
+}
+
 export async function artiEksiKaydet(
   id: string | null,
   veri: Record<string, string>,
@@ -1080,21 +1119,48 @@ export async function artiEksiKaydet(
   if (!sonuc.success) return { alanlar: alanHatalari(sonuc.error) }
 
   const supabase = await supabaseServer()
+
+  const { data: eski } = id
+    ? await supabase.from('arti_eksi').select('gider_id').eq('id', id).maybeSingle()
+    : { data: null }
+
+  const masraf = await artiEksiMasrafi(
+    supabase,
+    { ...sonuc.data, aciklama: sonuc.data.aciklama ?? null },
+    (eski as { gider_id: string | null } | null)?.gider_id ?? null,
+  )
+  if (masraf.hata) return { hata: masraf.hata }
+
+  const kayit = { ...sonuc.data, gider_id: masraf.giderId }
   const { error } = id
-    ? await supabase.from('arti_eksi').update(sonuc.data).eq('id', id)
-    : await supabase.from('arti_eksi').insert(sonuc.data)
+    ? await supabase.from('arti_eksi').update(kayit).eq('id', id)
+    : await supabase.from('arti_eksi').insert(kayit)
   if (error) return { hata: error.message }
 
   revalidatePath('/finans/arti-eksi')
+  revalidatePath('/finans/gider')
+  revalidatePath('/finans/para-akisi')
   return { basari: id ? 'Kaydedildi.' : 'Eklendi.' }
 }
 
 export async function artiEksiSil(id: string): Promise<FinansDurumu> {
   const supabase = await supabaseServer()
+
+  // Defterdeki karşılığı da gitsin, ortada kalmasın
+  const { data: eski } = await supabase
+    .from('arti_eksi')
+    .select('gider_id')
+    .eq('id', id)
+    .maybeSingle()
+  const giderId = (eski as { gider_id: string | null } | null)?.gider_id
+  if (giderId) await supabase.from('gunluk_gider').delete().eq('id', giderId)
+
   const { error } = await supabase.from('arti_eksi').delete().eq('id', id)
   if (error) return { hata: error.message }
 
   revalidatePath('/finans/arti-eksi')
+  revalidatePath('/finans/gider')
+  revalidatePath('/finans/para-akisi')
   return { basari: 'Silindi.' }
 }
 

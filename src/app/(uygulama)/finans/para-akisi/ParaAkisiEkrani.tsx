@@ -38,8 +38,10 @@ const s = (v: number | string) => Number(v ?? 0)
 function hesapla(g: GunSatiri, kurumDahil: boolean) {
   const giren =
     s(g.nakit) + s(g.kart) + s(g.ek_gelir) + s(g.ogrenci) + (kurumDahil ? s(g.kurum) : 0)
-  const birikim = s(g.birikim_arti) - s(g.birikim_eksi)
-  return { giren, gider: s(g.gider), birikim, kalan: giren - s(g.gider) - birikim }
+  // Artı/Eksi'nin eksi satırları artık günlük masrafa yazılıyor; buradan
+  // ayrıca düşülse aynı ödeme iki kez sayılırdı. Artı satırları da yeni
+  // para değil, kurum tahsilatının hesaba aktarılmış hâli.
+  return { giren, gider: s(g.gider), kalan: giren - s(g.gider) }
 }
 
 export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
@@ -81,8 +83,7 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
       t.eksi += s(g.birikim_eksi)
     }
     const giren = t.nakit + t.kart + t.ek + t.ogrenci + (kurumDahil ? t.kurum : 0)
-    const birikim = t.arti - t.eksi
-    return { ...t, giren, birikim, kalan: giren - t.gider - birikim }
+    return { ...t, giren, kalan: giren - t.gider }
   }, [suzulmus, kurumDahil])
 
   const kalanRenk =
@@ -114,7 +115,7 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
         />
       </div>
 
-      {/* Dört büyük rakam: giren, çıkan, birikim, kalan */}
+      {/* Üç büyük rakam: giren, çıkan, aradaki fark */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="kart bg-emerald-50 p-4 text-emerald-900">
           <p className="text-xs font-semibold tracking-wide uppercase opacity-80">Giren</p>
@@ -126,11 +127,15 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
           <p className="mt-1 text-2xl font-bold tabular-nums">{para(toplam.gider)}</p>
           <p className="mt-0.5 text-xs opacity-75">günlük masraf</p>
         </div>
+        {/* Artı/Eksi defteri bilgi olarak duruyor: eksileri zaten çıkanın
+            içinde, artıları kurum parasının hesaba aktarılmış hâli. */}
         <div className="kart bg-indigo-50 p-4 text-indigo-900">
-          <p className="text-xs font-semibold tracking-wide uppercase opacity-80">Birikim</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums">{para(toplam.birikim)}</p>
+          <p className="text-xs font-semibold tracking-wide uppercase opacity-80">
+            Artı / Eksi defteri
+          </p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{para(toplam.arti)}</p>
           <p className="mt-0.5 text-xs opacity-75">
-            {para(toplam.arti)} artı · {para(toplam.eksi)} eksi
+            giren · {para(toplam.eksi)} ödeme çıkanın içinde
           </p>
         </div>
         <div className="kart bg-amber-50 p-4 text-amber-900">
@@ -140,7 +145,7 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
           <p className={`mt-1 text-2xl font-bold tabular-nums ${kalanRenk}`}>
             {para(toplam.kalan)}
           </p>
-          <p className="mt-0.5 text-xs opacity-75">giren − çıkan − birikim</p>
+          <p className="mt-0.5 text-xs opacity-75">giren − çıkan</p>
         </div>
       </div>
 
@@ -209,7 +214,7 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
                 <th>Tarih</th>
                 <th className="text-right">Giren</th>
                 <th className="text-right">Çıkan</th>
-                <th className="text-right">Birikim</th>
+                
                 <th className="text-right">Kayıt dışı</th>
               </tr>
             </thead>
@@ -230,9 +235,6 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
                     <td className="text-right font-medium whitespace-nowrap tabular-nums text-red-700">
                       {h.gider > 0 ? para(h.gider) : '—'}
                     </td>
-                    <td className="text-right font-medium whitespace-nowrap tabular-nums text-indigo-700">
-                      {h.birikim !== 0 ? para(h.birikim) : '—'}
-                    </td>
                     <td
                       className={`text-right font-semibold whitespace-nowrap tabular-nums ${
                         Math.abs(h.kalan) < 1 ? 'text-solgun' : 'text-amber-700'
@@ -245,7 +247,7 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
               })}
               {suzulmus.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-solgun">
+                  <td colSpan={4} className="py-6 text-center text-solgun">
                     Seçili aralıkta kayıt yok.
                   </td>
                 </tr>
@@ -258,9 +260,6 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
                   {para(toplam.giren)}
                 </td>
                 <td className="text-right tabular-nums text-red-700">{para(toplam.gider)}</td>
-                <td className="text-right tabular-nums text-indigo-700">
-                  {para(toplam.birikim)}
-                </td>
                 <td className={`text-right tabular-nums ${kalanRenk}`}>
                   {para(toplam.kalan)}
                 </td>
@@ -271,11 +270,12 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
       </div>
 
       <p className="text-xs text-solgun">
-        <strong>Kayıt dışı</strong> = giren − çıkan − birikim. Artı çıkması, giren paranın
-        bir kısmının ne masrafa ne birikime yazıldığını gösterir — yani cebinden gitmiş
-        ama deftere yazılmamış para. Eksi çıkması tersi: deftere girmemiş bir gelirin
-        harcandığı anlamına gelir. Günlük satırda büyük sapma varsa o günün masraf ya da
-        ciro kaydı eksiktir.
+        <strong>Kayıt dışı</strong> = giren − çıkan. Artı çıkması, giren paranın bir
+        kısmının hiçbir yere harcanmamış ya da harcanıp deftere yazılmamış olduğunu
+        gösterir. Eksi çıkması tersi: deftere girmemiş bir gelirle ödeme yapılmış. Artı/Eksi
+        defterindeki <strong>eksi satırları da çıkanın içinde</strong> — kasap, tedarikçi,
+        hastahane gibi hesaptan yapılan ödemeler günlük masrafa yazılıyor. Günlük satırda
+        büyük sapma varsa o günün masraf ya da ciro kaydı eksiktir.
       </p>
     </div>
   )
