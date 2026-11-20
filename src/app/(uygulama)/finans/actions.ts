@@ -28,6 +28,10 @@ function tazele() {
   revalidatePath('/finans/alacaklar')
   revalidatePath('/finans/maaslar')
   revalidatePath('/finans/tahsil-edilmemis')
+  // Ödenen senet ve maaş deftere düşüyor; o sayfalar da yenilensin
+  revalidatePath('/finans/gider')
+  revalidatePath('/finans/para-akisi')
+  revalidatePath('/finans/odeme-plani')
   revalidatePath('/maliyet/kar-zarar')
   revalidatePath('/maliyet/giderler')
 }
@@ -82,20 +86,83 @@ export async function senetGuncelle(
   return { basari: 'Kaydedildi.' }
 }
 
-/** Ödendi işaretler ya da geri alır — tek düğmeyle. */
+/**
+ * Ödendi işaretler ya da geri alır — tek düğmeyle.
+ *
+ * Ödendi derken aynı tutar günlük masraf defterine de yazılıyor; ödenen her
+ * şey defterde görünsün, para akışı hesabı tutsun. İşaret kalkınca o satır
+ * da siliniyor.
+ */
 export async function senetOdemeDegistir(
   id: string,
   odemeTarihi: string | null,
 ): Promise<FinansDurumu> {
   const supabase = await supabaseServer()
+
+  const { data: senet } = await supabase
+    .from('senetler')
+    .select('kime, tutar, senet_no, gider_id')
+    .eq('id', id)
+    .maybeSingle()
+
+  const kayit = senet as {
+    kime: string
+    tutar: number | string
+    senet_no: string | null
+    gider_id: string | null
+  } | null
+
+  // Geri alma: deftere düşen satır da gitsin
+  if (!odemeTarihi) {
+    if (kayit?.gider_id) await supabase.from('gunluk_gider').delete().eq('id', kayit.gider_id)
+    const { error } = await supabase
+      .from('senetler')
+      .update({ odeme_tarihi: null, gider_id: null })
+      .eq('id', id)
+    if (error) return { hata: error.message }
+
+    tazele()
+    return { basari: 'Ödeme geri alındı; günlük masraftaki satır da silindi.' }
+  }
+
+  let giderId = kayit?.gider_id ?? null
+  const tutar = Number(kayit?.tutar ?? 0)
+
+  if (tutar > 0) {
+    const yama = {
+      tarih: odemeTarihi,
+      tutar,
+      masraf_noktasi: kayit?.kime ?? 'SENET',
+      aciklama: 'Senet' + (kayit?.senet_no ? ` · ${kayit.senet_no}` : ''),
+    }
+    // Eski satır varsa güncelleniyor, yoksa açılıyor: iki kez ödendi denince
+    // defterde iki satır birikmesin.
+    if (giderId) {
+      const { error } = await supabase.from('gunluk_gider').update(yama).eq('id', giderId)
+      if (error) return { hata: error.message }
+    } else {
+      const { data: yeni, error } = await supabase
+        .from('gunluk_gider')
+        .insert(yama)
+        .select('id')
+        .single()
+      if (error) return { hata: error.message }
+      giderId = (yeni as { id: string }).id
+    }
+  }
+
   const { error } = await supabase
     .from('senetler')
-    .update({ odeme_tarihi: odemeTarihi })
+    .update({ odeme_tarihi: odemeTarihi, gider_id: giderId })
     .eq('id', id)
   if (error) return { hata: error.message }
 
   tazele()
-  return { basari: odemeTarihi ? 'Ödendi olarak işaretlendi.' : 'Ödeme geri alındı.' }
+  return {
+    basari: giderId
+      ? 'Ödendi olarak işaretlendi, günlük masrafa yazıldı.'
+      : 'Ödendi olarak işaretlendi.',
+  }
 }
 
 export async function senetSil(id: string): Promise<FinansDurumu> {
