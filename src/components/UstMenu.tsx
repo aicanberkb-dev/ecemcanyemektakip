@@ -35,6 +35,7 @@ const FINANS_ALT = [
   { yol: '/finans/defter', ad: 'Tedarikçi Girdi-Çıktı' },
   { yol: '/finans/ciro', ad: 'Günlük Ciro' },
   { yol: '/finans/gider', ad: 'Ekrem Günlük Masraf' },
+  { yol: '/finans/kart', ad: 'Kart Harcamaları' },
   { yol: '/finans/kiralar', ad: 'Kiralar' },
   { yol: '/finans/odeme-plani', ad: 'Ödeme Takvimi' },
 ]

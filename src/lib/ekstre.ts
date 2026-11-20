@@ -82,8 +82,13 @@ export function gonderenAyikla(aciklama: string): string {
   return ad.join(' ')
 }
 
-/** xlsx içindeki ilk sayfayı bulup satır-hücre dizisine çevirir. */
-function sayfaHucreleri(dosya: Uint8Array): string[][] {
+/**
+ * xlsx içindeki ilk sayfayı bulup satır-hücre dizisine çevirir.
+ *
+ * Kart harcamalarını okuyan `kart-ekstre.ts` de aynı dosyayı ayrıştırdığı
+ * için dışa açık.
+ */
+export function sayfaHucreleri(dosya: Uint8Array): string[][] {
   const paket = unzipSync(dosya)
   const sayfaAdi = Object.keys(paket).find((a) => /^xl\/worksheets\/sheet\d*\.xml$/.test(a))
   if (!sayfaAdi) throw new Error('Dosyada çalışma sayfası bulunamadı.')
