@@ -36,6 +36,7 @@ const FINANS_ALT = [
   { yol: '/finans/ciro', ad: 'Günlük Ciro' },
   { yol: '/finans/gider', ad: 'Ekrem Günlük Masraf' },
   { yol: '/finans/kart', ad: 'Kart Harcamaları' },
+  { yol: '/finans/para-akisi', ad: 'Para Akışı' },
   { yol: '/finans/kiralar', ad: 'Kiralar' },
   { yol: '/finans/odeme-plani', ad: 'Ödeme Takvimi' },
 ]

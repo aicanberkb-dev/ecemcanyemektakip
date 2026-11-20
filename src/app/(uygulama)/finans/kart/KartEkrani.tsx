@@ -3,6 +3,14 @@
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 
+import { useBugun } from '@/components/BugunSaglayici'
+import {
+  araliktaMi,
+  ayEtiketi,
+  BOS_ARALIK,
+  TarihFiltresi,
+  type Aralik,
+} from '@/components/TarihFiltresi'
 import { para, tarih as tarihBicim } from '@/lib/format'
 import { cozumlenemeyen, kartEkstresiOku, type KartHarcamasi } from '@/lib/kart-ekstre'
 
@@ -55,6 +63,8 @@ export function KartEkrani({ girilmisler }: { girilmisler: GirilmisSatir[] }) {
   const [atlanan, setAtlanan] = useState(0)
   const [secili, setSecili] = useState<Set<string>>(new Set())
   const [mesaj, setMesaj] = useState<{ tip: 'ok' | 'hata'; metin: string } | null>(null)
+  const bugun = useBugun()
+  const [aralik, setAralik] = useState<Aralik>(BOS_ARALIK)
 
   async function dosyaSecildi(dosya: File) {
     setMesaj(null)
@@ -147,17 +157,27 @@ export function KartEkrani({ girilmisler }: { girilmisler: GirilmisSatir[] }) {
   const yeniler = okunan?.filter((h) => !h.zatenVar) ?? []
   const mukerrer = (okunan?.length ?? 0) - yeniler.length
 
-  // Rapor: deftere aktarılmış bütün kart harcamaları
-  const rapor = useMemo(() => {
-    const aylar = grupla(girilmisler, (s) => s.tarih.slice(0, 7)).sort((a, b) =>
-      b.ad.localeCompare(a.ad),
-    )
-    return {
-      toplam: topla(girilmisler),
-      isyerleri: grupla(girilmisler, (s) => s.isyeri).slice(0, 12),
-      aylar,
-    }
-  }, [girilmisler])
+  // Rapor: deftere aktarılmış kart harcamaları, seçili tarih aralığında
+  const suzulmus = useMemo(
+    () => girilmisler.filter((s) => araliktaMi(s.tarih, aralik)),
+    [girilmisler, aralik],
+  )
+
+  const aylar = useMemo(
+    () => [...new Set(girilmisler.map((s) => s.tarih.slice(0, 7)))].sort().reverse(),
+    [girilmisler],
+  )
+
+  const rapor = useMemo(
+    () => ({
+      toplam: topla(suzulmus),
+      isyerleri: grupla(suzulmus, (s) => s.isyeri).slice(0, 12),
+      aylar: grupla(suzulmus, (s) => s.tarih.slice(0, 7)).sort((a, b) =>
+        b.ad.localeCompare(a.ad),
+      ),
+    }),
+    [suzulmus],
+  )
 
   return (
     <div className="space-y-5">
@@ -292,20 +312,42 @@ export function KartEkrani({ girilmisler }: { girilmisler: GirilmisSatir[] }) {
           </p>
         ) : (
           <div className="space-y-3">
+            <div className="kart p-4">
+              <TarihFiltresi
+                bugun={bugun}
+                aralik={aralik}
+                degistir={setAralik}
+                aylar={aylar}
+                ozet={
+                  <>
+                    <p className="text-xs font-semibold tracking-wide text-solgun uppercase">
+                      {aralik.ay ? ayEtiketi(aralik.ay) : 'Seçili aralık'} toplamı
+                    </p>
+                    <p className="text-2xl font-bold tabular-nums text-indigo-700">
+                      {para(rapor.toplam)}
+                    </p>
+                    <p className="text-xs text-solgun">
+                      {suzulmus.length} / {girilmisler.length} harcama
+                    </p>
+                  </>
+                }
+              />
+            </div>
+
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="kart bg-indigo-50 p-4 text-indigo-900">
                 <p className="text-xs font-semibold tracking-wide uppercase opacity-80">
                   Toplam
                 </p>
                 <p className="mt-1 text-2xl font-bold tabular-nums">{para(rapor.toplam)}</p>
-                <p className="mt-0.5 text-xs opacity-75">{girilmisler.length} harcama</p>
+                <p className="mt-0.5 text-xs opacity-75">{suzulmus.length} harcama</p>
               </div>
               <div className="kart p-4">
                 <p className="text-xs font-semibold tracking-wide text-solgun uppercase">
                   İşyeri
                 </p>
                 <p className="mt-1 text-2xl font-bold tabular-nums">
-                  {new Set(girilmisler.map((g) => g.isyeri)).size}
+                  {new Set(suzulmus.map((g) => g.isyeri)).size}
                 </p>
                 <p className="mt-0.5 text-xs text-solgun">farklı masraf noktası</p>
               </div>
@@ -314,7 +356,7 @@ export function KartEkrani({ girilmisler }: { girilmisler: GirilmisSatir[] }) {
                   Harcama başına
                 </p>
                 <p className="mt-1 text-2xl font-bold tabular-nums">
-                  {para(rapor.toplam / girilmisler.length)}
+                  {para(suzulmus.length > 0 ? rapor.toplam / suzulmus.length : 0)}
                 </p>
                 <p className="mt-0.5 text-xs text-solgun">ortalama</p>
               </div>
