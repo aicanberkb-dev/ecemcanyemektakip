@@ -30,26 +30,21 @@ const s = (v: number | string) => Number(v ?? 0)
 /**
  * Bir günün girenleri, çıkanları ve aradaki fark.
  *
- * Kurum ödemeleri isteğe bağlı: o para bankaya giriyor ve işletme kasasından
- * ayrı duruyor. İkisi karışınca "işletmeden ne harcamışım" sorusunun cevabı
- * kayboluyor — kurum parası dahil edilince kalan, harcanmamış banka parasını
- * da sayıyor. Varsayılan olarak dışarıda.
+ * Giren: kasaya ve bankaya ne girdiyse. Çıkan: günlük masraf defteri —
+ * maaş, kira, fatura, senet, kart harcaması ve Artı/Eksi'nin eksileri
+ * hepsi orada. Aradaki fark harcanmamış ya da deftere yazılmamış para.
+ *
+ * Artı/Eksi buraya ayrı bir kalem olarak girmiyor: eksileri zaten çıkanın
+ * içinde, artıları da kurum tahsilatının hesaba aktarılmış hâli.
  */
-function hesapla(g: GunSatiri, kurumDahil: boolean) {
-  const giren =
-    s(g.nakit) + s(g.kart) + s(g.ek_gelir) + s(g.ogrenci) + (kurumDahil ? s(g.kurum) : 0)
-  // Artı/Eksi'nin eksi satırları artık günlük masrafa yazılıyor; buradan
-  // ayrıca düşülse aynı ödeme iki kez sayılırdı. Artı satırları da yeni
-  // para değil, kurum tahsilatının hesaba aktarılmış hâli.
+function hesapla(g: GunSatiri) {
+  const giren = s(g.nakit) + s(g.kart) + s(g.ek_gelir) + s(g.ogrenci) + s(g.kurum)
   return { giren, gider: s(g.gider), kalan: giren - s(g.gider) }
 }
 
 export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
   const bugun = useBugun()
   const [aralik, setAralik] = useState<Aralik>(BOS_ARALIK)
-  // Varsayılan kapalı: asıl soru "işletmeden ne harcadım", kurum parası
-  // bankada ayrı duruyor ve karışınca rakam anlamını yitiriyor
-  const [kurumDahil, setKurumDahil] = useState(false)
 
   const aylar = useMemo(
     () => [...new Set(gunler.map((g) => g.tarih.slice(0, 7)))].sort().reverse(),
@@ -82,9 +77,9 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
       t.arti += s(g.birikim_arti)
       t.eksi += s(g.birikim_eksi)
     }
-    const giren = t.nakit + t.kart + t.ek + t.ogrenci + (kurumDahil ? t.kurum : 0)
+    const giren = t.nakit + t.kart + t.ek + t.ogrenci + t.kurum
     return { ...t, giren, kalan: giren - t.gider }
-  }, [suzulmus, kurumDahil])
+  }, [suzulmus])
 
   const kalanRenk =
     Math.abs(toplam.kalan) < 1
@@ -149,33 +144,6 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
         </div>
       </div>
 
-      {/* Kurum parası bankada ayrı duruyor; işletme kasasıyla karışınca
-          "işletmeden ne harcamışım" sorusunun cevabı kayboluyor. */}
-      <label className="kart flex flex-wrap items-center gap-3 p-4 text-sm">
-        <input
-          type="checkbox"
-          checked={kurumDahil}
-          onChange={(e) => setKurumDahil(e.target.checked)}
-          className="accent-indigo-600"
-        />
-        <span>
-          <strong>Kurum ödemelerini de hesaba kat</strong>
-          <span className="block text-xs text-solgun">
-            Kapalıyken yalnız işletme kasası sayılır: nakit, kart, öğrenci parası, ek
-            gelir. Kurum tahsilatı bankaya giriyor ve orada bekliyor; hesaba katınca
-            kayıt dışı rakamı harcanmamış banka parasını da sayar, şişer.
-          </span>
-        </span>
-        <span className="ml-auto text-right">
-          <span className="block text-xs font-semibold tracking-wide text-solgun uppercase">
-            Kurum ödemeleri
-          </span>
-          <span className="block font-bold tabular-nums text-indigo-700">
-            {para(toplam.kurum)}
-          </span>
-        </span>
-      </label>
-
       {/* Girenin kırılımı: hangi kanaldan ne geldi */}
       <div className="kart p-4">
         <p className="mb-2 text-xs font-semibold tracking-wide text-solgun uppercase">
@@ -187,19 +155,10 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
             { ad: 'Kredi kartı', tutar: toplam.kart },
             { ad: 'Öğrenci parası', tutar: toplam.ogrenci },
             { ad: 'Ek gelir', tutar: toplam.ek },
-            // Hesaba katılmıyorsa soluk görünsün, toplamda yok
-            { ad: 'Kurum ödemeleri', tutar: toplam.kurum, disarida: !kurumDahil },
+            { ad: 'Kurum ödemeleri', tutar: toplam.kurum },
           ].map((k) => (
-            <div
-              key={k.ad}
-              className={`flex items-baseline justify-between gap-2 ${
-                k.disarida ? 'opacity-45' : ''
-              }`}
-            >
-              <span className="text-solgun">
-                {k.ad}
-                {k.disarida && <span className="ml-1 text-[10px]">(hariç)</span>}
-              </span>
+            <div key={k.ad} className="flex items-baseline justify-between gap-2">
+              <span className="text-solgun">{k.ad}</span>
               <span className="font-semibold tabular-nums">{para(k.tutar)}</span>
             </div>
           ))}
@@ -220,7 +179,7 @@ export function ParaAkisiEkrani({ gunler }: { gunler: GunSatiri[] }) {
             </thead>
             <tbody>
               {suzulmus.map((g) => {
-                const h = hesapla(g, kurumDahil)
+                const h = hesapla(g)
                 return (
                   <tr key={g.tarih}>
                     <td className="whitespace-nowrap">{tarihBicim(g.tarih)}</td>
