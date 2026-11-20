@@ -47,6 +47,18 @@ export type EkGelir = {
 }
 
 /**
+ * Başka ekranlardan gelen, gün bazında toplanmış tahsilat.
+ *
+ * Öğrenci havaleleri Tahsilat ekranından, kurum ödemeleri Alacaklar
+ * ekranından geliyor; ciroda elle girilmiyor, okunuyor.
+ */
+export type GunlukTahsilat = {
+  tarih: string
+  tutar: number | string
+  adet: number
+}
+
+/**
  * Kırılım satırı: ekranda sırası korunsun diye dizi, nesne değil.
  *
  * `tutar` posun çektiği (Z raporu), `yatan` o bankadan hesaba geçen.
@@ -119,11 +131,17 @@ export function CiroEkrani({
   satirlar,
   yerler: gelenYerler,
   ekGelirler,
+  ogrenciHavaleleri,
+  kurumTahsilatlari,
 }: {
   satirlar: CiroSatiri[]
   yerler: string[]
   /** Yerlerin hasılatı dışında kalan gelirler */
   ekGelirler: EkGelir[]
+  /** GÖKSU öğrencilerinin o gün gelen havaleleri */
+  ogrenciHavaleleri: GunlukTahsilat[]
+  /** Alacaklar sayfasında girilen kurum tahsilatları */
+  kurumTahsilatlari: GunlukTahsilat[]
 }) {
   const router = useRouter()
   const [bekliyor, baslat] = useTransition()
@@ -203,8 +221,31 @@ export function CiroEkrani({
   const ekToplami = (gun: string) =>
     (ekHarita.get(gun) ?? []).reduce((t, e) => t + Number(e.tutar), 0)
 
-  const genelToplam = gunler.reduce((t, [gun, g]) => t + gunToplami(g) + ekToplami(gun), 0)
+  // Öğrenci havalesi ve kurum tahsilatı gün bazında okunuyor; ikisi de
+  // ayrı kanaldan geliyor (banka), nakit ve kartla çakışmıyor.
+  const ogrenciHarita = useMemo(() => {
+    const m = new Map<string, GunlukTahsilat>()
+    for (const t of ogrenciHavaleleri) m.set(t.tarih, t)
+    return m
+  }, [ogrenciHavaleleri])
+
+  const kurumHarita = useMemo(() => {
+    const m = new Map<string, GunlukTahsilat>()
+    for (const t of kurumTahsilatlari) m.set(t.tarih, t)
+    return m
+  }, [kurumTahsilatlari])
+
+  const ogrenciToplami = (gun: string) => Number(ogrenciHarita.get(gun)?.tutar ?? 0)
+  const kurumToplami = (gun: string) => Number(kurumHarita.get(gun)?.tutar ?? 0)
+
+  const genelToplam = gunler.reduce(
+    (t, [gun, g]) =>
+      t + gunToplami(g) + ekToplami(gun) + ogrenciToplami(gun) + kurumToplami(gun),
+    0,
+  )
   const genelEk = gunler.reduce((t, [gun]) => t + ekToplami(gun), 0)
+  const genelOgrenci = gunler.reduce((t, [gun]) => t + ogrenciToplami(gun), 0)
+  const genelKurum = gunler.reduce((t, [gun]) => t + kurumToplami(gun), 0)
   const genelNakit = gunler.reduce((t, [, gun]) => t + gunToplami(gun, 'nakit'), 0)
   const genelKart = gunler.reduce((t, [, gun]) => t + gunToplami(gun, 'kart'), 0)
 
@@ -825,6 +866,30 @@ export function CiroEkrani({
               </p>
             )}
           </div>
+          {/* Banka kanalı: işletme hasılatı değil ama o gün kasaya giren para.
+              Ayrı sütunda duruyor ki hangisi satış hangisi tahsilat belli olsun. */}
+          {genelOgrenci > 0 && (
+            <div>
+              <p className="text-xs font-semibold tracking-wide text-solgun uppercase">
+                Öğrenci parası
+              </p>
+              <p className="text-xl font-bold tabular-nums text-teal-700">
+                {para(genelOgrenci)}
+              </p>
+              <p className="text-xs text-solgun">GÖKSU havaleleri</p>
+            </div>
+          )}
+          {genelKurum > 0 && (
+            <div>
+              <p className="text-xs font-semibold tracking-wide text-solgun uppercase">
+                Kurum ödemeleri
+              </p>
+              <p className="text-xl font-bold tabular-nums text-indigo-700">
+                {para(genelKurum)}
+              </p>
+              <p className="text-xs text-solgun">Alacaklar sayfasından</p>
+            </div>
+          )}
           <div>
             <p className="text-xs font-semibold tracking-wide text-solgun uppercase">
               Dönem toplamı
@@ -966,15 +1031,43 @@ export function CiroEkrani({
                   )}
                 </td>
                 <td className="text-right font-semibold tabular-nums text-emerald-700">
-                  {kayitlar.size === 0 && ekToplami(gun) === 0 ? (
+                  {kayitlar.size === 0 &&
+                  ekToplami(gun) === 0 &&
+                  ogrenciToplami(gun) === 0 &&
+                  kurumToplami(gun) === 0 ? (
                     <span className="text-xs font-normal text-amber-700">veri girilmedi</span>
                   ) : (
                     <>
-                      {para(gunToplami(kayitlar) + ekToplami(gun))}
+                      {para(
+                        gunToplami(kayitlar) +
+                          ekToplami(gun) +
+                          ogrenciToplami(gun) +
+                          kurumToplami(gun),
+                      )}
                       {gunToplami(kayitlar, 'nakit') + gunToplami(kayitlar, 'kart') > 0 && (
                         <span className="block text-xs font-normal text-solgun">
                           {para(gunToplami(kayitlar, 'nakit'))} nakit ·{' '}
                           {para(gunToplami(kayitlar, 'kart'))} kart
+                        </span>
+                      )}
+                      {/* Banka kanalı: işletme hasılatından ayrı dursun ki
+                          hangi paranın nereden geldiği okunsun. */}
+                      {ogrenciToplami(gun) > 0 && (
+                        <span className="block text-xs font-normal text-teal-700">
+                          {para(ogrenciToplami(gun))} öğrenci parası
+                          <span className="text-solgun">
+                            {' '}
+                            ({ogrenciHarita.get(gun)?.adet})
+                          </span>
+                        </span>
+                      )}
+                      {kurumToplami(gun) > 0 && (
+                        <span className="block text-xs font-normal text-indigo-700">
+                          {para(kurumToplami(gun))} kurum ödemesi
+                          <span className="text-solgun">
+                            {' '}
+                            ({kurumHarita.get(gun)?.adet})
+                          </span>
                         </span>
                       )}
                     </>

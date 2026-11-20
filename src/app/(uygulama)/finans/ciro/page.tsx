@@ -1,24 +1,40 @@
 import { supabaseServer } from '@/lib/supabase/server'
 
-import { CiroEkrani, type CiroSatiri, type EkGelir } from './CiroEkrani'
+import { CiroEkrani, type CiroSatiri, type EkGelir, type GunlukTahsilat } from './CiroEkrani'
 
 export const metadata = { title: 'Günlük Ciro — Yemek Takip' }
 
 /** Hiç kayıt yokken ekranda duran yerler */
 const VARSAYILAN_YERLER = ['GÖKSU', 'AKBABA', 'TORİK']
 
+/**
+ * Öğrenci ve kurum tahsilatlarının ciroda gösterilmeye başladığı gün.
+ *
+ * Öncesi için bu kalemler takip edilmiyordu; eski günlerde yarım rakam
+ * göstermektense hiç göstermemek doğru.
+ */
+const BASLANGIC = '2026-10-22'
+
 export default async function CiroPage() {
   const supabase = await supabaseServer()
-  const [{ data, error }, { data: ekVeri }] = await Promise.all([
-    supabase
-    .from('gunluk_ciro')
-    .select('id, tarih, yer, tutar, nakit, kart, kart_yatan, aciklama, kart_kirilimi, kart_yatan_kirilimi')
-      .order('tarih', { ascending: false }),
-    supabase
-      .from('ciro_ek_gelir')
-      .select('id, tarih, kaynak, tutar, aciklama')
-      .order('tarih', { ascending: false }),
-  ])
+  const [{ data, error }, { data: ekVeri }, { data: ogrenciVeri }, { data: kurumVeri }] =
+    await Promise.all([
+      supabase
+        .from('gunluk_ciro')
+        .select(
+          'id, tarih, yer, tutar, nakit, kart, kart_yatan, aciklama, kart_kirilimi, kart_yatan_kirilimi',
+        )
+        .order('tarih', { ascending: false }),
+      supabase
+        .from('ciro_ek_gelir')
+        .select('id, tarih, kaynak, tutar, aciklama')
+        .order('tarih', { ascending: false }),
+      // Öğrenci parası: yalnız havale, yalnız GÖKSU. Nakit ve kartla ödenenler
+      // zaten kasaya ve posa giriyor, buraya alınsa iki kez sayılırdı.
+      supabase.rpc('ciro_ogrenci_havaleleri', { bas: BASLANGIC }),
+      // Kurum ödemeleri: Alacaklar sayfasında girilen fatura tahsilatları
+      supabase.rpc('ciro_kurum_tahsilatlari', { bas: BASLANGIC }),
+    ])
 
   const satirlar = (data ?? []) as CiroSatiri[]
   const yerler = [...new Set([...VARSAYILAN_YERLER, ...satirlar.map((s) => s.yer)])]
@@ -32,7 +48,10 @@ export default async function CiroPage() {
           eskisinin üstüne yazar, toplam şişmez. Yeni bir yer eklemek için kutuya adını
           yaz, listeye kendiliğinden girer. Tarihi değiştirince o güne girilmiş
           rakamlar forma gelir; kredi kartını banka banka kırmak istersen kartın
-          altındaki bağlantıyı kullan.
+          altındaki bağlantıyı kullan. <strong>Öğrenci parası</strong> (GÖKSU
+          havaleleri) ve <strong>kurum ödemeleri</strong> kendiliğinden gelir,
+          elle girilmez: ilki Tahsilat ekranından, ikincisi Alacaklar
+          sayfasından okunur.
         </p>
       </div>
 
@@ -44,6 +63,8 @@ export default async function CiroPage() {
         satirlar={satirlar}
         yerler={yerler}
         ekGelirler={(ekVeri ?? []) as EkGelir[]}
+        ogrenciHavaleleri={(ogrenciVeri ?? []) as GunlukTahsilat[]}
+        kurumTahsilatlari={(kurumVeri ?? []) as GunlukTahsilat[]}
       />
     </div>
   )
