@@ -45,6 +45,29 @@ export const GOKSU_TAKSITLERI: Taksit[] = [
   { sira: 10, ad: 'Haziran 2027', yarim: true, ayrac: 'Sözleşmenin son ayı · yarım taksit' },
 ]
 
+/**
+ * AKBABA: 8,5 aylık yeni sözleşme, Aralık 2026 – Kasım 2027.
+ *
+ * İlk üç taksit önceki sözleşmenin; yeni kira (19.723,50) dördüncü
+ * taksitle, Aralık 2026'da başlıyor. Haziran–Ağustos tatil olduğu için
+ * ödeme çıkmıyor, kalan aylar gelecek sezonun Eylül'ünden devam ediyor.
+ * Sekiz tam ve bir yarım (Kasım 2027) taksit eder.
+ */
+export const AKBABA_TAKSITLERI: Taksit[] = [
+  { sira: 1, ad: 'Eylül 2026', ayrac: 'Önceki sözleşme' },
+  { sira: 2, ad: 'Ekim 2026' },
+  { sira: 3, ad: 'Kasım 2026' },
+  { sira: 4, ad: 'Aralık 2026', ayrac: 'Yeni sözleşme · 8,5 ay · Aralık 2026 – Kasım 2027' },
+  { sira: 5, ad: 'Ocak 2027' },
+  { sira: 6, ad: 'Şubat 2027' },
+  { sira: 7, ad: 'Mart 2027' },
+  { sira: 8, ad: 'Nisan 2027' },
+  { sira: 9, ad: 'Mayıs 2027' },
+  { sira: 10, ad: 'Eylül 2027', ayrac: 'Yaz tatili atlandı · gelecek sezondan devam' },
+  { sira: 11, ad: 'Ekim 2027' },
+  { sira: 12, ad: 'Kasım 2027', yarim: true, ayrac: 'Sözleşmenin son ayı · yarım taksit' },
+]
+
 /** Hesaplamanın yarıya ineceği taksitler */
 export function yarimSiralar(taksitler: Taksit[]): number[] {
   return taksitler.filter((t) => t.yarim).map((t) => t.sira)

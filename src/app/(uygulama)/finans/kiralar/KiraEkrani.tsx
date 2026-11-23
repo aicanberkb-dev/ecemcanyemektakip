@@ -13,6 +13,7 @@ import { KALEM_ADLARI, type Kalem } from './kalemler'
 import { SozlesmeKutusu } from './SozlesmeKutusu'
 import { OKUL_KLASORU, type SozlesmeDosyasi } from './sozlesme'
 import {
+  AKBABA_TAKSITLERI,
   GOKSU_TAKSITLERI,
   type Taksit,
   VARSAYILAN_TAKSITLER,
@@ -120,7 +121,7 @@ const OKULLAR: { ad: string; gruplar: Grup[] }[] = [
         ad: 'Kantin Kira Bedeli (İlkokul + Ortaokul)',
         kiraAnahtarlari: ['AKBABA KANTİN İLKOKUL', 'AKBABA KANTİN ORTAOKUL'],
         paylarAnahtarlari: ['AKBABA KANTİN İLKOKUL'],
-        taksitler: VARSAYILAN_TAKSITLER,
+        taksitler: AKBABA_TAKSITLERI,
         bolumler: [
           {
             ad: 'AKBABA KANTİN İLKOKUL — Kira',
