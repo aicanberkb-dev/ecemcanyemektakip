@@ -7,6 +7,8 @@ import { useBugun, useBugunTarihi } from '@/components/BugunSaglayici'
 // Bu deftere kuruş girilmiyor; rakamlar kuruşsuz gösteriliyor
 import { paraTam as para, tarih as tarihBicim } from '@/lib/format'
 
+import { createContext, use } from 'react'
+
 import { artiEksiKaydet, artiEksiSil, type FinansDurumu } from '../actions'
 
 type Yon = 'arti' | 'eksi'
@@ -30,13 +32,34 @@ type Taslak = { tarih: string; tutar: string; yontem: Yontem; aciklama: string }
 
 const YONTEM_ADLARI: Record<Yontem, string> = { nakit: 'Nakit', havale: 'Havale' }
 
+/** Bir defterin kaydet/sil eylemleri */
+export type AeIslemleri = {
+  kaydet: (id: string | null, veri: Record<string, string>) => Promise<FinansDurumu>
+  sil: (id: string) => Promise<FinansDurumu>
+}
+
+/**
+ * Satır bileşenleri defterin eylemlerini buradan alıyor.
+ *
+ * Ekran iki kademe derin (Sütun → Satır), prop zinciri uzuyordu; hangi
+ * defterde olduğumuz tek yerden geçsin diye bağlam kullanıldı.
+ */
+const IslemBaglami = createContext<AeIslemleri>({ kaydet: artiEksiKaydet, sil: artiEksiSil })
+
 /**
  * İki sütunlu defter: solda artılar, sağda eksiler.
  *
  * Tarih aralığı boşsa her şey sayılır; doldurulursa hem listeler hem fark o
  * aralığa göre hesaplanır.
  */
-export function ArtiEksiEkrani({ satirlar }: { satirlar: ArtiEksiSatiri[] }) {
+export function ArtiEksiEkrani({
+  satirlar,
+  islemler = { kaydet: artiEksiKaydet, sil: artiEksiSil },
+}: {
+  satirlar: ArtiEksiSatiri[]
+  /** Hangi defterin eylemleri; Cumhuriyet aynı ekranı kendi tablosuyla kullanıyor */
+  islemler?: AeIslemleri
+}) {
   const [bas, setBas] = useState('')
   const [bit, setBit] = useState('')
 
@@ -83,6 +106,7 @@ export function ArtiEksiEkrani({ satirlar }: { satirlar: ArtiEksiSatiri[] }) {
   }, [satirlar])
 
   return (
+    <IslemBaglami value={islemler}>
     <div className="space-y-4">
       <div className="kart flex flex-wrap items-end gap-3 p-4">
         <div>
@@ -152,6 +176,7 @@ export function ArtiEksiEkrani({ satirlar }: { satirlar: ArtiEksiSatiri[] }) {
         <Sutun yon="eksi" satirlar={eksiler} toplam={topla(eksiler)} bakiyeler={bakiyeler} />
       </div>
     </div>
+    </IslemBaglami>
   )
 }
 
@@ -283,6 +308,7 @@ function Kutular({
 }
 
 function YeniSatir({ yon }: { yon: Yon }) {
+  const islemler = use(IslemBaglami)
   const bugun = useBugun()
   const router = useRouter()
   const [bekliyor, baslat] = useTransition()
@@ -302,7 +328,7 @@ function YeniSatir({ yon }: { yon: Yon }) {
   function ekle(e: React.FormEvent) {
     e.preventDefault()
     baslat(async () => {
-      const sonuc = await artiEksiKaydet(null, { yon, ...taslak })
+      const sonuc = await islemler.kaydet(null, { yon, ...taslak })
       setDurum(sonuc)
       if (sonuc.basari) {
         // Tarih yeniden bugün, yöntem kalsın
@@ -338,6 +364,7 @@ function Satir({
   /** Bu satır yapıldıktan sonra elde kalan para */
   bakiye?: Bakiye
 }) {
+  const islemler = use(IslemBaglami)
   const router = useRouter()
   const [bekliyor, baslat] = useTransition()
   const [duzenle, setDuzenle] = useState(false)
@@ -367,7 +394,7 @@ function Satir({
                 disabled={bekliyor}
                 onClick={() =>
                   baslat(async () => {
-                    const sonuc = await artiEksiKaydet(satir.id, { yon: satir.yon, ...taslak })
+                    const sonuc = await islemler.kaydet(satir.id, { yon: satir.yon, ...taslak })
                     setDurum(sonuc)
                     if (sonuc.basari) {
                       setDuzenle(false)
@@ -438,7 +465,7 @@ function Satir({
           onClick={() => {
             if (!confirm(`${tarihBicim(satir.tarih)} · ${para(satir.tutar)} silinsin mi?`)) return
             baslat(async () => {
-              const sonuc = await artiEksiSil(satir.id)
+              const sonuc = await islemler.sil(satir.id)
               if (sonuc.hata) alert(sonuc.hata)
               else router.refresh()
             })

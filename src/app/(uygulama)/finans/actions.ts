@@ -1071,7 +1071,25 @@ const artiEksiSemasi = z.object({
   aciklama: bosNull,
 })
 
-/** id verilirse satırı günceller, verilmezse yeni satır ekler. */
+/**
+ * Artı/Eksi düzeninde çalışan defterler.
+ *
+ * Cumhuriyet defteri ayrı bir hesabın aynı kurgulu defteri; ikisi de
+ * aynı mantıkla çalıştığı için işlemler tek yerde, tablo adı parametre.
+ */
+const AE_DEFTERLERI = {
+  arti_eksi: { yol: '/finans/arti-eksi', ad: 'Artı/Eksi defteri', nokta: 'ARTI/EKSİ' },
+  cumhuriyet: { yol: '/finans/cumhuriyet', ad: 'Cumhuriyet defteri', nokta: 'CUMHURİYET' },
+} as const
+
+type AeDefteri = keyof typeof AE_DEFTERLERI
+
+function aeTazele(defter: AeDefteri) {
+  revalidatePath(AE_DEFTERLERI[defter].yol)
+  revalidatePath('/finans/gider')
+  revalidatePath('/finans/para-akisi')
+}
+
 /**
  * Eksi satırının günlük masraftaki karşılığı.
  *
@@ -1079,8 +1097,9 @@ const artiEksiSemasi = z.object({
  * her şey defterde görünsün diye masrafa da yazılıyor. Artı satırları
  * hesaba giren para, masraf değil; onlarda bağlantı yok.
  */
-async function artiEksiMasrafi(
+async function aeMasrafi(
   supabase: Awaited<ReturnType<typeof supabaseServer>>,
+  defter: AeDefteri,
   satir: { yon: string; tarih: string; tutar: number; aciklama: string | null },
   giderId: string | null,
 ): Promise<{ giderId: string | null; hata?: string }> {
@@ -1093,8 +1112,8 @@ async function artiEksiMasrafi(
   const yama = {
     tarih: satir.tarih,
     tutar: satir.tutar,
-    masraf_noktasi: satir.aciklama?.trim() || 'ARTI/EKSİ',
-    aciklama: 'Artı/Eksi defteri',
+    masraf_noktasi: satir.aciklama?.trim() || AE_DEFTERLERI[defter].nokta,
+    aciklama: AE_DEFTERLERI[defter].ad,
   }
 
   if (giderId) {
@@ -1111,7 +1130,9 @@ async function artiEksiMasrafi(
   return { giderId: (data as { id: string }).id }
 }
 
-export async function artiEksiKaydet(
+/** id verilirse satırı günceller, verilmezse yeni satır ekler. */
+async function aeKaydet(
+  defter: AeDefteri,
   id: string | null,
   veri: Record<string, string>,
 ): Promise<FinansDurumu> {
@@ -1121,11 +1142,12 @@ export async function artiEksiKaydet(
   const supabase = await supabaseServer()
 
   const { data: eski } = id
-    ? await supabase.from('arti_eksi').select('gider_id').eq('id', id).maybeSingle()
+    ? await supabase.from(defter).select('gider_id').eq('id', id).maybeSingle()
     : { data: null }
 
-  const masraf = await artiEksiMasrafi(
+  const masraf = await aeMasrafi(
     supabase,
+    defter,
     { ...sonuc.data, aciklama: sonuc.data.aciklama ?? null },
     (eski as { gider_id: string | null } | null)?.gider_id ?? null,
   )
@@ -1133,35 +1155,53 @@ export async function artiEksiKaydet(
 
   const kayit = { ...sonuc.data, gider_id: masraf.giderId }
   const { error } = id
-    ? await supabase.from('arti_eksi').update(kayit).eq('id', id)
-    : await supabase.from('arti_eksi').insert(kayit)
+    ? await supabase.from(defter).update(kayit).eq('id', id)
+    : await supabase.from(defter).insert(kayit)
   if (error) return { hata: error.message }
 
-  revalidatePath('/finans/arti-eksi')
-  revalidatePath('/finans/gider')
-  revalidatePath('/finans/para-akisi')
+  aeTazele(defter)
   return { basari: id ? 'Kaydedildi.' : 'Eklendi.' }
 }
 
-export async function artiEksiSil(id: string): Promise<FinansDurumu> {
+async function aeSil(defter: AeDefteri, id: string): Promise<FinansDurumu> {
   const supabase = await supabaseServer()
 
   // Defterdeki karşılığı da gitsin, ortada kalmasın
   const { data: eski } = await supabase
-    .from('arti_eksi')
+    .from(defter)
     .select('gider_id')
     .eq('id', id)
     .maybeSingle()
   const giderId = (eski as { gider_id: string | null } | null)?.gider_id
   if (giderId) await supabase.from('gunluk_gider').delete().eq('id', giderId)
 
-  const { error } = await supabase.from('arti_eksi').delete().eq('id', id)
+  const { error } = await supabase.from(defter).delete().eq('id', id)
   if (error) return { hata: error.message }
 
-  revalidatePath('/finans/arti-eksi')
-  revalidatePath('/finans/gider')
-  revalidatePath('/finans/para-akisi')
+  aeTazele(defter)
   return { basari: 'Silindi.' }
+}
+
+export async function artiEksiKaydet(
+  id: string | null,
+  veri: Record<string, string>,
+): Promise<FinansDurumu> {
+  return aeKaydet('arti_eksi', id, veri)
+}
+
+export async function artiEksiSil(id: string): Promise<FinansDurumu> {
+  return aeSil('arti_eksi', id)
+}
+
+export async function cumhuriyetKaydet(
+  id: string | null,
+  veri: Record<string, string>,
+): Promise<FinansDurumu> {
+  return aeKaydet('cumhuriyet', id, veri)
+}
+
+export async function cumhuriyetSil(id: string): Promise<FinansDurumu> {
+  return aeSil('cumhuriyet', id)
 }
 
 // ---------------------------------------------------------------------------
